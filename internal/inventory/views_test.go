@@ -351,7 +351,7 @@ func TestRepairViews(t *testing.T) {
 	r.views[1] = View{ID: 1, Name: "Networks", Kind: apitypes.ViewNetwork, CreatedAt: now}
 	r.views[2] = View{ID: 2, Name: "A", Kind: apitypes.ViewCustom, CreatedAt: now}
 	r.groups[1] = Group{ID: 1, Name: "n1", ViewID: 1}
-	r.groups[2] = Group{ID: 2, Name: "lost", ViewID: 9}                // view missing
+	r.groups[2] = Group{ID: 2, Name: "lost", ViewID: 9}               // view missing
 	r.groups[3] = Group{ID: 3, Name: "cross", ViewID: 2, ParentID: 1} // parent in view 1
 	r.groups[4] = Group{ID: 4, Name: "c4", ViewID: 2}
 	r.groups[5] = Group{ID: 5, Name: "10.0.0.0/8", ViewID: 2, CIDR: netip.MustParsePrefix("10.0.0.0/8")}

@@ -15,6 +15,7 @@ Status: **draft v0.4** (2026-11-10)
 | D8 | Notes: one plain-text field per host, group and network | 2026-11-10 |
 | D9 | Groups collapse into one icon or expand into a frame on the same map. No drill-down view in v0.1 | 2026-11-10 |
 | D10 | Networks are groups with an optional `cidr` (network groups). No link lines. Hosts can be moved out of their network group by hand. Nested network groups are checked to fit their parent's range | 2026-11-10 |
+| D11 | Go module path: `github.com/maarten-boot/go-ined` | 2026-11-10 |
 
 ## Package layout
 ```
@@ -69,4 +70,5 @@ pkg/client/           public Go API client
 - [ ] Update `Changes.md`, tag `v0.1.0`
 
 ## Open questions
-- Go module path (for example `github.com/<owner>/go-ined`)?
+- Fixes proposed in `Crosscheck-2026-11-10-01.md`, waiting for the user's OK.
+- Should `docs/architecture` be merged into `main` before M1?

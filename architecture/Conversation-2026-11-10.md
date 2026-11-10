@@ -39,3 +39,5 @@
     **Claude** updated Spec to v0.4: withdrew SPEC-108–110 and 710, added SPEC-113–115, and changed 101/102/105–107/111/201/204/501/502/702/704/706–708. Plan v0.4. Tests: reworked TC-107–109 and 704, added TC-206.
 11. **User** confirmed assumptions A1–A5: up to about 5,000 hosts, IPv4-only range scans, localhost-only by default, TOML config, no status history in v0.1.
     **Claude** marked A1–A5 as confirmed in Spec.md and removed the item from Plan's open questions. The Go module path is still open.
+12. **User** chose the module path `github.com/maarten-boot/go-ined` (recorded as D11) and asked for a crosscheck first. Asked mid-turn whether to create an empty GitHub repo.
+    **Claude** ran crosscheck `Crosscheck-2026-11-10-01.md`: there is no code yet, so only the docs were checked against each other. Found 23 items (3 H, 10 M, 8 L, plus 2 informational). The main ones: no pan/zoom or search for 5,000 hosts, event ids across server restarts, `stale` undefined, `inedctl` without Spec items, and missing tests. All fixes are proposed and waiting for the user's OK.

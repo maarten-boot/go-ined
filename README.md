@@ -2,7 +2,7 @@
 
 A network monitor loosely modelled on [Tkined](https://github.com/flightaware/scotty) (Scotty), split into two parts:
 
-- **`ined-server`**: a daemon that keeps the inventory in SQLite and serves it over a REST + Server-Sent Events API. Planned: CIDR discovery, background ping and reverse DNS.
+- **`ined-server`**: a daemon that keeps the inventory in SQLite and serves it over a REST + Server-Sent Events API. It pings every monitored host in the background (IPv4 and IPv6). Planned: CIDR discovery and reverse DNS.
 - **`ined-gui`** (planned): a desktop client ([Fyne](https://fyne.io)) that shows hosts and groups on one shared map with live status. Groups can be collapsed and expanded, as in Tkined.
 - **`inedctl`** (planned): a command-line client.
 
@@ -10,8 +10,8 @@ Hosts and groups form a tree. A group with a CIDR is a **network group**: discov
 
 ## Status
 
-Early development. **Milestone 1 (server core) is done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS and the TOML config.
-Next up: live events (SSE) and background ping (M2), discovery and DNS (M3), the CLI (M4), and the GUI (M5–M6).
+Early development. **Milestones 1 and 2 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, and a live event stream (SSE).
+Next up: discovery and DNS (M3), the CLI (M4), and the GUI (M5–M6).
 See [`architecture/Plan.md`](architecture/Plan.md) for the roadmap.
 
 ## Build and run
@@ -34,6 +34,7 @@ INED=http://127.0.0.1:8470
 curl -s -X POST $INED/api/v1/groups -d '{"cidr":"192.168.1.0/24"}'
 curl -s -X POST $INED/api/v1/hosts  -d '{"ip":"192.168.1.10","name":"nas"}'   # goes into 192.168.1.0/24
 curl -s $INED/api/v1/map
+curl -sN $INED/api/v1/events                                                  # live events; Ctrl-C to stop
 ```
 
 More (verified) calls are in [`architecture/API-examples.md`](architecture/API-examples.md).
@@ -52,6 +53,8 @@ Every key, with its default, is in [`examples/server.toml`](examples/server.toml
 Security: by default the server listens on loopback only. To listen on any other address you must set `server.token`; clients then send `Authorization: Bearer <token>`. Set `server.tls_cert` and `server.tls_key` to turn on TLS.
 
 Only one `ined-server` can use a database at a time; a second one refuses to start.
+
+Ping: the server first tries unprivileged ICMP sockets, then raw sockets. On Linux, unprivileged ICMP needs the server's group inside `sysctl net.ipv4.ping_group_range` (many distributions allow all groups). Otherwise, give the binary `CAP_NET_RAW` (`sudo setcap cap_net_raw+ep bin/ined-server`). If neither works, the server still runs: hosts stay `unknown`, and `/api/v1/health` (with a token) reports the problem. The startup log shows the mode in use.
 
 ## Documentation
 

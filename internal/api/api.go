@@ -1,6 +1,6 @@
 // Package api serves the go-ined REST API under /api/v1 (SPEC-501,
-// SPEC-504, SPEC-802). Server-Sent Events (SPEC-502) are added in M2 and
-// discovery endpoints in M3.
+// SPEC-504, SPEC-802) and the Server-Sent Events stream (SPEC-502).
+// Discovery endpoints arrive in M3.
 package api
 
 import (
@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/maarten-boot/go-ined/internal/events"
 	"github.com/maarten-boot/go-ined/internal/inventory"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
@@ -31,6 +32,10 @@ type Options struct {
 	RunID   string                          // reported by /health (authenticated)
 	DBPing  func(ctx context.Context) error // for /health; nil = not checked
 	Logger  *slog.Logger                    // nil = slog.Default()
+	Events  *events.Bus                     // for /events; nil = endpoint answers 404
+	// ICMP reports the monitor's ICMP mode for /health (SPEC-304). errMsg
+	// is set when no mode works. nil = "not started".
+	ICMP func() (mode, errMsg string)
 }
 
 type server struct {
@@ -61,6 +66,9 @@ func New(svc *inventory.Service, opts Options) http.Handler {
 	}
 	route("/health", map[string]http.HandlerFunc{"GET": s.health})
 	route("/map", map[string]http.HandlerFunc{"GET": s.getMap})
+	if opts.Events != nil {
+		route("/events", map[string]http.HandlerFunc{"GET": s.events})
+	}
 	route("/hosts", map[string]http.HandlerFunc{"GET": s.listHosts, "POST": s.createHost})
 	route("/hosts/{id}", map[string]http.HandlerFunc{"GET": s.getHost, "PATCH": s.patchHost, "DELETE": s.deleteHost})
 	route("/groups", map[string]http.HandlerFunc{"GET": s.listGroups, "POST": s.createGroup})
@@ -108,7 +116,13 @@ func (s *server) health(w http.ResponseWriter, r *http.Request) {
 	h := apitypes.Health{Status: "ok", Version: s.opts.Version}
 	if isAuthed(r) {
 		h.RunID = s.opts.RunID
-		h.ICMPMode = "not started" // monitoring arrives in M2
+		h.ICMPMode = apitypes.ICMPNotStarted
+		if s.opts.ICMP != nil {
+			h.ICMPMode, h.ICMPError = s.opts.ICMP()
+			if h.ICMPError != "" {
+				h.Status = "degraded"
+			}
+		}
 		h.DB = "ok"
 		if s.opts.DBPing != nil {
 			if err := s.opts.DBPing(r.Context()); err != nil {

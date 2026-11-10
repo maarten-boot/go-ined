@@ -11,9 +11,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,8 +24,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/maarten-boot/go-ined/internal/monitor"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
+
+// TestMain keeps the server tests off the real network: every test uses a
+// fake prober unless it sets its own.
+func TestMain(m *testing.M) {
+	newProber = func() (monitor.Prober, string, error) { return fakeProber{}, apitypes.ICMPUnprivileged, nil }
+	os.Exit(m.Run())
+}
 
 // syncBuf is a goroutine-safe log buffer.
 type syncBuf struct {
@@ -75,8 +86,8 @@ func TestRefuseNonLoopbackWithoutToken(t *testing.T) {
 	}
 }
 
-// TC-802: SIGTERM/SIGINT (context cancel) shuts down cleanly; the database
-// is closed and data is kept. SSE stream closing is added in M2.
+// TC-802: SIGTERM/SIGINT (context cancel) shuts down cleanly: open SSE
+// streams are closed at once, the database is closed and data is kept.
 func TestCleanShutdown(t *testing.T) {
 	db := filepath.Join(t.TempDir(), "x.db")
 	addr, stop, log := startServer(t, "-listen", "127.0.0.1:0", "-db", db)
@@ -87,8 +98,28 @@ func TestCleanShutdown(t *testing.T) {
 	}
 	resp.Body.Close()
 
+	ev, err := http.Get("http://" + addr + "/api/v1/events")
+	if err != nil || ev.StatusCode != 200 {
+		t.Fatalf("events: %v %v", err, ev)
+	}
+	defer ev.Body.Close()
+	streamDone := make(chan error, 1)
+	go func() { _, err := io.Copy(io.Discard, ev.Body); streamDone <- err }()
+
+	start := time.Now()
 	if err := stop(); err != nil {
 		t.Fatalf("shutdown error: %v\n%s", err, log)
+	}
+	if d := time.Since(start); d > shutdownTimeout/2 {
+		t.Errorf("shutdown took %v: the SSE stream held it up", d)
+	}
+	select {
+	case err := <-streamDone:
+		if err != nil {
+			t.Errorf("stream ended with %v, want a clean end", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("SSE stream still open after shutdown")
 	}
 	if !strings.Contains(log.String(), "stopped") {
 		t.Errorf("no clean stop in log:\n%s", log)
@@ -107,6 +138,116 @@ func TestCleanShutdown(t *testing.T) {
 	var gs []apitypes.Group
 	if err := json.NewDecoder(resp.Body).Decode(&gs); err != nil || len(gs) != 1 {
 		t.Errorf("after restart: %v %+v", err, gs)
+	}
+}
+
+// fakeProber answers every ping; gate, if not nil, holds rounds until it
+// is closed.
+type fakeProber struct{ gate chan struct{} }
+
+func (p fakeProber) Ping(ctx context.Context, _ netip.Addr, count int, _ time.Duration) (monitor.Result, error) {
+	if p.gate != nil {
+		select {
+		case <-p.gate:
+		case <-ctx.Done():
+			return monitor.Result{}, ctx.Err()
+		}
+	}
+	return monitor.Result{Sent: count, Received: count, RTTs: []time.Duration{time.Millisecond}}, nil
+}
+
+func useProber(t *testing.T, p monitor.Prober, err error) {
+	old := newProber
+	newProber = func() (monitor.Prober, string, error) { return p, apitypes.ICMPUnprivileged, err }
+	t.Cleanup(func() { newProber = old })
+}
+
+func getJSON(t *testing.T, url string, out any) {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func waitHost(t *testing.T, url string, cond func(apitypes.Host) bool) apitypes.Host {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var h apitypes.Host
+		getJSON(t, url, &h)
+		if cond(h) {
+			return h
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timeout; host = %+v", h)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TC-602, TC-303: ping results are saved; after a restart the last status
+// is served with stale = true until the first round, which clears it.
+func TestMonitoringPersistsAndStale(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "x.db")
+	cfg := filepath.Join(dir, "s.toml")
+	if err := os.WriteFile(cfg, []byte("[monitor]\ninterval = \"1h\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	useProber(t, fakeProber{}, nil)
+	addr, stop, _ := startServer(t, "-config", cfg, "-listen", "127.0.0.1:0", "-db", db)
+	resp, err := http.Post("http://"+addr+"/api/v1/hosts", "application/json", strings.NewReader(`{"ip":"192.0.2.7"}`))
+	if err != nil || resp.StatusCode != 201 {
+		t.Fatalf("create: %v %v", err, resp)
+	}
+	resp.Body.Close()
+	h := waitHost(t, "http://"+addr+"/api/v1/hosts/1", func(h apitypes.Host) bool { return h.Status == apitypes.StatusUp })
+	if h.RTTms == nil || *h.RTTms != 1 || h.LossPct == nil || *h.LossPct != 0 || h.LastSeen == nil || h.LastChange == nil {
+		t.Fatalf("round not recorded: %+v", h)
+	}
+	if err := stop(); err != nil {
+		t.Fatal(err)
+	}
+
+	gate := make(chan struct{})
+	useProber(t, fakeProber{gate: gate}, nil)
+	addr, _, _ = startServer(t, "-config", cfg, "-listen", "127.0.0.1:0", "-db", db)
+	var h2 apitypes.Host
+	getJSON(t, "http://"+addr+"/api/v1/hosts/1", &h2)
+	if !h2.Stale || h2.Status != apitypes.StatusUp || h2.RTTms == nil || !h2.LastSeen.Equal(*h.LastSeen) {
+		t.Fatalf("after restart: %+v", h2)
+	}
+	close(gate)
+	waitHost(t, "http://"+addr+"/api/v1/hosts/1", func(h apitypes.Host) bool { return !h.Stale && h.Status == apitypes.StatusUp })
+}
+
+// TC-304: without any ICMP mode the server runs, hosts stay unknown and
+// /health reports the error.
+func TestNoICMP(t *testing.T) {
+	useProber(t, nil, errors.New("no ICMP mode available (test)"))
+	addr, _, log := startServer(t, "-listen", "127.0.0.1:0", "-db", filepath.Join(t.TempDir(), "x.db"))
+	resp, err := http.Post("http://"+addr+"/api/v1/hosts", "application/json", strings.NewReader(`{"ip":"192.0.2.7"}`))
+	if err != nil || resp.StatusCode != 201 {
+		t.Fatalf("create: %v %v", err, resp)
+	}
+	resp.Body.Close()
+	var hv apitypes.Health
+	getJSON(t, "http://"+addr+"/api/v1/health", &hv)
+	if hv.Status != "degraded" || hv.ICMPMode != apitypes.ICMPUnavailable || !strings.Contains(hv.ICMPError, "no ICMP mode") {
+		t.Errorf("health: %+v", hv)
+	}
+	var h apitypes.Host
+	getJSON(t, "http://"+addr+"/api/v1/hosts/1", &h)
+	if h.Status != apitypes.StatusUnknown {
+		t.Errorf("host: %+v", h)
+	}
+	if !strings.Contains(log.String(), "monitoring disabled") {
+		t.Errorf("no log line:\n%s", log)
 	}
 }
 

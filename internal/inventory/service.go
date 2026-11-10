@@ -39,6 +39,17 @@ type Changes struct {
 	NextGroupID  int64
 }
 
+// Notifier receives the events of every change (SPEC-502, SPEC-305). It is
+// called with the Service lock held, so events are published in the order
+// of the changes; Publish must not block or call back into the Service.
+type Notifier interface {
+	Publish(typ string, data any)
+}
+
+type nopNotifier struct{}
+
+func (nopNotifier) Publish(string, any) {}
+
 // Service is the inventory with locking and write-through persistence. All
 // returned values are copies.
 type Service struct {
@@ -49,6 +60,30 @@ type Service struct {
 	nextGroup int64
 	now       func() time.Time
 	warnings  []string
+	notify    Notifier
+}
+
+// SetNotifier sets where change events go. nil turns events off. Call it
+// before the Service is shared.
+func (s *Service) SetNotifier(n Notifier) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if n == nil {
+		n = nopNotifier{}
+	}
+	s.notify = n
+}
+
+// emitGroupStatus publishes group.status for every group that existed in
+// before and whose computed status differs now (SPEC-305). Groups that are
+// new (their created event carries the status) or deleted are skipped.
+func (s *Service) emitGroupStatus(before map[int64]Counts) {
+	after := s.m.Aggregate()
+	for _, id := range sortedKeys(after) {
+		if b, ok := before[id]; ok && b.Status() != after[id].Status() {
+			s.notify.Publish(apitypes.EventGroupStatus, apitypes.GroupStatusEvent{ID: id, Status: after[id].Status()})
+		}
+	}
 }
 
 // NewService loads the inventory from repo. Every loaded host is marked
@@ -60,7 +95,7 @@ func NewService(ctx context.Context, repo Repository) (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("inventory: load: %w", err)
 	}
-	s := &Service{repo: repo, m: NewModel(), nextHost: max(1, st.NextHostID), nextGroup: max(1, st.NextGroupID), now: time.Now}
+	s := &Service{repo: repo, m: NewModel(), nextHost: max(1, st.NextHostID), nextGroup: max(1, st.NextGroupID), now: time.Now, notify: nopNotifier{}}
 	for i := range st.Groups {
 		g := st.Groups[i]
 		s.m.Groups[g.ID] = &g
@@ -250,9 +285,13 @@ func (s *Service) CreateHost(ctx context.Context, in apitypes.HostCreate) (apity
 	if err := s.repo.Apply(ctx, Changes{Hosts: []Host{h}, NextHostID: h.ID + 1}); err != nil {
 		return apitypes.Host{}, err
 	}
+	before := s.m.Aggregate()
 	s.nextHost++
 	s.m.Hosts[h.ID] = &h
-	return s.hostView(&h), nil
+	v := s.hostView(&h)
+	s.notify.Publish(apitypes.EventHostCreated, v)
+	s.emitGroupStatus(before)
+	return v, nil
 }
 
 // UpdateHost applies a PATCH to a host.
@@ -306,8 +345,12 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 	if err := s.repo.Apply(ctx, Changes{Hosts: []Host{h}}); err != nil {
 		return apitypes.Host{}, err
 	}
+	before := s.m.Aggregate()
 	*cur = h
-	return s.hostView(cur), nil
+	v := s.hostView(cur)
+	s.notify.Publish(apitypes.EventHostUpdated, v)
+	s.emitGroupStatus(before)
+	return v, nil
 }
 
 // DeleteHost removes a host.
@@ -320,7 +363,10 @@ func (s *Service) DeleteHost(ctx context.Context, id int64) error {
 	if err := s.repo.Apply(ctx, Changes{DeleteHosts: []int64{id}}); err != nil {
 		return err
 	}
+	before := s.m.Aggregate()
 	delete(s.m.Hosts, id)
+	s.notify.Publish(apitypes.EventHostDeleted, apitypes.DeletedEvent{ID: id})
+	s.emitGroupStatus(before)
 	return nil
 }
 
@@ -374,7 +420,9 @@ func (s *Service) CreateGroup(ctx context.Context, in apitypes.GroupCreate) (api
 		return apitypes.Group{}, err
 	}
 	s.nextGroup++
-	return groupView(&g, s.m.Aggregate()[g.ID]), nil
+	v := groupView(&g, s.m.Aggregate()[g.ID])
+	s.notify.Publish(apitypes.EventGroupCreated, v)
+	return v, nil
 }
 
 // UpdateGroup applies a PATCH to a group (SPEC-103, SPEC-113, SPEC-114).
@@ -430,6 +478,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	if err := checkPos(g.X, g.Y); err != nil {
 		return apitypes.Group{}, err
 	}
+	before := s.m.Aggregate()
 	old := *cur
 	*cur = g
 	if err := s.m.CheckNesting(id); err != nil {
@@ -441,7 +490,10 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 		*cur = old
 		return apitypes.Group{}, err
 	}
-	return groupView(cur, s.m.Aggregate()[id]), nil
+	v := groupView(cur, s.m.Aggregate()[id])
+	s.notify.Publish(apitypes.EventGroupUpdated, v)
+	s.emitGroupStatus(before)
+	return v, nil
 }
 
 // DeleteGroup removes a group (SPEC-104). mode is "", "reparent" or
@@ -498,6 +550,7 @@ func (s *Service) DeleteGroup(ctx context.Context, id int64, mode string) error 
 	if err := s.repo.Apply(ctx, ch); err != nil {
 		return err
 	}
+	before := s.m.Aggregate()
 	for _, h := range ch.Hosts {
 		*s.m.Hosts[h.ID] = h
 	}
@@ -510,6 +563,21 @@ func (s *Service) DeleteGroup(ctx context.Context, id int64, mode string) error 
 	for _, gid := range ch.DeleteGroups {
 		delete(s.m.Groups, gid)
 	}
+	// Events: moved children first, then one deleted event per item.
+	after := s.m.Aggregate()
+	for _, h := range ch.Hosts {
+		s.notify.Publish(apitypes.EventHostUpdated, s.hostView(s.m.Hosts[h.ID]))
+	}
+	for _, c := range ch.Groups {
+		s.notify.Publish(apitypes.EventGroupUpdated, groupView(s.m.Groups[c.ID], after[c.ID]))
+	}
+	for _, hid := range ch.DeleteHosts {
+		s.notify.Publish(apitypes.EventHostDeleted, apitypes.DeletedEvent{ID: hid})
+	}
+	for _, gid := range ch.DeleteGroups {
+		s.notify.Publish(apitypes.EventGroupDeleted, apitypes.DeletedEvent{ID: gid})
+	}
+	s.emitGroupStatus(before)
 	return nil
 }
 

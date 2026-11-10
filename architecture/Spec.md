@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.8** (2026-11-10)
+Status: **draft v0.9** (2026-11-10)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -57,13 +57,14 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-205** MUST: Each discovery job has an id, a state (`running`, `done`, `cancelled` or `failed`) and progress (addresses probed, total, hosts found). A job can be cancelled. Progress is published as events.
 
 ## 6. Monitoring
-- **SPEC-301** MUST: Every monitored host is pinged in the background every `interval` (default 60 s). Start times are spread across the interval so the pings don't all go out at once.
+- **SPEC-301** MUST: Every monitored host is pinged in the background every `interval` (default 60 s). `monitor.enabled = false` turns pinging off for the whole server; hosts then keep their stored status and `/health` reports `icmp_mode: disabled` (v0.9). Start times are spread across the interval so the pings don't all go out at once.
 - **SPEC-302** MUST: Each round sends `count` echo requests (default 3) with a `timeout` (default 1 s). A host is `up` if at least one reply arrives. It becomes `down` after `down_after` failed rounds in a row (default 2). Before its first result, a host is `unknown`.
 - **SPEC-303** MUST: Each round records the average round-trip time, the packet loss in percent, `last_seen` (time of the last reply) and `last_change` (time of the last status change).
 - **SPEC-304** MUST: The server tries unprivileged ICMP first and falls back to privileged (raw) ICMP. The startup log says which mode is in use. If neither works, the server keeps running, marks hosts `unknown` and reports a clear error through the API's health endpoint (`status: degraded`, `icmp_mode: unavailable`, `icmp_error`). IPv4 hosts are pinged with ICMP, IPv6 hosts with ICMPv6 (v0.8).
 - **SPEC-305** MUST: When a host's status changes, the server emits a `host.status` event. Whenever a group's computed status changes, for any cause (a host status change, a move, an add, a delete, or a change to `monitored`), the server emits `group.status` for that group.
 - **SPEC-306** MUST: A host with monitoring turned off (`monitored = false`) is not pinged and is left out of group status.
 - **SPEC-307** MUST (v0.8): `host.status` is emitted only when a host's status changes or its `stale` flag clears. Changes to round-trip time or loss alone are saved but emit no event. Ping results are written to the database in batches, one transaction about every second.
+- **SPEC-308** MUST (v0.9): When a host's IP address changes, its status is reset to `unknown`, its round-trip time and loss are cleared, `last_change` is set, and `host.status` is emitted after `host.updated`. The ping streak starts over.
 
 ## 7. Reverse DNS
 - **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20).
@@ -91,6 +92,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   | 405 | `method_not_allowed` | Method not supported on an existing endpoint (with an `Allow` header) |
   | 409 | `conflict` | Duplicate IP or CIDR, cycle, non-empty group delete, SPEC-114 violation |
   | 413 | `too_large` | Note over 64 KiB, request body too large |
+  | 503 | `unavailable` | The server is shutting down (for example, a new `GET /events` during shutdown) (v0.9) |
   | 500 | `internal` | Unexpected server error |
 - **SPEC-505** SHOULD: The server serves an OpenAPI document at `/api/v1/openapi.json`.
 - **SPEC-506** MUST: A Go client package (`pkg/client`) wraps the REST and SSE API. The GUI and the CLI both use it. The JSON types live in `pkg/apitypes` and are shared by the server and all clients.
@@ -98,7 +100,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 ## 9. Storage
 - **SPEC-601** MUST: Data is stored in SQLite through `modernc.org/sqlite` (pure Go, no cgo). The database file path is configurable.
 - **SPEC-602** MUST: The database schema is versioned. Migrations run automatically at startup.
-- **SPEC-603** MUST: The current status, round-trip time, packet loss, `last_seen` and `last_change` are saved to the database, so a restarted server shows the last known state. After a restart, every host has `stale = true` until its first ping round completes. `stale` is a separate flag and doesn't change the status value.
+- **SPEC-603** MUST: The current status, round-trip time, packet loss, `last_seen` and `last_change` are saved to the database, so a restarted server shows the last known state. After a restart, every monitored host has `stale = true` until its first ping round completes. Hosts with `monitored = false` are never stale; turning monitoring off clears the flag (v0.9). `stale` is a separate flag and doesn't change the status value.
 - **SPEC-604** MUST: The server takes an exclusive lock on its database at startup. A second server on the same database refuses to start at once, with the message "database is in use by another process". The lock is released when the server stops.
 - **SPEC-605** MUST: At startup the server checks the tree. A host or group whose parent group doesn't exist is moved to the root, the repair is saved, and a warning is logged for each one. A parent cycle stops the startup with an error, because it needs a manual fix.
 
@@ -134,6 +136,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   | server | `server.token` | `""` |
   | server | `server.tls_cert`, `server.tls_key` | `""` (TLS off) |
   | server | `storage.db_path` | `""` (= `$XDG_DATA_HOME/go-ined/ined.db`) |
+  | server | `monitor.enabled` | `true` (v0.9) |
   | server | `monitor.interval` / `count` / `timeout` / `down_after` | `60s` / `3` / `1s` / `2` |
   | server | `discovery.max_prefix` / `rate` / `concurrency` | `16` / `200` / `64` |
   | server | `dns.refresh` / `concurrency` | `1h` / `20` |
@@ -161,6 +164,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - A 9P front end that exposes the inventory as a file tree.
 - A ZMQ publisher for alerts.
 - TCP-port probes for hosts that block ICMP, and ARP discovery.
+- MAC address collection (v0.9, user request). MAC addresses are only visible (ARP/NDP) from inside the host's own layer-2 segment, so remote networks need a vantage point there: either ping and ARP/neighbour-table reads over SSH on a host in that network, or a small go-ined agent that runs there and reports to the server.
 - Status history and graphs.
 - Importing Tkined `.tki` map files.
 - Free-floating text labels on the map, like Tkined's text objects.

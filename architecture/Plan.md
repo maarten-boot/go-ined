@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.8** (2026-11-10)
+Status: **draft v0.9** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -60,6 +60,9 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] ICMP prober (ICMP and ICMPv6), unprivileged first then privileged (SPEC-304)
 - [x] Ping scheduler, status rules, group aggregation, status persistence and the `stale` flag (SPEC-301..303, 305..307, 105, 603)
 
+### M2 follow-ups ✅ (branch `fix/m2-followups`)
+- [x] 503 `unavailable` in SPEC-504; `monitor.enabled` (SPEC-301, 805) and deterministic `make examples`; `stale` only for monitored hosts (SPEC-603); status reset on IP change (SPEC-308)
+
 ### M3: Discovery + DNS
 - [ ] CIDR expansion, rate limit, jobs (SPEC-201..205)
 - [ ] Reverse DNS with a concurrency limit (SPEC-401..403)
@@ -83,6 +86,5 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] Update `Changes.md`, tag `v0.1.0`
 
 ## Open questions
-- M2 follow-ups waiting for the user (log item 21): 503 `unavailable` in SPEC-504; deterministic `make examples` now that the server pings; `stale` on unmonitored hosts; status after an IP change.
 - Not yet decided: configurable `log/slog` level and format, OpenAPI-first or generated from the handlers (before M7), `inedctl backup`.
 - `staticcheck` / `govulncheck`: run in CI (M7), or locally once allowed.

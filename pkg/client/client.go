@@ -391,4 +391,6 @@ func (c *Client) UnplaceHost(ctx context.Context, viewID, hostID int64) error {
 }
 
 // PlacementPath is the path PlaceHost and UnplaceHost use.
-func PlacementPath(viewID, hostID int64) string { return "/views/" + id(viewID) + "/hosts/" + id(hostID) }
+func PlacementPath(viewID, hostID int64) string {
+	return "/views/" + id(viewID) + "/hosts/" + id(hostID)
+}

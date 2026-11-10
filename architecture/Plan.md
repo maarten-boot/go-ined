@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.12** (2026-11-10)
+Status: **draft v0.13** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -93,5 +93,6 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] Update `Changes.md`, tag `v0.1.0`
 
 ## Open questions
+- **Views** (user idea, 2026-11-10): design proposal in `Design-views.md`; scope decision pending (recommended: M4 now, views as M4b before the GUI). Ids stay integers (decided).
 - Not yet decided: configurable `log/slog` level and format, OpenAPI-first or generated from the handlers (before M7), `inedctl backup`.
 - `staticcheck` / `govulncheck`: run in CI (M7), or locally once allowed.

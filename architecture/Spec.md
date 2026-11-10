@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.12** (2026-11-10)
+Status: **draft v0.13** (2026-11-10)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -95,7 +95,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   | 503 | `unavailable` | The server is shutting down (for example, a new `GET /events` during shutdown) (v0.9) |
   | 500 | `internal` | Unexpected server error |
 - **SPEC-505** SHOULD: The server serves an OpenAPI document at `/api/v1/openapi.json`.
-- **SPEC-506** MUST: A Go client package (`pkg/client`) wraps the REST and SSE API. The GUI and the CLI both use it. The JSON types live in `pkg/apitypes` and are shared by the server and all clients.
+- **SPEC-506** MUST: A Go client package (`pkg/client`) wraps the REST and SSE API. The GUI and the CLI both use it. The JSON types live in `pkg/apitypes` and are shared by the server and all clients. API errors are returned as a typed `*client.APIError` with the HTTP status, `code` and message. The event stream reconnects automatically (waiting 1 s at first, doubling up to 30 s), resumes with `Last-Event-ID`, and passes `resync` on to the caller (v0.13).
 
 ## 9. Storage
 - **SPEC-601** MUST: Data is stored in SQLite through `modernc.org/sqlite` (pure Go, no cgo). The database file path is configurable.
@@ -144,6 +144,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   | server | `events.buffer` | `1000` |
   | gui, ctl | `server.url` | `http://127.0.0.1:8470` |
   | gui, ctl | `server.token` | `""` |
+  | gui, ctl | `server.ca_cert` | `""` (system roots; set a PEM file to trust a self-signed server) (v0.13) |
   | gui | `contrast.preset` | `AA` (`AA`, `AAA`, `Max` or `custom`) |
   | gui | `contrast.min_ratio` | `4.5` (used only when `preset = "custom"`, range 4.5–21) |
 - **SPEC-806** SHOULD: Every binary supports `-version`, which prints the version (set at build time) and exits.
@@ -158,8 +159,10 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   - `health`
 
   The server URL and token come from SPEC-805.
-- **SPEC-902** MUST: Output is a human-readable table by default. `--json` prints the API's JSON unchanged.
-- **SPEC-903** MUST: Exit codes: `0` OK, `1` the API returned an error, `2` usage error, `3` connection or authentication error.
+
+  Shape (v0.13): `inedctl [--url U] [--token T] [--ca-cert F] [--json] [--config F] <object> <action> [flags] [args]`, parsed with the standard library `flag` package. Examples: `host add <ip> [--name N] [--parent ID] [--note T] [--unmonitored]`, `host move <id> <group-id|root>`, `group add [--cidr C] [--name N] [--parent ID]`, `group rm <id> [--reparent|--cascade]`. `discover start` prints the job; with `--wait` it follows the events, shows progress until the job ends, and exits 1 if the job fails. `events` prints one line per event (time, type, id, short summary); with `--json`, the raw event JSON.
+- **SPEC-902** MUST: Output is a human-readable table by default. `--json` prints the API's JSON unchanged. Tables are sorted by ID. Hosts: ID, IP, NAME, STATUS, RTT, PARENT, MON. Groups: ID, NAME, CIDR, STATUS, PARENT, COLLAPSED (v0.13).
+- **SPEC-903** MUST: Exit codes: `0` OK, `1` the API returned an error, `2` usage error, `3` connection or authentication error (including 401).
 
 ## 13. LATER (not in v0.1)
 - A 9P front end that exposes the inventory as a file tree.
@@ -171,7 +174,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - Importing Tkined `.tki` map files.
 - Free-floating text labels on the map, like Tkined's text objects.
 - A drill-down view that opens a single group on its own.
-- Host references, so one host can appear in several groups (for example its subnet and a functional group, or a router on several networks).
+- Host references, so one host can appear in several groups (for example its subnet and a functional group, or a router on several networks). **Proposed to be covered by views**, see `Design-views.md` (v0.13).
 - A topology view with link lines.
 - Notes as a log with dates and authors.
 - mTLS, multiple users, read-only roles.

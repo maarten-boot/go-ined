@@ -98,3 +98,6 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-901 | SPEC-901 | I | Each `inedctl` subcommand works against a test server, including `note set` from stdin | — | planned |
 | TC-902 | SPEC-902 | I | `--json` output equals the API response; the default output is a table | — | planned |
 | TC-903 | SPEC-903 | I | Exit codes: 0 OK, 1 API error, 2 usage error, 3 server unreachable or wrong token | — | planned |
+| TC-904 | SPEC-805, 803 | I | `server.ca_cert` / `--ca-cert` lets the CLI talk to a server with a self-signed certificate; without it the connection fails with exit code 3 | — | planned |
+| TC-905 | SPEC-506, 503 | I | The client's event stream reconnects after the server restarts or the connection drops, resumes with `Last-Event-ID`, and passes `resync` on | — | planned |
+| TC-906 | SPEC-901 | I | `discover start --wait` shows progress and exits 0 on `done`, 1 on `failed` | — | planned |

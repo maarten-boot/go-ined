@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.5** (2026-11-10)
+Status: **draft v0.6** (2026-11-10)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -34,16 +34,16 @@ go-ined is a network monitor loosely modelled on Tkined (Scotty). It splits Tkin
 There are two kinds of **items**: host and group. A group with a `cidr` is a **network group**. Items form a tree, and all items share one map.
 
 - **SPEC-101** MUST: A **host** has an id, a unique IP address, a PTR name, an optional manual name, a description, a note, an optional parent group, a monitored flag (default on), a status, and created/updated timestamps.
-- **SPEC-102** MUST: A **group** has an id, a name, a description, a note, an optional `cidr` (IPv4 or IPv6), an optional parent group, and a `collapsed` flag. Hosts and groups form a **tree**: each item has at most one parent, and an item with no parent sits at the root.
+- **SPEC-102** MUST: A **group** has an id, a name, a description, a note, an optional `cidr` (IPv4 or IPv6), an optional parent group, and a `collapsed` flag. If a group is created with a CIDR and no name, its name is the CIDR; a name can't be changed to empty. Hosts and groups form a **tree**: each item has at most one parent, and an item with no parent sits at the root.
 - **SPEC-103** MUST: Moving a group into itself or into one of its own subgroups is rejected (no cycles).
 - **SPEC-104** MUST: Deleting a non-empty group is rejected unless the request says what to do with its children: `reparent` (move them to the group's parent) or `cascade` (delete them as well).
 - **SPEC-105** MUST: A host's status is one of `up`, `down` or `unknown`. A group's status is the worst status among all monitored hosts in its subtree, in the order `down` > `unknown` > `up`. A group with no monitored hosts in its subtree is `unknown`. Network groups follow the same rule.
 - **SPEC-106** MUST: Every item has (x, y) coordinates on the single shared map. A new item gets a free position near its parent.
-- **SPEC-107** MUST: A host can be added by hand by giving its IP address (IPv4 or IPv6). If no parent is given, it goes into the most specific network group whose CIDR contains its IP. If none matches, it goes to the root.
+- **SPEC-107** MUST: A host can be added by hand by giving its IP address (IPv4 or IPv6). If `parent_id` is omitted or null, it goes into the most specific network group whose CIDR contains its IP. If none matches, it goes to the root.
 - **SPEC-108** ~~withdrawn~~ (v0.4: separate network objects replaced by network groups, SPEC-113)
 - **SPEC-109** ~~withdrawn~~ (v0.4: no host-to-network links)
 - **SPEC-110** ~~withdrawn~~ (v0.4: a network group's status follows SPEC-105)
-- **SPEC-111** MUST: Every host and group has one plain-text **note**. It is optional, empty by default, and at most 64 KiB.
+- **SPEC-111** MUST: Every host and group has one plain-text **note**. It is optional, empty by default, and at most 64 KiB. Other text limits: a name is at most 255 bytes, and a description at most 4 KiB.
 - **SPEC-112** MUST: A group's `collapsed` flag is stored on the server and shared by all clients. New groups start collapsed. An item is **visible** on the map only if none of the groups above it is collapsed.
 - **SPEC-113** MUST: A group's `cidr` must be a valid, unique range in canonical form, with no host bits set. Two network groups can't share the same CIDR.
 - **SPEC-114** MUST: A network group nested inside another network group must have a CIDR within its ancestor's range. A create, move or update that breaks this is rejected. Ordinary groups (without `cidr`) can sit anywhere, and hosts can be moved anywhere: network membership is a starting point, not enforced.
@@ -72,7 +72,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-501** MUST: The JSON REST API lives under `/api/v1`:
   - `GET/POST /hosts`, `GET/PATCH/DELETE /hosts/{id}`
   - `GET/POST /groups`, `GET/PATCH/DELETE /groups/{id}?children=reparent|cascade`
-  - `GET /map`: every item with its type, parent, position, `collapsed` flag, `cidr`, status, `stale` flag, display name, `has_note` flag and `outside_cidr` flag. A client builds the map from this one response.
+  - `GET /map`: every item with its type, parent, position, `collapsed` flag, `cidr`, status, `stale` flag, display name, `has_note` flag, `outside_cidr` flag and, for hosts, `ip`. A client builds the map from this one response.
   - `POST /discovery`, `GET /discovery/{id}`, `DELETE /discovery/{id}` (cancel)
   - `GET /health`: without a token, returns only `{status, version}`. With a valid token, it also returns the ICMP mode, database status and run id.
   - Moving, repositioning, collapsing, expanding and editing notes are all done with `PATCH` on `parent_id`, `x` / `y`, `collapsed` or `note`.
@@ -82,14 +82,15 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 
   | HTTP | `code` | When |
   |------|--------|------|
-  | 400 | `invalid_argument` | Malformed JSON, invalid IP or CIDR, non-canonical CIDR, IPv6 discovery |
+  | 400 | `invalid_argument` | Malformed JSON, unknown JSON field, invalid IP or CIDR, non-canonical CIDR, IPv6 discovery, a `parent_id` that doesn't exist, text over its length limit (except notes) |
   | 401 | `unauthenticated` | Missing or invalid token |
-  | 404 | `not_found` | Unknown id |
+  | 404 | `not_found` | Unknown id in the path, unknown endpoint |
+  | 405 | `method_not_allowed` | Method not supported on an existing endpoint (with an `Allow` header) |
   | 409 | `conflict` | Duplicate IP or CIDR, cycle, non-empty group delete, SPEC-114 violation |
   | 413 | `too_large` | Note over 64 KiB, request body too large |
   | 500 | `internal` | Unexpected server error |
 - **SPEC-505** SHOULD: The server serves an OpenAPI document at `/api/v1/openapi.json`.
-- **SPEC-506** MUST: A Go client package (`pkg/client`) wraps the REST and SSE API. The GUI and the CLI both use it.
+- **SPEC-506** MUST: A Go client package (`pkg/client`) wraps the REST and SSE API. The GUI and the CLI both use it. The JSON types live in `pkg/apitypes` and are shared by the server and all clients.
 
 ## 9. Storage
 - **SPEC-601** MUST: Data is stored in SQLite through `modernc.org/sqlite` (pure Go, no cgo). The database file path is configurable.
@@ -136,6 +137,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   | gui, ctl | `server.token` | `""` |
   | gui | `contrast.preset` | `AA` (`AA`, `AAA`, `Max` or `custom`) |
   | gui | `contrast.min_ratio` | `4.5` (used only when `preset = "custom"`, range 4.5–21) |
+- **SPEC-806** SHOULD: Every binary supports `-version`, which prints the version (set at build time) and exits.
 
 ## 12. CLI (`inedctl`)
 - **SPEC-901** MUST: Subcommands:

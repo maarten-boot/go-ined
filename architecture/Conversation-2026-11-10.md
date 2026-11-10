@@ -32,3 +32,5 @@
 8. **User**: "OK, defaults".
    **Decisions:** D7 network objects (CIDR, bar, links to hosts by longest prefix), D8 one plain-text note per item, D9 one shared map where groups collapse into an icon or expand into a frame, no drill-down view; the collapsed/expanded state is stored on the server.
    **Claude** updated Spec to v0.3 (changed SPEC-101/102/105/106/201/501/502/702–708; added SPEC-108–112 and 710–712), Plan to v0.3, and Tests (TC-107–112, 205, 504, 704–706).
+9. **User** suggested an alternative: make the CIDR network a group itself. That removes the connecting lines and makes the map less cluttered.
+   **Claude** agreed and recommended it, noting the trade-offs (multi-homed hosts, the tree limits each host to one group, no topology lines). Proposed rules for network groups. Waiting for the user's confirmation.

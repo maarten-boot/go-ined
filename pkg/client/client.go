@@ -15,7 +15,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -110,6 +112,24 @@ func certPool(file string) (*x509.CertPool, error) {
 
 // URL returns the server's base URL.
 func (c *Client) URL() string { return c.base }
+
+// TokenInClear reports whether the client sends a token over plain HTTP to
+// a host that isn't loopback, where others on the network can read it.
+// Clients warn about this (SPEC-802).
+func (c *Client) TokenInClear() bool {
+	u, err := url.Parse(c.base)
+	if err != nil || c.token == "" || u.Scheme != "http" {
+		return false
+	}
+	h := u.Hostname()
+	if h == "localhost" || strings.HasSuffix(h, ".localhost") {
+		return false
+	}
+	if ip, err := netip.ParseAddr(h); err == nil {
+		return !ip.Unmap().IsLoopback()
+	}
+	return net.ParseIP(h) == nil // a name other than localhost
+}
 
 // APIError is an error response of the API (SPEC-504).
 type APIError struct {

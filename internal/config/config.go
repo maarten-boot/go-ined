@@ -165,18 +165,21 @@ func DefaultDBPath() (string, error) {
 // error, but a missing explicitly given file is.
 func LoadServer(path string) (Server, error) {
 	cfg := DefaultServer()
-	if err := load(path, "server.toml", &cfg); err != nil {
+	if _, err := load(path, "server.toml", &cfg); err != nil {
 		return cfg, err
 	}
 	return cfg, cfg.Validate()
 }
 
 // LoadClient reads the inedctl config and applies INED_URL / INED_TOKEN.
+// A relative server.ca_cert is taken relative to the config file's folder.
 func LoadClient(path string) (Client, error) {
 	cfg := DefaultClient()
-	if err := load(path, "ctl.toml", &cfg); err != nil {
+	used, err := load(path, "ctl.toml", &cfg)
+	if err != nil {
 		return cfg, err
 	}
+	cfg.Server.relative(used)
 	applyEnv(&cfg.Server)
 	return cfg, nil
 }
@@ -184,11 +187,21 @@ func LoadClient(path string) (Client, error) {
 // LoadGUI reads the GUI config and applies INED_URL / INED_TOKEN.
 func LoadGUI(path string) (GUI, error) {
 	cfg := DefaultGUI()
-	if err := load(path, "gui.toml", &cfg); err != nil {
+	used, err := load(path, "gui.toml", &cfg)
+	if err != nil {
 		return cfg, err
 	}
+	cfg.Server.relative(used)
 	applyEnv(&cfg.Server)
 	return cfg, nil
+}
+
+// relative makes a relative CACert relative to the folder of the config
+// file it came from (file is "" when no file was read).
+func (s *ClientServer) relative(file string) {
+	if s.CACert != "" && file != "" && !filepath.IsAbs(s.CACert) {
+		s.CACert = filepath.Join(filepath.Dir(file), s.CACert)
+	}
 }
 
 func applyEnv(s *ClientServer) {
@@ -200,21 +213,23 @@ func applyEnv(s *ClientServer) {
 	}
 }
 
-func load(path, defaultName string, into any) error {
+// load decodes the file into into and returns the path it read ("" when
+// the default file doesn't exist).
+func load(path, defaultName string, into any) (string, error) {
 	explicit := path != ""
 	if !explicit {
 		p, err := DefaultPath(defaultName)
 		if err != nil {
-			return err
+			return "", err
 		}
 		path = p
 	}
 	md, err := toml.DecodeFile(path, into)
 	if err != nil {
 		if !explicit && errors.Is(err, fs.ErrNotExist) {
-			return nil
+			return "", nil
 		}
-		return fmt.Errorf("config: %s: %w", path, err)
+		return "", fmt.Errorf("config: %s: %w", path, err)
 	}
 	if und := md.Undecoded(); len(und) > 0 {
 		keys := make([]string, len(und))
@@ -222,9 +237,9 @@ func load(path, defaultName string, into any) error {
 			keys[i] = k.String()
 		}
 		sort.Strings(keys)
-		return fmt.Errorf("config: %s: unknown keys: %s", path, strings.Join(keys, ", "))
+		return "", fmt.Errorf("config: %s: unknown keys: %s", path, strings.Join(keys, ", "))
 	}
-	return nil
+	return path, nil
 }
 
 // Validate checks value ranges of the server config.

@@ -11,6 +11,7 @@ WORK=$(mktemp -d /tmp/go-ined/gen-examples.XXXXXX)
 trap 'kill "${PID:-}" 2>/dev/null || true; rm -rf "$WORK"; rmdir /tmp/go-ined 2>/dev/null || true' EXIT
 
 go build -C "$REPO" -o "$WORK/ined-server" ./cmd/ined-server
+go build -C "$REPO" -o "$WORK/inedctl" ./cmd/inedctl
 # Monitoring and reverse DNS off: the output must not depend on which
 # example addresses answer pings or have names on the machine that runs
 # this script. Discovery probes 127.0.0.0/30, which answers on Linux.
@@ -89,6 +90,38 @@ sleep 2
 ex "Get the job: done, with 2 hosts found and added" GET "/discovery/$JOB"
 ex "Error: a range larger than discovery.max_prefix (/16)" POST /discovery '{"cidr":"10.0.0.0/8"}'
 ex "Error: discovery is IPv4 only" POST /discovery '{"cidr":"2001:db8::/120"}'
+
+# inedctl: the same server through the CLI.
+# ctl TITLE DISPLAYED-ARGS ARG... runs inedctl and records its output and
+# exit code. FILTER, if set, post-processes the output.
+ctl() {
+  local title=$1 shown=$2 out code
+  shift 2
+  set +e
+  out=$(XDG_CONFIG_HOME="$WORK/cfg" INED_URL="http://$ADDR" "$WORK/inedctl" "$@" 2>&1)
+  code=$?
+  set -e
+  [ -n "${FILTER:-}" ] && out=$(eval "$FILTER" <<<"$out")
+  { echo "### $title"; echo; echo '```bash'; echo "inedctl $shown"; echo '```'; echo
+    if [ -n "$out" ]; then echo '```text'; echo "$out"; echo '```'; else echo "No output."; fi
+    echo; echo "Exit code: \`$code\`"; echo; } >>"$OUT"
+}
+{ echo "## inedctl"; echo
+  echo 'The same server through the command-line client. `INED_URL` (or `--url`) points it at the server.'; echo; } >>"$OUT"
+# Remove the discovered loopback hosts first: their round-trip times differ
+# on every run.
+ctl "Delete a group with everything in it" "group rm 3 --cascade" group rm 3 --cascade
+ctl "Add a network group" "group add --cidr 10.10.0.0/24 --name lab" group add --cidr 10.10.0.0/24 --name lab
+ctl "Add a host (goes into the matching network group)" "host add 10.10.0.5 --name printer --note '2nd floor'" host add 10.10.0.5 --name printer --note '2nd floor'
+ctl "List the hosts" "host list" host list
+ctl "List the groups" "group list" group list
+ctl "The API's JSON instead of a table" "--json host show 5" --json host show 5
+ctl "Replace a note from stdin" "note set host 5 < note.txt" note set host 5 <<<"Toner replaced 2026-11"
+ctl "Read the note" "note get host 5" note get host 5
+FILTER='sed -n "1p;\$p"' ctl "Discover a range and wait for the result (progress lines in between left out here)" "discover start 127.0.0.4/30 --wait" discover start 127.0.0.4/30 --wait
+ctl "Error from the API: exit code 1" "host show 99" host show 99
+ctl "Usage error: exit code 2" "host move 5" host move 5
+ctl "Server not reachable: exit code 3" "--url http://127.0.0.1:1 health" --url http://127.0.0.1:1 health
 
 {
 cat <<'EOF'

@@ -28,9 +28,10 @@ import (
 // Exit codes (SPEC-903).
 const (
 	exitOK    = 0
-	exitAPI   = 1 // the API returned an error, or a discovery job failed
-	exitUsage = 2 // usage or config error
-	exitConn  = 3 // server unreachable, TLS failure, or 401
+	exitAPI   = 1   // the API returned an error, or a discovery job failed
+	exitUsage = 2   // usage or config error
+	exitConn  = 3   // server unreachable, TLS failure, or 401
+	exitIntr  = 130 // interrupted (Ctrl-C), except for events
 )
 
 const usageText = `Usage: inedctl [global flags] <object> <action> [flags] [args]
@@ -65,7 +66,8 @@ Commands:
   events [--last-id ID]
   health
 
-Exit codes: 0 OK, 1 API error or failed job, 2 usage error, 3 connection or authentication error.
+Exit codes: 0 OK, 1 API error or failed job, 2 usage or config error,
+3 connection, TLS or authentication error, 130 interrupted (events: 0).
 `
 
 func main() {
@@ -82,6 +84,11 @@ func (e usageError) Error() string { return e.msg }
 
 func usagef(format string, a ...any) error { return usageError{fmt.Sprintf(format, a...)} }
 
+// interrupted is returned when the user interrupts a command (exit 130).
+type interrupted struct{ msg string }
+
+func (e interrupted) Error() string { return e.msg }
+
 // errJob is returned when a waited-for discovery job fails or is cancelled.
 var errJob = errors.New("discovery job did not finish")
 
@@ -91,6 +98,7 @@ var errHelp = errors.New("help")
 type globals struct {
 	url, token, caCert, config string
 	json, version              bool
+	given                      map[string]bool // global flags given on the command line
 }
 
 // register adds the global flags to fs, keeping values already parsed.
@@ -113,11 +121,17 @@ type app struct {
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	a := &app{ctx: ctx, stdin: stdin, out: stdout, errOut: stderr}
+	a.g.given = map[string]bool{}
 	err := a.main(args)
+	var ie interrupted
+	if err != nil && ctx.Err() != nil && !errors.As(err, &ie) {
+		err = interrupted{"interrupted"}
+	}
 	code := exitCode(err)
+	var ue usageError
 	switch {
 	case err == nil, errors.Is(err, errHelp):
-	case code == exitUsage:
+	case errors.As(err, &ue):
 		fmt.Fprintf(stderr, "inedctl: %v\nRun 'inedctl -h' for usage.\n", err)
 	case errors.Is(err, errJob):
 		// The job's final state was already printed.
@@ -129,6 +143,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 
 func exitCode(err error) int {
 	var (
+		ie  interrupted
 		ue  usageError
 		ae  *client.APIError
 		ce  configError
@@ -138,6 +153,8 @@ func exitCode(err error) int {
 	switch {
 	case err == nil, errors.Is(err, errHelp):
 		return exitOK
+	case errors.As(err, &ie):
+		return exitIntr
 	case errors.As(err, &ue), errors.As(err, &ce):
 		return exitUsage
 	case errors.As(err, &ae):
@@ -166,6 +183,7 @@ func (a *app) main(args []string) error {
 	if err := root.Parse(args); err != nil {
 		return a.flagErr(err)
 	}
+	a.g.visit(root)
 	if a.g.version {
 		fmt.Fprintln(a.out, "inedctl", version.Version)
 		return nil
@@ -203,6 +221,17 @@ func (a *app) flagErr(err error) error {
 	return usageError{err.Error()}
 }
 
+// visit records which global flags fs got, so even an empty value
+// (--token "") overrides the config file and the environment.
+func (g *globals) visit(fs *flag.FlagSet) {
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "url", "token", "ca-cert", "config", "json":
+			g.given[f.Name] = true
+		}
+	})
+}
+
 // flags returns a FlagSet for one command, with the global flags added.
 func (a *app) flags(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
@@ -219,6 +248,7 @@ func (a *app) parse(fs *flag.FlagSet, args []string, minArgs, maxArgs int) ([]st
 		if err := fs.Parse(args); err != nil {
 			return nil, a.flagErr(err)
 		}
+		a.g.visit(fs)
 		if fs.NArg() == 0 {
 			break
 		}
@@ -247,18 +277,21 @@ func (a *app) connect() error {
 		return configError{err}
 	}
 	s := cfg.Server
-	if a.g.url != "" {
+	if a.g.given["url"] {
 		s.URL = a.g.url
 	}
-	if a.g.token != "" {
+	if a.g.given["token"] {
 		s.Token = a.g.token
 	}
-	if a.g.caCert != "" {
+	if a.g.given["ca-cert"] {
 		s.CACert = a.g.caCert
 	}
 	c, err := client.New(client.Options{URL: s.URL, Token: s.Token, CACert: s.CACert})
 	if err != nil {
 		return configError{err}
+	}
+	if c.TokenInClear() {
+		fmt.Fprintf(a.errOut, "inedctl: warning: sending the token unencrypted to %s; use https\n", c.URL())
 	}
 	a.c = c
 	return nil

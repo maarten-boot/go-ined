@@ -144,3 +144,30 @@ func TestDiscoveryRateBounds(t *testing.T) {
 		}
 	}
 }
+
+// A relative ca_cert is relative to the config file's folder; an absolute
+// one is kept.
+func TestRelativeCACert(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("INED_URL", "")
+	t.Setenv("INED_TOKEN", "")
+	for _, c := range []struct{ in, want string }{
+		{"ca.pem", filepath.Join(dir, "ca.pem")},
+		{"certs/ca.pem", filepath.Join(dir, "certs", "ca.pem")},
+		{"/etc/ssl/ca.pem", "/etc/ssl/ca.pem"},
+		{"", ""},
+	} {
+		p := filepath.Join(dir, "ctl.toml")
+		if err := os.WriteFile(p, []byte("[server]\nca_cert = \""+c.in+"\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := LoadClient(p)
+		if err != nil || cfg.Server.CACert != c.want {
+			t.Errorf("%q: got %q, %v; want %q", c.in, cfg.Server.CACert, err, c.want)
+		}
+		g, err := LoadGUI(p)
+		if err != nil || g.Server.CACert != c.want {
+			t.Errorf("gui %q: got %q, %v", c.in, g.Server.CACert, err)
+		}
+	}
+}

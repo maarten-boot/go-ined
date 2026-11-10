@@ -1,6 +1,6 @@
 # Design note: views
 
-Status: **approved**, 2026-11-10 (log item 30): scope option A (views are milestone M4b, after M4 and before the GUI); V1–V6 as recommended. The SPEC items and test cases are written at the start of M4b.
+Status: **implemented** in M4b (2026-11-10, Spec §4b SPEC-117..124, Plan D13/D14). One change from §4 below: hosts keep their network-view placement in the `hosts` table, and `placements` holds custom-view placements only, so no rebuild of `hosts` was needed (decision M4b-1).
 Origin: the user's idea (log item 29): "a notebook where the default view is the CIDR view, but where the user can add new views and rearrange hosts into functional groups (for example, servers used by the same users in the company)".
 
 ## 1. Goal

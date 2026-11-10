@@ -17,3 +17,11 @@
    - Project rules in committed `CLAUDE.md` (on `main`).
    - Contrast presets AA / AAA / Max / custom.
    **Claude** initialised the repo and created the docs skeleton (SPEC-001..006, TC-001..007).
+5. **User** described the scenario: a network monitor modelled loosely on Tkined (Scotty, github.com/flightaware/scotty).
+   - Build an inventory of a CIDR range, with one symbol per host.
+   - A background ping shows each host's basic status.
+   - Hosts can be put in groups, and groups can be nested.
+   - Reverse DNS shows a name for each host.
+   - Split the current single app into two parts. The inventory/monitor is a database service with a network API (ideas: 9P, ZMQ for alerts, maybe REST). The GUI is a separate client that shows host and group status.
+   - User asked to discuss options before building.
+   **Claude** proposed spelling fixes and laid out options: API (9P / REST+SSE / gRPC / ZMQ), storage, ICMP privileges, group model, GUI toolkit, layout storage, security. Waiting for the user's choices.

@@ -34,3 +34,6 @@
    **Claude** updated Spec to v0.3 (changed SPEC-101/102/105/106/201/501/502/702–708; added SPEC-108–112 and 710–712), Plan to v0.3, and Tests (TC-107–112, 205, 504, 704–706).
 9. **User** suggested an alternative: make the CIDR network a group itself. That removes the connecting lines and makes the map less cluttered.
    **Claude** agreed and recommended it, noting the trade-offs (multi-homed hosts, the tree limits each host to one group, no topology lines). Proposed rules for network groups. Waiting for the user's confirmation.
+10. **User**: "OK, defaults" for network groups.
+    **Decision D10:** a network is a group with an optional `cidr`; no link lines; hosts can be moved out of their network group by hand; nested network groups are checked to fit their parent's range.
+    **Claude** updated Spec to v0.4: withdrew SPEC-108–110 and 710, added SPEC-113–115, and changed 101/102/105–107/111/201/204/501/502/702/704/706–708. Plan v0.4. Tests: reworked TC-107–109 and 704, added TC-206.

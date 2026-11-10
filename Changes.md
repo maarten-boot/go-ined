@@ -26,6 +26,7 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - Go client package `pkg/client`: typed calls for every endpoint, `*client.APIError`, and an event stream that reconnects (1 s doubling to 30 s), resumes with `Last-Event-ID` and passes `resync` on.
 - `inedctl`: hosts, groups, notes, discovery (`--wait` follows a job), events and health; tables or `--json`; exit codes 0–3.
 - Client config key `server.ca_cert` (and `inedctl --ca-cert`) to trust a self-signed server certificate.
+- Views: custom maps with their own groups, where hosts can be placed in addition to the network view (`/views`, `GET /map?view=`, `PUT|DELETE /views/{id}/hosts/{host_id}`, `GET /groups?view=`, `view.*` and `placement.*` events); database migration 3; `pkg/client` view calls; `inedctl view …` and `--view`.
 - Spec: a Hosts tab for the GUI (sortable list by IP and DNS name, with find) listed as a future enhancement.
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 

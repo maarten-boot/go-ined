@@ -496,6 +496,11 @@ func TestEventShort(t *testing.T) {
 		{apitypes.EventDiscoveryProgress, `{"id":"r-1","cidr":"10.0.0.0/30","state":"running","probed":1,"total":2}`, "job r-1 10.0.0.0/30 running probed 1/2 found 0 added 0"},
 		{apitypes.EventDiscoveryFinished, `{"id":"r-1","cidr":"10.0.0.0/30","state":"failed","probed":2,"total":2,"errors":2,"error":"no route"}`, "job r-1 10.0.0.0/30 failed probed 2/2 found 0 added 0 errors 2: no route"},
 		{apitypes.EventResync, `{"reason":"client fell behind"}`, "reload: client fell behind"},
+		{apitypes.EventViewCreated, `{"id":2,"name":"Payroll","order":1}`, "view 2 Payroll order 1"},
+		{apitypes.EventViewDeleted, `{"id":2}`, "view 2"},
+		{apitypes.EventPlacementUpdated, `{"view_id":2,"host_id":5,"parent_id":3}`, "view 2 host 5 in group 3"},
+		{apitypes.EventPlacementUpdated, `{"view_id":2,"host_id":5,"parent_id":null}`, "view 2 host 5 in root"},
+		{apitypes.EventPlacementDeleted, `{"view_id":2,"host_id":5}`, "view 2 host 5 removed"},
 		{"other.type", `{"x":1}`, `{"x":1}`},
 		{apitypes.EventHostCreated, `not json`, `not json`},
 	} {
@@ -504,4 +509,52 @@ func TestEventShort(t *testing.T) {
 			t.Errorf("%s: %q, want %q", c.typ, got, c.want)
 		}
 	}
+}
+
+// TC-129: the view calls of the client.
+func TestViews(t *testing.T) {
+	s := testserver.Start(t, testserver.Options{})
+	c := newClient(t, s, "")
+	ctx := context.Background()
+	v, err := c.CreateView(ctx, apitypes.ViewCreate{Name: "Payroll"})
+	if err != nil || v.ID != 2 || v.Kind != apitypes.ViewCustom {
+		t.Fatalf("create: %+v %v", v, err)
+	}
+	if v, err = c.UpdateView(ctx, v.ID, apitypes.ViewPatch{Name: apitypes.Some("Pay")}); err != nil || v.Name != "Pay" {
+		t.Fatalf("update: %+v %v", v, err)
+	}
+	if got, err := c.View(ctx, v.ID); err != nil || got != v {
+		t.Fatalf("get: %+v %v", got, err)
+	}
+	vs, err := c.Views(ctx)
+	if err != nil || len(vs) != 2 || vs[0].ID != 1 {
+		t.Fatalf("list: %+v %v", vs, err)
+	}
+	g, err := c.CreateGroup(ctx, apitypes.GroupCreate{Name: "app", ViewID: &v.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, _ := c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1"})
+	p, err := c.PlaceHost(ctx, v.ID, h.ID, apitypes.PlacementSet{ParentID: &g.ID})
+	if err != nil || *p.ParentID != g.ID {
+		t.Fatalf("place: %+v %v", p, err)
+	}
+	m, err := c.ViewMap(ctx, v.ID)
+	if err != nil || m.ViewID != v.ID || len(m.Items) != 2 {
+		t.Fatalf("map: %+v %v", m, err)
+	}
+	gs, err := c.ViewGroups(ctx, v.ID)
+	if err != nil || len(gs) != 1 || gs[0].ViewID != v.ID {
+		t.Fatalf("groups: %+v %v", gs, err)
+	}
+	if err := c.UnplaceHost(ctx, v.ID, h.ID); err != nil {
+		t.Fatal(err)
+	}
+	apiErr(t, c.UnplaceHost(ctx, v.ID, h.ID), http.StatusNotFound, apitypes.CodeNotFound)
+	apiErr(t, c.DeleteView(ctx, 1), http.StatusConflict, apitypes.CodeConflict)
+	if err := c.DeleteView(ctx, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.ViewMap(ctx, v.ID)
+	apiErr(t, err, http.StatusNotFound, apitypes.CodeNotFound)
 }

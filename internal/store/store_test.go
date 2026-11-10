@@ -88,9 +88,9 @@ func TestRoundTrip(t *testing.T) {
 	}
 	now := time.Date(2026, 11, 10, 12, 0, 0, 123_000_000, time.UTC)
 	rtt, loss := 1.25, 33.3
-	g := inventory.Group{ID: 1, Name: "net", Description: "d", Note: "n", CIDR: netip.MustParsePrefix("10.0.0.0/24"),
+	g := inventory.Group{ID: 1, Name: "net", Description: "d", Note: "n", CIDR: netip.MustParsePrefix("10.0.0.0/24"), ViewID: 1,
 		Collapsed: true, X: 1, Y: 2, CreatedAt: now, UpdatedAt: now}
-	g2 := inventory.Group{ID: 2, Name: "plain", ParentID: 1, CreatedAt: now, UpdatedAt: now}
+	g2 := inventory.Group{ID: 2, Name: "plain", ViewID: 1, ParentID: 1, CreatedAt: now, UpdatedAt: now}
 	h := inventory.Host{ID: 7, IP: netip.MustParseAddr("2001:db8::1"), PTRName: "p.", Name: "m", Description: "d", Note: "n",
 		ParentID: 2, Monitored: true, Status: "up", RTTms: &rtt, LossPct: &loss, LastSeen: now, LastChange: now,
 		X: 3, Y: 4, CreatedAt: now, UpdatedAt: now}
@@ -245,5 +245,92 @@ func TestMigration2Seeds(t *testing.T) {
 	}
 	if h != 8 || g != 4 {
 		t.Errorf("seeded sequences: host %d group %d, want 8 and 4", h, g)
+	}
+}
+
+// TC-127: migration 3 upgrades a schema-2 database: view 1 exists, every
+// group is in it, hosts keep parent and position, sequences are intact.
+func TestMigration3(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v2.db")
+	db, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(ctx, db, migrations[:2]); err != nil {
+		t.Fatal(err)
+	}
+	ts := "2026-11-01T10:00:00Z"
+	if _, err := db.Exec(`INSERT INTO groups (id, name, cidr, parent_id, x, y, created_at, updated_at) VALUES
+			(3, 'net', '10.0.0.0/24', 0, 5, 6, ?1, ?1), (4, 'sub', NULL, 3, 7, 8, ?1, ?1);
+		INSERT INTO hosts (id, ip, parent_id, x, y, created_at, updated_at) VALUES (9, '10.0.0.9', 4, 11, 12, ?1, ?1);
+		UPDATE meta SET value = 20 WHERE key = 'next_host_id'`, ts); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s, err := Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	st, err := s.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Views) != 1 || st.Views[0].ID != 1 || st.Views[0].Kind != "network" || st.Views[0].Name != "Networks" ||
+		st.Views[0].CreatedAt.IsZero() {
+		t.Fatalf("views: %+v", st.Views)
+	}
+	if len(st.Groups) != 2 || st.Groups[0].ViewID != 1 || st.Groups[1].ViewID != 1 || st.Groups[1].ParentID != 3 ||
+		st.Groups[0].X != 5 || st.Groups[0].CIDR.String() != "10.0.0.0/24" {
+		t.Fatalf("groups: %+v", st.Groups)
+	}
+	if len(st.Hosts) != 1 || st.Hosts[0].ParentID != 4 || st.Hosts[0].X != 11 || st.Hosts[0].Y != 12 {
+		t.Fatalf("hosts: %+v", st.Hosts)
+	}
+	if st.NextHostID != 20 || st.NextGroupID != 1 || st.NextViewID != 2 || len(st.Placements) != 0 {
+		t.Fatalf("sequences %d %d %d, placements %v", st.NextHostID, st.NextGroupID, st.NextViewID, st.Placements)
+	}
+}
+
+// Views and placements: insert, update, delete, sequence.
+func TestRoundTripViews(t *testing.T) {
+	s, err := Open(ctx, filepath.Join(t.TempDir(), "v.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	v := inventory.View{ID: 2, Name: "Payroll", Kind: "custom", Order: 5, CreatedAt: now, UpdatedAt: now}
+	g := inventory.Group{ID: 1, Name: "app", ViewID: 2, CreatedAt: now, UpdatedAt: now}
+	h := inventory.Host{ID: 1, IP: netip.MustParseAddr("192.0.2.1"), Status: "unknown", CreatedAt: now, UpdatedAt: now}
+	pl := inventory.Placement{ViewID: 2, HostID: 1, ParentID: 1, X: 3, Y: 4}
+	if err := s.Apply(ctx, inventory.Changes{Views: []inventory.View{v}, Groups: []inventory.Group{g}, Hosts: []inventory.Host{h},
+		Placements: []inventory.Placement{pl}, NextViewID: 3}); err != nil {
+		t.Fatal(err)
+	}
+	v.Name, pl.X = "Pay", 9
+	if err := s.Apply(ctx, inventory.Changes{Views: []inventory.View{v}, Placements: []inventory.Placement{pl}}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Views) != 2 || st.Views[1] != v || len(st.Placements) != 1 || st.Placements[0] != pl ||
+		st.Groups[0].ViewID != 2 || st.NextViewID != 3 {
+		t.Fatalf("state: %+v", st)
+	}
+	if err := s.Apply(ctx, inventory.Changes{DeleteViews: []int64{2}, DeleteGroups: []int64{1},
+		DeletePlacements: []inventory.PlacementKey{{ViewID: 2, HostID: 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	st, _ = s.Load(ctx)
+	if len(st.Views) != 1 || len(st.Groups) != 0 || len(st.Placements) != 0 || len(st.Hosts) != 1 {
+		t.Fatalf("after delete: %+v", st)
+	}
+	// Names are unique in the database too.
+	dup := inventory.View{ID: 5, Name: "Networks", Kind: "custom", CreatedAt: now, UpdatedAt: now}
+	if err := s.Apply(ctx, inventory.Changes{Views: []inventory.View{dup}}); err == nil {
+		t.Fatal("duplicate view name accepted")
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,10 @@ var commands = map[string]map[string]command{
 		"rm": groupRm, "move": groupMove, "collapse": groupCollapse(true), "expand": groupCollapse(false),
 	},
 	"note": {"get": noteGet, "set": noteSet, "clear": noteClear},
+	"view": {
+		"list": viewList, "add": viewAdd, "show": viewShow, "rename": viewRename, "order": viewOrder,
+		"rm": viewRm, "place": viewPlace, "unplace": viewUnplace,
+	},
 	"discover": {
 		"start": discoverStart, "status": discoverStatus, "cancel": discoverCancel,
 	},
@@ -135,11 +140,20 @@ func hostMove(a *app, name string, args []string) error {
 // ---- groups ----
 
 func groupList(a *app, name string, args []string) error {
-	if _, err := a.parse(a.flags(name), args, 0, 0); err != nil {
+	fs := a.flags(name)
+	view := fs.Int64("view", 0, "only the groups of this view")
+	if _, err := a.parse(fs, args, 0, 0); err != nil {
 		return err
 	}
+	p := "/groups"
+	if set(fs)["view"] {
+		if *view < 1 {
+			return usagef("%s: --view must be a positive view id", name)
+		}
+		p += "?view=" + id(*view)
+	}
 	var gs []apitypes.Group
-	return a.call(http.MethodGet, "/groups", nil, &gs, func() { a.groupTable(gs) })
+	return a.call(http.MethodGet, p, nil, &gs, func() { a.groupTable(gs) })
 }
 
 func groupAdd(a *app, name string, args []string) error {
@@ -151,8 +165,15 @@ func groupAdd(a *app, name string, args []string) error {
 	fs.StringVar(&in.Note, "note", "", "note")
 	parent := fs.Int64("parent", 0, "parent group id (default: the root)")
 	expanded := fs.Bool("expanded", false, "create the group expanded")
+	view := fs.Int64("view", 0, "view of the group (default: the network view)")
 	if _, err := a.parse(fs, args, 0, 0); err != nil {
 		return err
+	}
+	if set(fs)["view"] {
+		if *view < 1 {
+			return usagef("%s: --view must be a positive view id", name)
+		}
+		in.ViewID = view
 	}
 	if in.CIDR == "" && in.Name == "" {
 		return usagef("%s: give --cidr or --name", name)
@@ -534,4 +555,145 @@ func (a *app) move(name string, args []string) (int64, *int64, error) {
 	}
 	parent, err := parseParent(pos[1])
 	return id, parent, err
+}
+
+// ---- views (SPEC-124) ----
+
+func viewList(a *app, name string, args []string) error {
+	if _, err := a.parse(a.flags(name), args, 0, 0); err != nil {
+		return err
+	}
+	var vs []apitypes.View
+	return a.call(http.MethodGet, "/views", nil, &vs, func() { a.viewTable(vs) })
+}
+
+func viewAdd(a *app, name string, args []string) error {
+	fs := a.flags(name)
+	order := fs.Int64("order", 0, "tab position (default: after all views)")
+	pos, err := a.parse(fs, args, 1, 1)
+	if err != nil {
+		return err
+	}
+	in := apitypes.ViewCreate{Name: pos[0]}
+	if set(fs)["order"] {
+		in.Order = order
+	}
+	var v apitypes.View
+	return a.call(http.MethodPost, "/views", in, &v, func() { a.viewDetails(v) })
+}
+
+// viewShow prints the view and, as a table, the hosts placed in it. With
+// --json it prints the view's JSON only.
+func viewShow(a *app, name string, args []string) error {
+	vid, err := a.oneID(name, args)
+	if err != nil {
+		return err
+	}
+	var v apitypes.View
+	return a.call(http.MethodGet, "/views/"+id(vid), nil, &v, func() {
+		a.viewDetails(v)
+		m, err := a.c.ViewMap(a.ctx, vid)
+		if err != nil {
+			fmt.Fprintf(a.errOut, "inedctl: %v\n", err)
+			return
+		}
+		fmt.Fprintln(a.out)
+		a.viewHosts(m)
+	})
+}
+
+func viewRename(a *app, name string, args []string) error {
+	pos, err := a.parse(a.flags(name), args, 2, 2)
+	if err != nil {
+		return err
+	}
+	vid, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	var v apitypes.View
+	return a.call(http.MethodPatch, "/views/"+id(vid), apitypes.ViewPatch{Name: apitypes.Some(pos[1])}, &v,
+		func() { a.viewDetails(v) })
+}
+
+func viewOrder(a *app, name string, args []string) error {
+	pos, err := a.parse(a.flags(name), args, 2, 2)
+	if err != nil {
+		return err
+	}
+	vid, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	n, err := strconv.ParseInt(pos[1], 10, 64)
+	if err != nil {
+		return usagef("%s: invalid order %q: want an integer", name, pos[1])
+	}
+	var v apitypes.View
+	return a.call(http.MethodPatch, "/views/"+id(vid), apitypes.ViewPatch{Order: apitypes.Some(n)}, &v,
+		func() { a.viewDetails(v) })
+}
+
+func viewRm(a *app, name string, args []string) error {
+	vid, err := a.oneID(name, args)
+	if err != nil {
+		return err
+	}
+	return a.call(http.MethodDelete, "/views/"+id(vid), nil, nil, nil)
+}
+
+// viewPlace puts a host in a custom view: view place <view> <host>
+// [--parent G] [--x X --y Y].
+func viewPlace(a *app, name string, args []string) error {
+	fs := a.flags(name)
+	grp := fs.Int64("parent", 0, "group in the view (default: the view's root)")
+	x := fs.Float64("x", 0, "x position")
+	y := fs.Float64("y", 0, "y position")
+	args2, err := a.parse(fs, args, 2, 2)
+	if err != nil {
+		return err
+	}
+	vid, hid, err := twoIDs(args2)
+	if err != nil {
+		return err
+	}
+	var in apitypes.PlacementSet
+	given := set(fs)
+	if given["parent"] {
+		if *grp < 1 {
+			return usagef("%s: --parent must be a positive group id", name)
+		}
+		in.ParentID = grp
+	}
+	if given["x"] != given["y"] {
+		return usagef("%s: give both --x and --y, or neither", name)
+	}
+	if given["x"] {
+		in.X, in.Y = x, y
+	}
+	var p apitypes.Placement
+	return a.call(http.MethodPut, client.PlacementPath(vid, hid), in, &p, func() {
+		a.details([][2]string{{"View", id(p.ViewID)}, {"Host", id(p.HostID)}, {"Parent", parent(p.ParentID)}, {"Position", pos(p.X, p.Y)}}, false)
+	})
+}
+
+func viewUnplace(a *app, name string, args []string) error {
+	pos, err := a.parse(a.flags(name), args, 2, 2)
+	if err != nil {
+		return err
+	}
+	vid, hid, err := twoIDs(pos)
+	if err != nil {
+		return err
+	}
+	return a.call(http.MethodDelete, client.PlacementPath(vid, hid), nil, nil, nil)
+}
+
+func twoIDs(pos []string) (int64, int64, error) {
+	a, err := parseID(pos[0])
+	if err != nil {
+		return 0, 0, err
+	}
+	b, err := parseID(pos[1])
+	return a, b, err
 }

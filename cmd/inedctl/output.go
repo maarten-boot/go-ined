@@ -160,3 +160,34 @@ func dash(s string) string {
 	}
 	return s
 }
+
+func (a *app) viewTable(vs []apitypes.View) {
+	rows := make([][]string, len(vs))
+	for i, v := range vs {
+		rows[i] = []string{id(v.ID), v.Name, v.Kind, strconv.FormatInt(v.Order, 10)}
+	}
+	a.table("ID\tNAME\tKIND\tORDER", rows) // in tab order, as the API lists them
+}
+
+func (a *app) viewDetails(v apitypes.View) {
+	a.details([][2]string{
+		{"ID", id(v.ID)}, {"Name", v.Name}, {"Kind", v.Kind}, {"Order", strconv.FormatInt(v.Order, 10)},
+		{"Created", v.CreatedAt.Local().Format(time.DateTime)}, {"Updated", v.UpdatedAt.Local().Format(time.DateTime)},
+	}, false)
+}
+
+// viewHosts prints the hosts of a view's map, sorted by ID.
+func (a *app) viewHosts(m apitypes.Map) {
+	var rows [][]string
+	for _, it := range m.Items {
+		if it.Type == apitypes.TypeHost {
+			rows = append(rows, []string{id(it.ID), it.IP, it.Name, status(it.Status, it.Stale), parent(it.ParentID)})
+		}
+	}
+	slices.SortFunc(rows, func(x, y []string) int {
+		n, _ := strconv.Atoi(x[0])
+		k, _ := strconv.Atoi(y[0])
+		return cmp.Compare(n, k)
+	})
+	a.table("ID\tIP\tNAME\tSTATUS\tPARENT", rows)
+}

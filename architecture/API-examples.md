@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "66b162d5134535d0"
+  "run_id": "f0fec2d198b630c0"
 }
 ```
 
@@ -42,13 +42,14 @@ Response: `201`
   "description": "",
   "note": "home LAN",
   "cidr": "192.168.1.0/24",
+  "view_id": 1,
   "parent_id": null,
   "collapsed": true,
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T22:22:00.879Z",
-  "updated_at": "2026-11-10T22:22:00.879Z"
+  "created_at": "2026-11-10T22:45:07.597Z",
+  "updated_at": "2026-11-10T22:45:07.597Z"
 }
 ```
 
@@ -67,13 +68,14 @@ Response: `201`
   "description": "",
   "note": "",
   "cidr": "",
+  "view_id": 1,
   "parent_id": 1,
   "collapsed": false,
   "status": "unknown",
   "x": 100,
   "y": 180,
-  "created_at": "2026-11-10T22:22:00.89Z",
-  "updated_at": "2026-11-10T22:22:00.89Z"
+  "created_at": "2026-11-10T22:45:07.607Z",
+  "updated_at": "2026-11-10T22:45:07.607Z"
 }
 ```
 
@@ -105,8 +107,8 @@ Response: `201`
   "outside_cidr": false,
   "x": 200,
   "y": 180,
-  "created_at": "2026-11-10T22:22:00.902Z",
-  "updated_at": "2026-11-10T22:22:00.902Z"
+  "created_at": "2026-11-10T22:45:07.616Z",
+  "updated_at": "2026-11-10T22:45:07.616Z"
 }
 ```
 
@@ -138,8 +140,8 @@ Response: `200`
   "outside_cidr": false,
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-10T22:22:00.902Z",
-  "updated_at": "2026-11-10T22:22:00.914Z"
+  "created_at": "2026-11-10T22:45:07.616Z",
+  "updated_at": "2026-11-10T22:45:07.625Z"
 }
 ```
 
@@ -158,13 +160,14 @@ Response: `200`
   "description": "",
   "note": "home LAN",
   "cidr": "192.168.1.0/24",
+  "view_id": 1,
   "parent_id": null,
   "collapsed": false,
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T22:22:00.879Z",
-  "updated_at": "2026-11-10T22:22:00.923Z"
+  "created_at": "2026-11-10T22:45:07.597Z",
+  "updated_at": "2026-11-10T22:45:07.634Z"
 }
 ```
 
@@ -178,6 +181,7 @@ Response: `200`
 
 ```json
 {
+  "view_id": 1,
   "items": [
     {
       "type": "group",
@@ -321,11 +325,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: 66b162d5134535d0-10
+id: f0fec2d198b630c0-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-10T22:22:01.319Z","updated_at":"2026-11-10T22:22:01.319Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-10T22:45:08.016Z","updated_at":"2026-11-10T22:45:08.016Z"}
 
-id: 66b162d5134535d0-11
+id: f0fec2d198b630c0-11
 event: host.deleted
 data: {"id":2}
 
@@ -341,7 +345,7 @@ Response: `202`
 
 ```json
 {
-  "id": "66b162d5134535d0-1",
+  "id": "f0fec2d198b630c0-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -350,7 +354,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-10T22:22:01.655Z",
+  "started_at": "2026-11-10T22:45:08.358Z",
   "finished_at": null
 }
 ```
@@ -358,14 +362,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/66b162d5134535d0-1
+curl -s $INED/api/v1/discovery/f0fec2d198b630c0-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "66b162d5134535d0-1",
+  "id": "f0fec2d198b630c0-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -374,8 +378,8 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-10T22:22:01.655Z",
-  "finished_at": "2026-11-10T22:22:01.663Z"
+  "started_at": "2026-11-10T22:45:08.358Z",
+  "finished_at": "2026-11-10T22:45:08.366Z"
 }
 ```
 
@@ -442,8 +446,8 @@ Parent:      root
 Status:      unknown
 Collapsed:   yes
 Position:    40, 40
-Created:     2026-11-10 23:22:03
-Updated:     2026-11-10 23:22:03
+Created:     2026-11-10 23:45:10
+Updated:     2026-11-10 23:45:10
 Note:        -
 ```
 
@@ -471,8 +475,8 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     40, 120
-Created:      2026-11-10 23:22:03
-Updated:      2026-11-10 23:22:03
+Created:      2026-11-10 23:45:10
+Updated:      2026-11-10 23:45:10
 Note:         2nd floor
 ```
 
@@ -530,8 +534,8 @@ inedctl --json host show 5
   "outside_cidr": false,
   "x": 40,
   "y": 120,
-  "created_at": "2026-11-10T22:22:03.763Z",
-  "updated_at": "2026-11-10T22:22:03.763Z"
+  "created_at": "2026-11-10T22:45:10.436Z",
+  "updated_at": "2026-11-10T22:45:10.436Z"
 }
 ```
 
@@ -566,8 +570,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job 66b162d5134535d0-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job 66b162d5134535d0-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job f0fec2d198b630c0-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job f0fec2d198b630c0-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -608,4 +612,182 @@ inedctl: Get "http://127.0.0.1:1/api/v1/health": dial tcp 127.0.0.1:1: connect: 
 ```
 
 Exit code: `3`
+
+## Views
+
+Each view is its own map (a tab in the GUI). Hosts are shared: a host placed in a custom view keeps its place in the network view (view 1).
+
+### Create a custom view
+
+```bash
+curl -s -X POST $INED/api/v1/views -d '{"name":"Printers"}'
+```
+
+Response: `201`
+
+```json
+{
+  "id": 2,
+  "name": "Printers",
+  "kind": "custom",
+  "order": 1,
+  "created_at": "2026-11-10T22:45:10.484Z",
+  "updated_at": "2026-11-10T22:45:10.484Z"
+}
+```
+
+### Add a group to the view
+
+```bash
+curl -s -X POST $INED/api/v1/groups -d '{"name":"2nd floor","view_id":2,"collapsed":false}'
+```
+
+Response: `201`
+
+```json
+{
+  "id": 6,
+  "name": "2nd floor",
+  "description": "",
+  "note": "",
+  "cidr": "",
+  "view_id": 2,
+  "parent_id": null,
+  "collapsed": false,
+  "status": "unknown",
+  "x": 40,
+  "y": 40,
+  "created_at": "2026-11-10T22:45:10.493Z",
+  "updated_at": "2026-11-10T22:45:10.493Z"
+}
+```
+
+### Put host 5 in that group (only in this view)
+
+```bash
+curl -s -X PUT $INED/api/v1/views/2/hosts/5 -d '{"parent_id":6}'
+```
+
+Response: `200`
+
+```json
+{
+  "view_id": 2,
+  "host_id": 5,
+  "parent_id": 6,
+  "x": 40,
+  "y": 120
+}
+```
+
+### The view's map
+
+```bash
+curl -s $INED/api/v1/map?view=2
+```
+
+Response: `200`
+
+```json
+{
+  "view_id": 2,
+  "items": [
+    {
+      "type": "group",
+      "id": 6,
+      "parent_id": null,
+      "x": 40,
+      "y": 40,
+      "name": "2nd floor",
+      "status": "unknown",
+      "stale": false,
+      "has_note": false,
+      "outside_cidr": false,
+      "collapsed": false
+    },
+    {
+      "type": "host",
+      "id": 5,
+      "parent_id": 6,
+      "x": 40,
+      "y": 120,
+      "name": "printer",
+      "status": "unknown",
+      "stale": false,
+      "has_note": true,
+      "ip": "10.10.0.5",
+      "outside_cidr": false,
+      "collapsed": false
+    }
+  ]
+}
+```
+
+### Error: network groups exist only in the network view
+
+```bash
+curl -s -X POST $INED/api/v1/groups -d '{"cidr":"10.20.0.0/24","view_id":2}'
+```
+
+Response: `400`
+
+```json
+{
+  "error": {
+    "code": "invalid_argument",
+    "message": "network groups (with a CIDR) exist only in the network view"
+  }
+}
+```
+
+### Error: the network view can't be deleted
+
+```bash
+curl -s -X DELETE "$INED/api/v1/views/1"
+```
+
+Response: `409`
+
+```json
+{
+  "error": {
+    "code": "conflict",
+    "message": "the network view can't be deleted"
+  }
+}
+```
+
+### The views in tab order
+
+```bash
+inedctl view list
+```
+
+```text
+ID  NAME      KIND     ORDER
+1   Networks  network  0
+2   Printers  custom   1
+```
+
+Exit code: `0`
+
+### A view and its hosts
+
+```bash
+inedctl view show 2
+```
+
+```text
+ID:      2
+Name:    Printers
+Kind:    custom
+Order:   1
+Created: 2026-11-10 23:45:10
+Updated: 2026-11-10 23:45:10
+
+ID  IP         NAME     STATUS   PARENT
+5   10.10.0.5  printer  unknown  6
+```
+
+Exit code: `0`
 

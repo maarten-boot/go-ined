@@ -14,18 +14,30 @@ import (
 
 // memRepo is an in-memory Repository for unit tests.
 type memRepo struct {
-	groups    map[int64]Group
-	hosts     map[int64]Host
-	nextHost  int64
-	nextGroup int64
-	fail      error
-	applies   int // successful Apply calls
+	views      map[int64]View
+	groups     map[int64]Group
+	hosts      map[int64]Host
+	placements map[PlacementKey]Placement
+	nextHost   int64
+	nextGroup  int64
+	nextView   int64
+	fail       error
+	applies    int // successful Apply calls
 }
 
-func newMemRepo() *memRepo { return &memRepo{groups: map[int64]Group{}, hosts: map[int64]Host{}} }
+func newMemRepo() *memRepo {
+	return &memRepo{views: map[int64]View{}, groups: map[int64]Group{}, hosts: map[int64]Host{},
+		placements: map[PlacementKey]Placement{}}
+}
 
 func (r *memRepo) Load(context.Context) (State, error) {
-	st := State{NextHostID: r.nextHost, NextGroupID: r.nextGroup}
+	st := State{NextHostID: r.nextHost, NextGroupID: r.nextGroup, NextViewID: r.nextView}
+	for _, v := range r.views {
+		st.Views = append(st.Views, v)
+	}
+	for _, p := range r.placements {
+		st.Placements = append(st.Placements, p)
+	}
 	for _, g := range r.groups {
 		st.Groups = append(st.Groups, g)
 	}
@@ -45,6 +57,21 @@ func (r *memRepo) Apply(_ context.Context, c Changes) error {
 	}
 	for _, id := range c.DeleteGroups {
 		delete(r.groups, id)
+	}
+	for _, id := range c.DeleteViews {
+		delete(r.views, id)
+	}
+	for _, k := range c.DeletePlacements {
+		delete(r.placements, k)
+	}
+	for _, v := range c.Views {
+		r.views[v.ID] = v
+	}
+	for _, p := range c.Placements {
+		r.placements[PlacementKey{p.ViewID, p.HostID}] = p
+	}
+	if c.NextViewID != 0 {
+		r.nextView = c.NextViewID
 	}
 	for _, g := range c.Groups {
 		r.groups[g.ID] = g

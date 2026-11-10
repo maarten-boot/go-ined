@@ -107,6 +107,9 @@ func New(svc *inventory.Service, opts Options) http.Handler {
 	route("/hosts/{id}", map[string]http.HandlerFunc{"GET": s.getHost, "PATCH": s.patchHost, "DELETE": s.deleteHost})
 	route("/groups", map[string]http.HandlerFunc{"GET": s.listGroups, "POST": s.createGroup})
 	route("/groups/{id}", map[string]http.HandlerFunc{"GET": s.getGroup, "PATCH": s.patchGroup, "DELETE": s.deleteGroup})
+	route("/views", map[string]http.HandlerFunc{"GET": s.listViews, "POST": s.createView})
+	route("/views/{id}", map[string]http.HandlerFunc{"GET": s.getView, "PATCH": s.patchView, "DELETE": s.deleteView})
+	route("/views/{id}/hosts/{host_id}", map[string]http.HandlerFunc{"PUT": s.placeHost, "DELETE": s.unplaceHost})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, apitypes.CodeNotFound, "no such endpoint: "+r.URL.Path)
 	})
@@ -168,8 +171,15 @@ func (s *server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h)
 }
 
-func (s *server) getMap(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.svc.Map())
+// getMap serves GET /map?view=<id>; without view, the network view
+// (SPEC-122).
+func (s *server) getMap(w http.ResponseWriter, r *http.Request) {
+	view, ok := queryView(w, r)
+	if !ok {
+		return
+	}
+	m, err := s.svc.MapOf(view)
+	s.respond(w, http.StatusOK, m, err)
 }
 
 func (s *server) listHosts(w http.ResponseWriter, _ *http.Request) {
@@ -215,8 +225,18 @@ func (s *server) deleteHost(w http.ResponseWriter, r *http.Request) {
 	s.respond(w, http.StatusNoContent, nil, s.svc.DeleteHost(r.Context(), id))
 }
 
-func (s *server) listGroups(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.svc.Groups())
+// listGroups serves GET /groups: every group, or with ?view= one view's.
+func (s *server) listGroups(w http.ResponseWriter, r *http.Request) {
+	if !r.URL.Query().Has("view") {
+		writeJSON(w, http.StatusOK, s.svc.Groups())
+		return
+	}
+	view, ok := queryView(w, r)
+	if !ok {
+		return
+	}
+	gs, err := s.svc.GroupsIn(view)
+	s.respond(w, http.StatusOK, gs, err)
 }
 
 func (s *server) getGroup(w http.ResponseWriter, r *http.Request) {
@@ -313,10 +333,26 @@ func (s *server) writeDomainError(w http.ResponseWriter, err error) {
 	}
 }
 
-func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) { return pathInt(w, r, "id") }
+
+func pathInt(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue(name), 10, 64)
 	if err != nil || id < 1 {
-		writeError(w, http.StatusBadRequest, apitypes.CodeInvalidArgument, "id must be a positive integer")
+		writeError(w, http.StatusBadRequest, apitypes.CodeInvalidArgument, name+" must be a positive integer")
+		return 0, false
+	}
+	return id, true
+}
+
+// queryView reads ?view=; absent means the network view.
+func queryView(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	q := r.URL.Query()
+	if !q.Has("view") {
+		return apitypes.NetworkViewID, true
+	}
+	id, err := strconv.ParseInt(q.Get("view"), 10, 64)
+	if err != nil || id < 1 {
+		writeError(w, http.StatusBadRequest, apitypes.CodeInvalidArgument, "view must be a positive integer")
 		return 0, false
 	}
 	return id, true

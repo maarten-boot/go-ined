@@ -210,6 +210,11 @@ func TestExitCodes(t *testing.T) {
 		{2, []string{u, "discover", "start"}},
 		{2, []string{u, "discover", "start", "10.0.0.0/24", "--group", "1"}},
 		{2, []string{"--url=ftp://x", "health"}},
+		{2, []string{u, "view", "order", "2", "first"}},
+		{2, []string{u, "view", "place", "2"}},
+		{2, []string{u, "view", "place", "2", "1", "--x", "5"}},
+		{2, []string{u, "group", "list", "--view", "0"}},
+		{1, []string{u, tok, "view", "show", "9"}},
 		{2, []string{"--config=/nonexistent/ctl.toml", "health"}},
 		{3, []string{u, "--token=wrong", "host", "list"}},
 		{3, []string{u, "host", "list"}}, // no token
@@ -435,5 +440,49 @@ func TestFormatRTT(t *testing.T) {
 	}
 	if ms(nil) != "-" {
 		t.Error("nil")
+	}
+}
+
+// TC-129: inedctl view commands and --view.
+func TestViewCommands(t *testing.T) {
+	isolate(t)
+	s := testserver.Start(t, testserver.Options{})
+	u := "--url=" + s.URL()
+	contains(t, ok(t, u, "view", "add", "Payroll"), "ID:", "2", "Kind:", "custom", "Order:", "1")
+	ok(t, u, "view", "add", "Lab", "--order", "-1")
+	list := ok(t, u, "view", "list")
+	lines := strings.Split(strings.TrimSpace(list), "\n")
+	if len(lines) != 4 || !strings.HasPrefix(lines[0], "ID") || !strings.Contains(lines[1], "Lab") || !strings.Contains(lines[2], "Networks") {
+		t.Fatalf("view list (tab order):\n%s", list)
+	}
+	contains(t, ok(t, u, "view", "rename", "2", "Pay"), "Name:", "Pay")
+	contains(t, ok(t, u, "view", "order", "2", "9"), "Order:", "9")
+	contains(t, ok(t, u, "group", "add", "--name", "app", "--view", "2"), "ID:", "1")
+	ok(t, u, "group", "add", "--cidr", "10.0.0.0/24")
+	if out := ok(t, u, "group", "list", "--view", "2"); strings.Count(out, "\n") != 2 || !strings.Contains(out, "app") {
+		t.Fatalf("group list --view:\n%s", out)
+	}
+	ok(t, u, "host", "add", "10.0.0.5", "--name", "web")
+	contains(t, ok(t, u, "view", "place", "2", "1", "--parent", "1"), "View:", "2", "Host:", "1", "Parent:", "1")
+	contains(t, ok(t, u, "view", "place", "2", "1", "--x", "5", "--y", "6"), "Parent:   root", "Position: 5, 6")
+	show := ok(t, u, "view", "show", "2")
+	contains(t, show, "Name:", "Pay", "ID  IP        NAME  STATUS   PARENT", "1   10.0.0.5  web   unknown  root")
+	var v apitypes.View
+	if err := json.Unmarshal([]byte(ok(t, u, "--json", "view", "show", "2")), &v); err != nil || v.Name != "Pay" {
+		t.Fatalf("view show --json: %+v %v", v, err)
+	}
+	ok(t, u, "view", "unplace", "2", "1")
+	if r := ctl(t, u, "view", "unplace", "2", "1"); r.code != 1 {
+		t.Fatalf("unplace twice: %+v", r)
+	}
+	if r := ctl(t, u, "view", "rm", "1"); r.code != 1 || !strings.Contains(r.errOut, "network view") {
+		t.Fatalf("rm view 1: %+v", r)
+	}
+	ok(t, u, "view", "rm", "2")
+	if out := ok(t, u, "group", "list"); strings.Contains(out, "app") {
+		t.Fatalf("groups of a deleted view remain:\n%s", out)
+	}
+	if out := ok(t, u, "host", "list"); !strings.Contains(out, "web") {
+		t.Fatal("hosts must stay")
 	}
 }

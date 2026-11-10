@@ -139,3 +139,5 @@
     - Clients warn about a token sent over plain HTTP.
     - `API-examples.md` has a generated `inedctl` section.
     - Spec and Plan v0.15 (SPEC-506, 802, 805, 903). Six new tests; `make all` passes.
+33. **User**: pushed; start M4b.
+    **Claude** wrote the draft Spec section 4b (SPEC-117..124: views, groups per view, placements, deletes in custom views, per-view status, API, storage, CLI) and TC-120..129, as Spec/Plan v0.16. It proposed 8 M4b decisions with defaults in Plan.md; decision 1 differs from `Design-views.md` §4: hosts keep their network placement in the `hosts` table, so the risky table rebuild isn't needed. Also fixed a duplicate test id that crosscheck 05 missed: the second TC-603 is now TC-606. The code waits for the decisions.

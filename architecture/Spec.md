@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.15** (2026-11-10)
+Status: **draft v0.16** (2026-11-10)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -49,6 +49,24 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-114** MUST: A network group nested inside another network group must have a CIDR within its ancestor's range. A create, move or update that breaks this is rejected. Ordinary groups (without `cidr`) can sit anywhere, and hosts can be moved anywhere: network membership is a starting point, not enforced.
 - **SPEC-115** SHOULD: A host whose IP is outside the CIDR of the nearest network group above it gets an `outside_cidr` flag in the API. This is informational only.
 - **SPEC-116** MUST: Ids of hosts and groups are never reused, not even after the item with the highest id is deleted and the server restarts. The id sequences are stored in the database.
+## 4b. Views (M4b; **draft v0.16, waiting for the decisions M4b-1..8 in Plan.md**)
+Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **view** is one map: one tab in the GUI. Hosts are shared by all views (one status, one note, pinged once); each view has its own groups and its own placement of hosts. Where these items conflict with §4, they take precedence: §4's "tree" and "single map" hold **per view**.
+
+- **SPEC-117** MUST: A **view** has an id, a name, a kind (`network` or `custom`), an `order` and created/updated timestamps. There is exactly one network view, with id 1, created by the server (initial name "Networks"). It can be renamed and reordered but not deleted (409). Custom views can be created, renamed, reordered and deleted by any client; views are shared by all clients (V5). Names are unique and 1–255 bytes. Views are listed by `order`, then id; a new view gets an `order` after all others. View ids are never reused (SPEC-116).
+- **SPEC-118** MUST: Every group belongs to exactly one view (`view_id`, default 1), fixed when the group is created. A group's parent must be a group in the same view (400 otherwise). Network groups (with `cidr`) exist only in the network view: a `cidr` in a custom view is rejected with 400 (V2). SPEC-103, 104 and 112 apply within each view.
+- **SPEC-119** MUST: A **placement** puts a host in a view: a parent group of that view (or the view's root) and a position. In the network view every host has exactly one placement: its `parent_id`, `x` and `y`, with SPEC-106/107 as before. In a custom view a host has at most one placement (V1), and only where a client put it. Hosts created by hand or by discovery are placed only in the network view (V4). A placement without `x`/`y` gets a free position near its parent (SPEC-106).
+- **SPEC-120** MUST: Deleting in a custom view never deletes hosts (V3). Deleting a group with `children=cascade` removes its subgroups and the placements in them; `children=reparent` moves its subgroups and placements to its parent. Deleting a custom view removes all its groups and placements. Deleting a host removes all its placements. In the network view, SPEC-104 is unchanged (cascade deletes hosts).
+- **SPEC-121** MUST: Group status (SPEC-105) and visibility (SPEC-112) are evaluated within the group's view, over the hosts placed in that view. A host status change can therefore change the status of groups in several views; each change emits `group.status`. `outside_cidr` (SPEC-115) refers to the network placement only.
+- **SPEC-122** MUST: API (additive; today's calls keep their meaning):
+  - `GET/POST /views`, `GET/PATCH/DELETE /views/{id}` (`name`, `order`; deleting view 1 → 409).
+  - `GET /map?view=<id>`: the items of one view, with the placement's parent and position for hosts. Without `view`, the network view.
+  - `PUT /views/{id}/hosts/{host_id}` with `{parent_id, x, y}` adds or moves a host in a custom view; `DELETE /views/{id}/hosts/{host_id}` removes it from the view. For view 1 both return 400: there, use `PATCH /hosts/{id}`.
+  - `POST /groups` takes `view_id` (default 1); group JSON has `view_id`. `GET /groups?view=<id>` lists one view's groups.
+  - Host JSON keeps `parent_id`, `x`, `y`: the network placement.
+  - Events (SPEC-502): `view.created|updated` (full view), `view.deleted` (`{id}`), `placement.updated` (`{view_id, host_id, parent_id, x, y}`), `placement.deleted` (`{view_id, host_id}`).
+- **SPEC-123** MUST: Storage: migration 3 adds views and custom-view placements; an existing database is upgraded with all its groups in view 1. The startup check (SPEC-605) also covers views: a group of a missing view moves to view 1's root, a group or placement whose parent is in another view or missing moves to the root of its view, each with a warning.
+- **SPEC-124** MUST: `inedctl view list|add|show|rename|rm|place|unplace`, `--view` on `group add` and `group list`. `view show <id>` prints the view and a table of its hosts.
+
 ## 5. Discovery
 - **SPEC-201** MUST: A discovery job takes either an IPv4 CIDR range or the id of an IPv4 network group, and probes every address in the range with ICMP echo. Hosts it finds go into the network group for that range. If no network group with that CIDR exists, one is created (named after the CIDR) under the optional target group, or at the root if none is given. An IPv6 range or IPv6 network group is rejected with 400 (A2). A job whose new network group would break SPEC-114 is rejected with 409 before it starts. Each address gets one echo request, and a second one 200 ms later only if the first gets no answer; each waits up to `monitor.timeout`. Discovery uses the same ICMP prober as monitoring and works even with `monitor.enabled = false`. Without a working IPv4 ICMP mode, `POST /discovery` returns 503 `unavailable` with the reason (v0.11).
 - **SPEC-202** MUST: For prefixes /30 and shorter, the network and broadcast addresses are skipped. For /31 and /32, every address is probed.

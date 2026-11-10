@@ -28,6 +28,16 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-111 | SPEC-112 | U | Visibility: an item under any collapsed group is hidden; nested expand/collapse combinations (table-driven). New groups start collapsed | inventory: TestVisibility | passing |
 | TC-112 | SPEC-112, 502 | I | PATCH `collapsed` is saved, emits `group.updated`, and a second client sees the change | inventory: TestCollapsedEvent; api: TestPersistence, TestEventsStream | passing |
 | TC-113 | SPEC-116 | U | Ids are never reused: delete the highest host and group id, restart, create new ones | inventory: TestIDsNeverReused; store: TestSequences, TestMigration2Seeds | passing |
+| TC-120 | SPEC-117 | I | Views: view 1 exists after migration and on a fresh database; create, rename, reorder, list order (order, then id); duplicate or empty name → 400/409; deleting view 1 → 409; view ids not reused after restart | — | planned |
+| TC-121 | SPEC-118 | U | Groups per view: default view 1; parent in another view → 400; `cidr` in a custom view → 400; `view_id` can't change; cycles and delete rules apply within a view | — | planned |
+| TC-122 | SPEC-119 | U | Placements: one per host per view; PUT twice moves it; parent from another view → 400; free position without x/y; new and discovered hosts are placed only in view 1 | — | planned |
+| TC-123 | SPEC-120 | U | Custom-view deletes: cascade removes subgroups and placements but no host; reparent moves them up; deleting a custom view removes its groups and placements; deleting a host removes its placements everywhere | — | planned |
+| TC-124 | SPEC-121 | U | Aggregation and visibility per view: a host down in a custom group turns that group and its ancestors `down` there, and its network group as well; unplaced hosts don't count; `group.status` for groups in every affected view | — | planned |
+| TC-125 | SPEC-122 | I | API: view CRUD, `GET /map?view=`, PUT/DELETE placements, `GET /groups?view=`, error codes; `GET /map` without `view` is unchanged | — | planned |
+| TC-126 | SPEC-122, 502 | I | Events: `view.*` and `placement.*` payloads; cascade in a custom view emits `group.deleted` and `placement.deleted`, not `host.deleted` | — | planned |
+| TC-127 | SPEC-123, 602 | I | Migration 3 upgrades a schema-2 database with hosts and groups: everything in view 1, positions and parents unchanged, sequences intact | — | planned |
+| TC-128 | SPEC-123, 605 | U | Load repair: a group of a missing view, a group or placement with a parent in another view or missing → moved, saved, warned | — | planned |
+| TC-129 | SPEC-506, 124 | I | `pkg/client` view calls; `inedctl view …` commands and `--view` | — | planned |
 | TC-201 | SPEC-201, 202 | U | CIDR expansion: /24 gives 254 addresses, /31 gives 2, /32 gives 1 | discovery: TestAddresses | passing |
 | TC-202 | SPEC-203 | U | A range larger than the maximum is rejected. The rate limiter respects the probes-per-second setting | discovery: TestMaxPrefixAndRate | passing |
 | TC-203 | SPEC-204 | I | Discovery with a fake prober adds the responders. An existing IP is neither duplicated nor moved | discovery: TestAddsResponders; inventory: TestAddDiscovered | passing |
@@ -76,7 +86,7 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-601 | SPEC-602 | I | Migrations run on a fresh database and on a database at an older schema version | store: TestMigrateFresh, TestMigrateFromOlder, TestMigrateFailureRollsBack, TestMigration2Seeds | passing |
 | TC-602 | SPEC-603 | I | After a restart, the last known status is served with `stale = true`. The flag clears after the first ping round, and the status value doesn't change because of the flag | inventory: TestStaleOnLoad, TestStaleClears; api: TestPersistence; ined-server: TestMonitoringPersistsAndStale; store: TestRoundTrip | passing |
 | TC-603 | SPEC-603 | U | After a restart, unmonitored hosts are not stale; turning monitoring off clears `stale`, turning it on sets it | inventory: TestStaleOnlyMonitored | passing |
-| TC-603 | SPEC-601, 805 | I | The database is created at `storage.db_path` (also with `?`, `#`, `%`, spaces or a relative path), or at the XDG default when the path is empty | store: TestMigrateFresh, TestSpecialCharacterPaths; config: TestXDGPaths; ined-server: TestDefaultDBPath | passing |
+| TC-606 | SPEC-601, 805 | I | The database is created at `storage.db_path` (also with `?`, `#`, `%`, spaces or a relative path), or at the XDG default when the path is empty | store: TestMigrateFresh, TestSpecialCharacterPaths; config: TestXDGPaths; ined-server: TestDefaultDBPath | passing |
 | TC-604 | SPEC-604 | I | A second store or server on the same database is refused at once; the first keeps working; the lock is released on close | store: TestExclusiveLock; ined-server: TestSecondServerRefused | passing |
 | TC-605 | SPEC-605 | U | Orphans move to the root (saved, one warning each, not repeated); a cycle refuses to load | inventory: TestRepairOnLoad | passing |
 | TC-701 | SPEC-702 | U | Every status has a distinct shape and text label (not only a colour) | — | planned |

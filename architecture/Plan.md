@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.15** (2026-11-10)
+Status: **draft v0.16** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -85,7 +85,8 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] Exit 130 on interrupt, relative `ca_cert`, empty flags override, raw JSON with `--wait`, RTT format, token-over-HTTP warning, `inedctl` examples (SPEC-506, 802, 805, 903)
 
 ### M4b: Views (design in `Design-views.md`, approved 2026-11-10)
-- [ ] Spec items and test cases for views and placements (V1–V6 as recommended); D1 becomes "at most one parent per view"
+- [x] Spec items (SPEC-117..124, draft) and test cases (TC-120..129) for views and placements (V1–V6 as recommended); D1 becomes "at most one parent per view"
+- [ ] Decisions M4b-1..8 (below), then the code
 - [ ] Migration 3 (`views`, `placements`, `groups.view_id`) with a tested upgrade from schema 2
 - [ ] `inventory` per view: aggregation, visibility, free positions, move/cycle checks; network rules only in view 1
 - [ ] API: `/views`, `GET /map?view=`, `PUT|DELETE /views/{id}/hosts/{host_id}`, `view.*` and `placement.*` events
@@ -106,5 +107,14 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] Update `Changes.md`, tag `v0.1.0`
 
 ## Open questions
+- **M4b decisions** (proposed 2026-11-10, defaults first; waiting for the user):
+  1. Storage: hosts keep `parent_id/x/y` as their network placement; a new `placements` table holds custom-view placements only. No rebuild of `hosts` (this differs from `Design-views.md` §4, lower risk; the API is the same).
+  2. `DELETE /views/{id}` needs no extra parameter and emits one `view.deleted` (clients drop the tab and its groups); no per-group events.
+  3. Cascade or reparent in a custom view emits `group.deleted` / `group.updated` and `placement.deleted` / `placement.updated` per item, as today.
+  4. Deleting a host emits only `host.deleted`; clients remove it from every view.
+  5. View names unique (409 on duplicates); a new view goes last; `PATCH order` sets only that view's value.
+  6. `GET /groups` still lists all groups (now with `view_id`); `?view=` filters. In custom views, map items have `outside_cidr: false`.
+  7. `inedctl view list|add|show|rename|rm|place|unplace`; `--view` on `group add|list`.
+  8. The GUI part (a notebook tab per view) is specified in M5, not now.
 - Not yet decided: configurable `log/slog` level and format, OpenAPI-first or generated from the handlers (before M7), `inedctl backup`.
 - `staticcheck` / `govulncheck`: run in CI (M7), or locally once allowed.

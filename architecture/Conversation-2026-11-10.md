@@ -66,3 +66,10 @@
     7. `-version` flag added to the server.
     8. TLS pulled forward into M1.
     9. New `pkg/apitypes` package.
+15. **User**: pushed and merged; OK on points 1–9; do a crosscheck.
+    **Claude**:
+    - The local `main` has the merge (noreply email OK), but GitHub reports the repo as empty, so the push didn't arrive.
+    - Applied points 1–9 as Spec v0.6: 405 code, `ip` in `/map`, name defaults to the CIDR, length limits, unknown `parent_id` → 400, auto-placement on null, SPEC-806 `-version`, `pkg/apitypes`. Added TC-807.
+    - Ran crosscheck `Crosscheck-2026-11-10-02.md`: 40/40 tests pass; staticcheck and govulncheck were denied by the permission policy.
+    - Findings: 1 H (two servers on one database overwrite each other's rows), 2 M (ids reused after a restart; database paths with `?`, `#` or `%`), 9 L.
+    - Added `architecture/API-examples.md`, verified against a live server. All fixes are waiting for the user's OK.

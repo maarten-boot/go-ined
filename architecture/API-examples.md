@@ -1,0 +1,310 @@
+# API examples — go-ined
+
+Verified against a running `ined-server` (M1) on 2026-11-10. IDs, timestamps and `run_id` will differ on your system.
+The steps run in order; each one depends on the ones before it.
+
+```bash
+ined-server -listen 127.0.0.1:8470 &
+INED=http://127.0.0.1:8470
+# With a token configured, add: -H "Authorization: Bearer $TOKEN"
+```
+
+### Health
+
+```bash
+curl -s $INED/api/v1/health
+```
+
+Response: `200`
+
+```json
+{
+  "status": "ok",
+  "version": "dev",
+  "icmp_mode": "not started",
+  "db": "ok",
+  "run_id": "35628267565f0c2a"
+}
+```
+
+### Create a network group (name defaults to the CIDR)
+
+```bash
+curl -s -X POST $INED/api/v1/groups -d '{"cidr":"192.168.1.0/24","note":"home LAN","x":100,"y":100}'
+```
+
+Response: `201`
+
+```json
+{
+  "id": 1,
+  "name": "192.168.1.0/24",
+  "description": "",
+  "note": "home LAN",
+  "cidr": "192.168.1.0/24",
+  "parent_id": null,
+  "collapsed": true,
+  "status": "unknown",
+  "x": 100,
+  "y": 100,
+  "created_at": "2026-11-10T12:39:33.291Z",
+  "updated_at": "2026-11-10T12:39:33.291Z"
+}
+```
+
+### Create an ordinary group inside it
+
+```bash
+curl -s -X POST $INED/api/v1/groups -d '{"name":"servers","parent_id":1,"collapsed":false}'
+```
+
+Response: `201`
+
+```json
+{
+  "id": 2,
+  "name": "servers",
+  "description": "",
+  "note": "",
+  "cidr": "",
+  "parent_id": 1,
+  "collapsed": false,
+  "status": "unknown",
+  "x": 100,
+  "y": 180,
+  "created_at": "2026-11-10T12:39:33.302Z",
+  "updated_at": "2026-11-10T12:39:33.302Z"
+}
+```
+
+### Add a host without parent_id (placed in the most specific network group)
+
+```bash
+curl -s -X POST $INED/api/v1/hosts -d '{"ip":"192.168.1.10","name":"nas"}'
+```
+
+Response: `201`
+
+```json
+{
+  "id": 1,
+  "ip": "192.168.1.10",
+  "ptr_name": "",
+  "name": "nas",
+  "display_name": "nas",
+  "description": "",
+  "note": "",
+  "parent_id": 1,
+  "monitored": true,
+  "status": "unknown",
+  "rtt_ms": null,
+  "loss_pct": null,
+  "last_seen": null,
+  "last_change": null,
+  "stale": false,
+  "outside_cidr": false,
+  "x": 200,
+  "y": 180,
+  "created_at": "2026-11-10T12:39:33.311Z",
+  "updated_at": "2026-11-10T12:39:33.311Z"
+}
+```
+
+### Move the host into a group, set a note and a position
+
+```bash
+curl -s -X PATCH $INED/api/v1/hosts/1 -d '{"parent_id":2,"note":"Synology, rack 2","x":140,"y":260}'
+```
+
+Response: `200`
+
+```json
+{
+  "id": 1,
+  "ip": "192.168.1.10",
+  "ptr_name": "",
+  "name": "nas",
+  "display_name": "nas",
+  "description": "",
+  "note": "Synology, rack 2",
+  "parent_id": 2,
+  "monitored": true,
+  "status": "unknown",
+  "rtt_ms": null,
+  "loss_pct": null,
+  "last_seen": null,
+  "last_change": null,
+  "stale": false,
+  "outside_cidr": false,
+  "x": 140,
+  "y": 260,
+  "created_at": "2026-11-10T12:39:33.311Z",
+  "updated_at": "2026-11-10T12:39:33.321Z"
+}
+```
+
+### Expand the network group
+
+```bash
+curl -s -X PATCH $INED/api/v1/groups/1 -d '{"collapsed":false}'
+```
+
+Response: `200`
+
+```json
+{
+  "id": 1,
+  "name": "192.168.1.0/24",
+  "description": "",
+  "note": "home LAN",
+  "cidr": "192.168.1.0/24",
+  "parent_id": null,
+  "collapsed": false,
+  "status": "unknown",
+  "x": 100,
+  "y": 100,
+  "created_at": "2026-11-10T12:39:33.291Z",
+  "updated_at": "2026-11-10T12:39:33.333Z"
+}
+```
+
+### Get the whole map
+
+```bash
+curl -s $INED/api/v1/map
+```
+
+Response: `200`
+
+```json
+{
+  "items": [
+    {
+      "type": "group",
+      "id": 1,
+      "parent_id": null,
+      "x": 100,
+      "y": 100,
+      "name": "192.168.1.0/24",
+      "status": "unknown",
+      "stale": false,
+      "has_note": true,
+      "outside_cidr": false,
+      "collapsed": false,
+      "cidr": "192.168.1.0/24"
+    },
+    {
+      "type": "group",
+      "id": 2,
+      "parent_id": 1,
+      "x": 100,
+      "y": 180,
+      "name": "servers",
+      "status": "unknown",
+      "stale": false,
+      "has_note": false,
+      "outside_cidr": false,
+      "collapsed": false
+    },
+    {
+      "type": "host",
+      "id": 1,
+      "parent_id": 2,
+      "x": 140,
+      "y": 260,
+      "name": "nas",
+      "status": "unknown",
+      "stale": false,
+      "has_note": true,
+      "ip": "192.168.1.10",
+      "outside_cidr": false,
+      "collapsed": false
+    }
+  ]
+}
+```
+
+### Error: duplicate IP address
+
+```bash
+curl -s -X POST $INED/api/v1/hosts -d '{"ip":"192.168.1.10"}'
+```
+
+Response: `409`
+
+```json
+{
+  "error": {
+    "code": "conflict",
+    "message": "IP address 192.168.1.10 already belongs to host 1"
+  }
+}
+```
+
+### Error: CIDR with host bits set
+
+```bash
+curl -s -X POST $INED/api/v1/groups -d '{"cidr":"10.0.0.5/24"}'
+```
+
+Response: `400`
+
+```json
+{
+  "error": {
+    "code": "invalid_argument",
+    "message": "CIDR \"10.0.0.5/24\" has host bits set; use 10.0.0.0/24"
+  }
+}
+```
+
+### Error: nested network group outside its parent
+
+```bash
+curl -s -X POST $INED/api/v1/groups -d '{"cidr":"10.0.0.0/24","parent_id":1}'
+```
+
+Response: `409`
+
+```json
+{
+  "error": {
+    "code": "conflict",
+    "message": "network group \"10.0.0.0/24\" (10.0.0.0/24) is not inside its enclosing network group \"192.168.1.0/24\" (192.168.1.0/24)"
+  }
+}
+```
+
+### Error: deleting a non-empty group without children=
+
+```bash
+curl -s -X DELETE "$INED/api/v1/groups/1"
+```
+
+Response: `409`
+
+```json
+{
+  "error": {
+    "code": "conflict",
+    "message": "group 1 is not empty; use children=reparent or children=cascade"
+  }
+}
+```
+
+### Delete a group and move its contents up one level
+
+```bash
+curl -s -X DELETE "$INED/api/v1/groups/2?children=reparent"
+```
+
+Response: `204`
+
+### Delete a group with everything in it
+
+```bash
+curl -s -X DELETE "$INED/api/v1/groups/1?children=cascade"
+```
+
+Response: `204`
+

@@ -78,3 +78,5 @@
     New Spec items: SPEC-116 (ids never reused), SPEC-604 (exclusive database lock), SPEC-605 (load repair).
     Added `README.md`, MIT `LICENSE`, `Makefile` and `scripts/gen-api-examples.sh`, and regenerated `API-examples.md`. The generator script and the Makefile were open suggestions; Claude included them and said so.
     Spec v0.7 and Plan v0.7. `make all` passes.
+17. **User**: is going to move the project directory; asked for a handover.
+    **Claude** wrote `architecture/Handover-2026-11-10.md`. It covers state, branches, open items (GitHub still empty, analysis tools not run), the user's working rules, a design summary, and detailed next steps for M2. Added a "start of every session" pointer to `CLAUDE.md`.

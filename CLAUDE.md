@@ -2,6 +2,8 @@
 
 Go project. These rules supplement the global `~/.claude/CLAUDE.md`.
 
+**Start of every session:** read the newest `architecture/Handover-*.md` (if any), then the newest `architecture/Conversation-*.md`.
+
 ## Documentation
 - All planning docs live in `architecture/`. Docs are edited on branch `docs/architecture` and merged into `main`. Code is developed on `feature/*` branches.
   - `Conversation-YYYY-MM-DD.md` — running conversation log, one file per day.

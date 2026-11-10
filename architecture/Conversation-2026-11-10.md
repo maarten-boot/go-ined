@@ -80,3 +80,12 @@
     Spec v0.7 and Plan v0.7. `make all` passes.
 17. **User**: is going to move the project directory; asked for a handover.
     **Claude** wrote `architecture/Handover-2026-11-10.md`. It covers state, branches, open items (GitHub still empty, analysis tools not run), the user's working rules, a design summary, and detailed next steps for M2. Added a "start of every session" pointer to `CLAUDE.md`.
+
+## Session 2 (after the directory move)
+
+18. **User**: continue from the previous session at the new path; read the handover.
+    **Claude** read the handover. Checks in the new location: tree clean, `make all` passes, repo-local email is the noreply address. Proposed 5 M2 decisions with defaults: (1) own ICMP prober on `golang.org/x/net/icmp` instead of `pro-bing` (Apache-2.0); (2) event payloads; (3) `host.status` only on a status or `stale` change, results saved in ~1 s batches; (4) IPv6 hosts pinged over ICMPv6; (5) SSE keepalive every 30 s, token in the header only, streams closed before the database on shutdown.
+19. **User**: pushed.
+    **Claude** verified on GitHub: all four branches are there with the same SHAs as local (`main` = `c3d5193`). Handover open item 1 is closed.
+20. **User**: OK, defaults.
+    **Claude** wrote Spec v0.8 (SPEC-304 ICMPv6 and health fields, SPEC-307 new, SPEC-502 payloads/keepalive/lag, SPEC-503 resync carries the newest id, SPEC-804 shutdown order), Plan v0.8 (D12), Tests TC-308, TC-309, TC-507. Started M2 on `feature/m2-monitoring-events`.

@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.7** (2026-11-10)
+Status: **draft v0.8** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -16,6 +16,7 @@ Status: **draft v0.7** (2026-11-10)
 | D9 | Groups collapse into one icon or expand into a frame on the same map. No drill-down view in v0.1 | 2026-11-10 |
 | D10 | Networks are groups with an optional `cidr` (network groups). No link lines. Hosts can be moved out of their network group by hand. Nested network groups are checked to fit their parent's range | 2026-11-10 |
 | D11 | Go module path: `github.com/maarten-boot/go-ined` | 2026-11-10 |
+| D12 | ICMP: own small prober on `golang.org/x/net/icmp` (BSD-3), not `pro-bing` (Apache-2.0, would need a licence notice in binaries) | 2026-11-10 |
 
 ## Package layout
 ```
@@ -54,10 +55,10 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] Exclusive database lock (SPEC-604), id sequences (SPEC-116), escaped database path, load repair (SPEC-605)
 - [x] README.md, MIT LICENSE, Makefile, `scripts/gen-api-examples.sh`
 
-### M2: Monitoring + events
+### M2: Monitoring + events (branch `feature/m2-monitoring-events`)
 - [ ] Event bus, SSE, replay buffer, run-id event ids (SPEC-502, 503)
 - [ ] ICMP prober, unprivileged first then privileged (SPEC-304)
-- [ ] Ping scheduler, status rules, group aggregation, status persistence and the `stale` flag (SPEC-301..303, 305, 306, 105, 603)
+- [ ] Ping scheduler, status rules, group aggregation, status persistence and the `stale` flag (SPEC-301..303, 305..307, 105, 603)
 
 ### M3: Discovery + DNS
 - [ ] CIDR expansion, rate limit, jobs (SPEC-201..205)

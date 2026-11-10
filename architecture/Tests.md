@@ -42,6 +42,8 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-304 | SPEC-304 | I | If neither ICMP mode is available, `/health` reports the error and hosts stay `unknown` | — | planned |
 | TC-305 | SPEC-305 | I | `host.status` on a host status change. `group.status` for every group whose computed status changes, caused by a host status change, a move, an add, a delete, or a change to `monitored` | — | planned |
 | TC-307 | SPEC-306 | U | A host with `monitored = false` is never handed to the prober; turning it back on schedules it | — | planned |
+| TC-308 | SPEC-307 | U | `host.status` only on a status change or when `stale` clears; a round-trip-time change alone emits nothing but is saved; results are saved in batches | — | planned |
+| TC-309 | SPEC-304 | I | The real prober finds a working mode (unprivileged or raw) and gets a reply from 127.0.0.1 and ::1 (skipped when no ICMP mode is available) | — | planned |
 | TC-401 | SPEC-402 | U | Display name priority: manual name, then PTR name (trailing dot stripped), then IP address | inventory: TestDisplayName | passing |
 | TC-402 | SPEC-403 | U | A temporary DNS error keeps the old name. NXDOMAIN clears it | — | planned |
 | TC-403 | SPEC-401 | U | With a fake resolver and clock: a lookup when a host is added, and a refresh after `dns.refresh` | — | planned |
@@ -52,6 +54,7 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-504 | SPEC-501 | I | `GET /map` returns every item with its type, parent, position, collapsed flag, `cidr`, status, `stale`, `has_note` and `outside_cidr` | api: TestMap | passing |
 | TC-505 | SPEC-505 | I | `/api/v1/openapi.json` is valid OpenAPI 3 and lists every route the server registers | — | planned |
 | TC-506 | SPEC-503 | I | Event ids have the form `<run>-<seq>`. After a restart, a `Last-Event-ID` from the previous run gets `resync` | — | planned |
+| TC-507 | SPEC-502 | I | Event payloads: full object on created/updated/host.status, `{id}` on deleted (one per item on cascade), `{id,status}` on group.status. A client that falls behind gets `resync` and the stream ends | — | planned |
 | TC-601 | SPEC-602 | I | Migrations run on a fresh database and on a database at an older schema version | store: TestMigrateFresh, TestMigrateFromOlder, TestMigrateFailureRollsBack, TestMigration2Seeds | passing |
 | TC-602 | SPEC-603 | I | After a restart, the last known status is served with `stale = true`. The flag clears after the first ping round, and the status value doesn't change because of the flag | inventory: TestStaleOnLoad; api: TestPersistence | partial: stale after restart passes; clearing after a ping round in M2 |
 | TC-603 | SPEC-601, 805 | I | The database is created at `storage.db_path` (also with `?`, `#`, `%`, spaces or a relative path), or at the XDG default when the path is empty | store: TestMigrateFresh, TestSpecialCharacterPaths; config: TestXDGPaths; ined-server: TestDefaultDBPath | passing |

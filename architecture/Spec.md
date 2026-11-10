@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.6** (2026-11-10)
+Status: **draft v0.7** (2026-11-10)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -39,7 +39,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-104** MUST: Deleting a non-empty group is rejected unless the request says what to do with its children: `reparent` (move them to the group's parent) or `cascade` (delete them as well).
 - **SPEC-105** MUST: A host's status is one of `up`, `down` or `unknown`. A group's status is the worst status among all monitored hosts in its subtree, in the order `down` > `unknown` > `up`. A group with no monitored hosts in its subtree is `unknown`. Network groups follow the same rule.
 - **SPEC-106** MUST: Every item has (x, y) coordinates on the single shared map. A new item gets a free position near its parent.
-- **SPEC-107** MUST: A host can be added by hand by giving its IP address (IPv4 or IPv6). If `parent_id` is omitted or null, it goes into the most specific network group whose CIDR contains its IP. If none matches, it goes to the root.
+- **SPEC-107** MUST: A host can be added by hand by giving its IP address (IPv4 or IPv6). If `parent_id` is omitted or null, it goes into the most specific network group whose CIDR contains its IP. If none matches, it goes to the root. Changing the IP later doesn't move the host; `outside_cidr` (SPEC-115) shows any mismatch.
 - **SPEC-108** ~~withdrawn~~ (v0.4: separate network objects replaced by network groups, SPEC-113)
 - **SPEC-109** ~~withdrawn~~ (v0.4: no host-to-network links)
 - **SPEC-110** ~~withdrawn~~ (v0.4: a network group's status follows SPEC-105)
@@ -48,6 +48,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-113** MUST: A group's `cidr` must be a valid, unique range in canonical form, with no host bits set. Two network groups can't share the same CIDR.
 - **SPEC-114** MUST: A network group nested inside another network group must have a CIDR within its ancestor's range. A create, move or update that breaks this is rejected. Ordinary groups (without `cidr`) can sit anywhere, and hosts can be moved anywhere: network membership is a starting point, not enforced.
 - **SPEC-115** SHOULD: A host whose IP is outside the CIDR of the nearest network group above it gets an `outside_cidr` flag in the API. This is informational only.
+- **SPEC-116** MUST: Ids of hosts and groups are never reused, not even after the item with the highest id is deleted and the server restarts. The id sequences are stored in the database.
 ## 5. Discovery
 - **SPEC-201** MUST: A discovery job takes either an IPv4 CIDR range or the id of an IPv4 network group, and probes every address in the range with ICMP echo. Hosts it finds go into the network group for that range. If no network group with that CIDR exists, one is created (named after the CIDR) under the optional target group, or at the root if none is given. An IPv6 range or IPv6 network group is rejected with 400 (A2). A job whose new network group would break SPEC-114 is rejected with 409 before it starts.
 - **SPEC-202** MUST: For prefixes /30 and shorter, the network and broadcast addresses are skipped. For /31 and /32, every address is probed.
@@ -72,7 +73,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-501** MUST: The JSON REST API lives under `/api/v1`:
   - `GET/POST /hosts`, `GET/PATCH/DELETE /hosts/{id}`
   - `GET/POST /groups`, `GET/PATCH/DELETE /groups/{id}?children=reparent|cascade`
-  - `GET /map`: every item with its type, parent, position, `collapsed` flag, `cidr`, status, `stale` flag, display name, `has_note` flag, `outside_cidr` flag and, for hosts, `ip`. A client builds the map from this one response.
+  - `GET /map`: every item with its type, parent, position, `collapsed` flag, `cidr`, status, `stale` flag, display name, `has_note` flag, `outside_cidr` flag and, for hosts, `ip`. Flags that don't apply to an item type (`collapsed` on hosts, `outside_cidr` on groups) are `false`. A client builds the map from this one response.
   - `POST /discovery`, `GET /discovery/{id}`, `DELETE /discovery/{id}` (cancel)
   - `GET /health`: without a token, returns only `{status, version}`. With a valid token, it also returns the ICMP mode, database status and run id.
   - Moving, repositioning, collapsing, expanding and editing notes are all done with `PATCH` on `parent_id`, `x` / `y`, `collapsed` or `note`.
@@ -96,6 +97,8 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-601** MUST: Data is stored in SQLite through `modernc.org/sqlite` (pure Go, no cgo). The database file path is configurable.
 - **SPEC-602** MUST: The database schema is versioned. Migrations run automatically at startup.
 - **SPEC-603** MUST: The current status, round-trip time, packet loss, `last_seen` and `last_change` are saved to the database, so a restarted server shows the last known state. After a restart, every host has `stale = true` until its first ping round completes. `stale` is a separate flag and doesn't change the status value.
+- **SPEC-604** MUST: The server takes an exclusive lock on its database at startup. A second server on the same database refuses to start at once, with the message "database is in use by another process". The lock is released when the server stops.
+- **SPEC-605** MUST: At startup the server checks the tree. A host or group whose parent group doesn't exist is moved to the root, the repair is saved, and a warning is logged for each one. A parent cycle stops the startup with an error, because it needs a manual fix.
 
 ## 10. GUI (Fyne)
 - **SPEC-701** MUST: `ined-gui` connects to a server URL (and token) given in its config file or by command-line flags.
@@ -128,7 +131,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   | server | `server.listen` | `127.0.0.1:8470` |
   | server | `server.token` | `""` |
   | server | `server.tls_cert`, `server.tls_key` | `""` (TLS off) |
-  | server | `storage.db_path` | `$XDG_DATA_HOME/go-ined/ined.db` |
+  | server | `storage.db_path` | `""` (= `$XDG_DATA_HOME/go-ined/ined.db`) |
   | server | `monitor.interval` / `count` / `timeout` / `down_after` | `60s` / `3` / `1s` / `2` |
   | server | `discovery.max_prefix` / `rate` / `concurrency` | `16` / `200` / `64` |
   | server | `dns.refresh` / `concurrency` | `1h` / `20` |

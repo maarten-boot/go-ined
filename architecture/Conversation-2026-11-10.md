@@ -73,3 +73,8 @@
     - Ran crosscheck `Crosscheck-2026-11-10-02.md`: 40/40 tests pass; staticcheck and govulncheck were denied by the permission policy.
     - Findings: 1 H (two servers on one database overwrite each other's rows), 2 M (ids reused after a restart; database paths with `?`, `#` or `%`), 9 L.
     - Added `architecture/API-examples.md`, verified against a live server. All fixes are waiting for the user's OK.
+16. **User**: apply all fixes; README yes; MIT License.
+    **Claude** fixed C1–C7 on `fix/crosscheck-02`, after first checking SQLite's locking and URI escaping with throw-away tests.
+    New Spec items: SPEC-116 (ids never reused), SPEC-604 (exclusive database lock), SPEC-605 (load repair).
+    Added `README.md`, MIT `LICENSE`, `Makefile` and `scripts/gen-api-examples.sh`, and regenerated `API-examples.md`. The generator script and the Makefile were open suggestions; Claude included them and said so.
+    Spec v0.7 and Plan v0.7. `make all` passes.

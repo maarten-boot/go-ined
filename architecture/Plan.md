@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.6** (2026-11-10)
+Status: **draft v0.7** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -22,6 +22,7 @@ Status: **draft v0.6** (2026-11-10)
 cmd/ined-server/      daemon entry point
 cmd/ined-gui/         Fyne client
 cmd/inedctl/          CLI client
+scripts/              helper scripts (gen-api-examples.sh)
 internal/inventory/   domain model, tree rules, status aggregation (no I/O)
 internal/store/       SQLite repository and migrations
 internal/monitor/     ping scheduler and ICMP prober (behind an interface, so tests can fake it)
@@ -47,7 +48,11 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] SQLite store and migrations, including the status columns (SPEC-601, 602)
 - [x] REST CRUD, `/map`, `/health`, error table (SPEC-501, 504), auth (SPEC-802), clean shutdown (SPEC-804)
 - [x] TLS (SPEC-803), pulled forward from M7 because it was only a few lines
-- [x] `-version` flag on `ined-server` (crosscheck 01 §5 suggestion, applied to the server only)
+- [x] `-version` flag on `ined-server` (SPEC-806)
+
+### Crosscheck 02 fixes ✅ (branch `fix/crosscheck-02`)
+- [x] Exclusive database lock (SPEC-604), id sequences (SPEC-116), escaped database path, load repair (SPEC-605)
+- [x] README.md, MIT LICENSE, Makefile, `scripts/gen-api-examples.sh`
 
 ### M2: Monitoring + events
 - [ ] Event bus, SSE, replay buffer, run-id event ids (SPEC-502, 503)
@@ -59,11 +64,12 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] Reverse DNS with a concurrency limit (SPEC-401..403)
 
 ### M4: Client package + CLI
-- [ ] `pkg/client` (SPEC-506)
-- [ ] `inedctl`: subcommands, table or `--json` output, exit codes (SPEC-901..903)
+- [ ] `pkg/client` (SPEC-506), with Go `Example*` functions
+- [ ] `inedctl`: subcommands, table or `--json` output, exit codes, `-version` (SPEC-901..903, 806)
 
 ### M5: GUI, read-only
 - [ ] `internal/theme` contrast math and presets (SPEC-001..005)
+- [ ] `ined-gui -version` (SPEC-806)
 - [ ] Shared map, icons, network-group style, collapse/expand, details and notes panel, live updates (SPEC-701..703, 705, 708, 709, 711, 712)
 - [ ] Pan/zoom and find host (SPEC-713, 714)
 
@@ -76,4 +82,5 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] Update `Changes.md`, tag `v0.1.0`
 
 ## Open questions
-- Not yet decided (crosscheck 01, §5): `log/slog` logging, a `--version` flag, a Makefile, OpenAPI-first or generated from the handlers, `inedctl backup`.
+- Not yet decided: configurable `log/slog` level and format, OpenAPI-first or generated from the handlers (before M7), `inedctl backup`.
+- `staticcheck` / `govulncheck`: run in CI (M7), or locally once allowed.

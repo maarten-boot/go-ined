@@ -23,10 +23,11 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-106 | SPEC-106 | I | A new item gets a free position near its parent. PATCH x/y saves the position | inventory: TestFreePosition; api: TestPersistence | passing |
 | TC-107 | SPEC-113 | I | Group `cidr`: a duplicate fails with 409. An invalid or non-canonical value (such as 10.0.0.5/24) fails with 400. Clearing it works | inventory: TestGroupCIDR; api: TestCRUD | passing |
 | TC-108 | SPEC-107 | U | Placing a manually added host with no parent: goes to the most specific network group containing its IP (10.1.2.3 with /8 and /16 groups → /16), or to the root if none matches. IPv4 and IPv6 | inventory: TestPlacement | passing |
-| TC-109 | SPEC-114 | U | Nested network groups: a /24 inside a /16 that contains it → OK; outside it → rejected on create, move and CIDR change; an ordinary group in between is skipped when checking; hosts can move anywhere | inventory: TestNesting; api: TestTreeRulesAPI | passing |
+| TC-109 | SPEC-114 | U | Nested network groups: a /24 inside a /16 that contains it → OK; outside it → rejected on create, move and CIDR change; an ordinary group in between is skipped when checking; hosts can move anywhere | inventory: TestNesting, TestNestingMessage; api: TestTreeRulesAPI | passing |
 | TC-110 | SPEC-111 | I | Notes on a host and a group: set, read and clear through PATCH. A note over 64 KiB fails with 413 `too_large` | inventory: TestNotes; api: TestPersistence | passing |
 | TC-111 | SPEC-112 | U | Visibility: an item under any collapsed group is hidden; nested expand/collapse combinations (table-driven). New groups start collapsed | inventory: TestVisibility | passing |
 | TC-112 | SPEC-112, 502 | I | PATCH `collapsed` is saved, emits `group.updated`, and a second client sees the change | api: TestPersistence | partial: saving passes; event part in M2 |
+| TC-113 | SPEC-116 | U | Ids are never reused: delete the highest host and group id, restart, create new ones | inventory: TestIDsNeverReused; store: TestSequences, TestMigration2Seeds | passing |
 | TC-201 | SPEC-201, 202 | U | CIDR expansion: /24 gives 254 addresses, /31 gives 2, /32 gives 1 | — | planned |
 | TC-202 | SPEC-203 | U | A range larger than the maximum is rejected. The rate limiter respects the probes-per-second setting | — | planned |
 | TC-203 | SPEC-204 | I | Discovery with a fake prober adds the responders. An existing IP is neither duplicated nor moved | — | planned |
@@ -51,9 +52,11 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-504 | SPEC-501 | I | `GET /map` returns every item with its type, parent, position, collapsed flag, `cidr`, status, `stale`, `has_note` and `outside_cidr` | api: TestMap | passing |
 | TC-505 | SPEC-505 | I | `/api/v1/openapi.json` is valid OpenAPI 3 and lists every route the server registers | — | planned |
 | TC-506 | SPEC-503 | I | Event ids have the form `<run>-<seq>`. After a restart, a `Last-Event-ID` from the previous run gets `resync` | — | planned |
-| TC-601 | SPEC-602 | I | Migrations run on a fresh database and on a database at an older schema version | store: TestMigrateFresh, TestMigrateFromOlder, TestMigrateFailureRollsBack | passing |
+| TC-601 | SPEC-602 | I | Migrations run on a fresh database and on a database at an older schema version | store: TestMigrateFresh, TestMigrateFromOlder, TestMigrateFailureRollsBack, TestMigration2Seeds | passing |
 | TC-602 | SPEC-603 | I | After a restart, the last known status is served with `stale = true`. The flag clears after the first ping round, and the status value doesn't change because of the flag | inventory: TestStaleOnLoad; api: TestPersistence | partial: stale after restart passes; clearing after a ping round in M2 |
-| TC-603 | SPEC-601, 805 | I | The database is created at `storage.db_path`, or at the XDG default when the path is empty | store: TestMigrateFresh; config: TestXDGPaths; ined-server: TestCleanShutdown | passing |
+| TC-603 | SPEC-601, 805 | I | The database is created at `storage.db_path` (also with `?`, `#`, `%`, spaces or a relative path), or at the XDG default when the path is empty | store: TestMigrateFresh, TestSpecialCharacterPaths; config: TestXDGPaths; ined-server: TestDefaultDBPath | passing |
+| TC-604 | SPEC-604 | I | A second store or server on the same database is refused at once; the first keeps working; the lock is released on close | store: TestExclusiveLock; ined-server: TestSecondServerRefused | passing |
+| TC-605 | SPEC-605 | U | Orphans move to the root (saved, one warning each, not repeated); a cycle refuses to load | inventory: TestRepairOnLoad | passing |
 | TC-701 | SPEC-702 | U | Every status has a distinct shape and text label (not only a colour) | — | planned |
 | TC-702 | SPEC-703, 704, 706, 707 | M | GUI manual script: expand/collapse groups, drag items and frames, drop into a group, manage groups (including network groups) and hosts, scan an IPv4 network group; "Scan this network" is disabled for an IPv6 network group | — | planned |
 | TC-703 | SPEC-705 | I | After the server restarts, the GUI client reconnects and resyncs | — | planned |
@@ -69,7 +72,7 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-804 | SPEC-805 | U | Config precedence (flag, then environment, then file, then default) and XDG path fallbacks when the variables are unset | config: TestServerFileOverridesDefaults, TestMissingFiles, TestXDGPaths, TestClientEnvOverridesFile | passing |
 | TC-805 | SPEC-805 | U | Each file in `examples/*.toml` parses, has no unknown keys, and every value equals the built-in default (keeps the examples and the code in sync) | config: TestExamplesMatchDefaults, TestUnknownKeysRejected | passing |
 | TC-806 | SPEC-501, 802 | I | `/health` without a token returns only `{status, version}`; with a valid token, the full details | api: TestAuthAndHealth | passing |
-| TC-807 | SPEC-806 | U | `-version` prints the program name and version and exits 0 | ined-server: TestVersionFlag | passing |
+| TC-807 | SPEC-806 | U | `-version` prints the program name and version to stdout and exits 0 | ined-server: TestVersionFlag | passing (server; GUI and CLI later) |
 | TC-901 | SPEC-901 | I | Each `inedctl` subcommand works against a test server, including `note set` from stdin | — | planned |
 | TC-902 | SPEC-902 | I | `--json` output equals the API response; the default output is a table | — | planned |
 | TC-903 | SPEC-903 | I | Exit codes: 0 OK, 1 API error, 2 usage error, 3 server unreachable or wrong token | — | planned |

@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.10** (2026-11-10)
+Status: **draft v0.11** (2026-11-10)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -50,11 +50,11 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-115** SHOULD: A host whose IP is outside the CIDR of the nearest network group above it gets an `outside_cidr` flag in the API. This is informational only.
 - **SPEC-116** MUST: Ids of hosts and groups are never reused, not even after the item with the highest id is deleted and the server restarts. The id sequences are stored in the database.
 ## 5. Discovery
-- **SPEC-201** MUST: A discovery job takes either an IPv4 CIDR range or the id of an IPv4 network group, and probes every address in the range with ICMP echo. Hosts it finds go into the network group for that range. If no network group with that CIDR exists, one is created (named after the CIDR) under the optional target group, or at the root if none is given. An IPv6 range or IPv6 network group is rejected with 400 (A2). A job whose new network group would break SPEC-114 is rejected with 409 before it starts.
+- **SPEC-201** MUST: A discovery job takes either an IPv4 CIDR range or the id of an IPv4 network group, and probes every address in the range with ICMP echo. Hosts it finds go into the network group for that range. If no network group with that CIDR exists, one is created (named after the CIDR) under the optional target group, or at the root if none is given. An IPv6 range or IPv6 network group is rejected with 400 (A2). A job whose new network group would break SPEC-114 is rejected with 409 before it starts. Each address gets one echo request, and a second one 200 ms later only if the first gets no answer; each waits up to `monitor.timeout`. Discovery uses the same ICMP prober as monitoring and works even with `monitor.enabled = false`. Without a working IPv4 ICMP mode, `POST /discovery` returns 503 `unavailable` with the reason (v0.11).
 - **SPEC-202** MUST: For prefixes /30 and shorter, the network and broadcast addresses are skipped. For /31 and /32, every address is probed.
 - **SPEC-203** MUST: The largest allowed range (default /16), the probe rate (default 200 probes/s) and the concurrency are configurable. A range larger than the maximum is rejected.
-- **SPEC-204** MUST: A host that responds is added to the inventory, in the network group from SPEC-201. An IP address that is already in the inventory is not added twice, and that host is not moved.
-- **SPEC-205** MUST: Each discovery job has an id, a state (`running`, `done`, `cancelled` or `failed`) and progress (addresses probed, total, hosts found). A job can be cancelled. Progress is published as events.
+- **SPEC-204** MUST: A host that responds is added to the inventory, in the most specific network group inside the subtree of the SPEC-201 group that contains its IP (v0.11; for example, discovering 10.0.0.0/16 puts 10.0.1.5 into an existing 10.0.1.0/24 subgroup). It is added with `monitored = true` and status `up`, with round-trip time, loss and `last_seen` from the probe; monitoring takes over from there. Found hosts are saved in batches of about 1 s, with one `host.created` event per host. An IP address that is already in the inventory is not added twice, and that host is not moved.
+- **SPEC-205** MUST: Each discovery job has an id, a state (`running`, `done`, `cancelled` or `failed`) and progress (addresses probed, total, hosts found). A job can be cancelled; hosts found until then are kept. Progress is published as events: `discovery.progress` at most once a second, and `discovery.finished` at the end, both carrying the full job (v0.11). Jobs are kept in memory only, so they are gone after a restart. Job ids are strings `<run>-<n>`. The last 100 finished jobs are kept. A job whose range overlaps a running job is rejected with 409 (v0.11).
 
 ## 6. Monitoring
 - **SPEC-301** MUST: Every monitored host is pinged in the background every `interval` (default 60 s). `monitor.enabled = false` turns pinging off for the whole server; hosts then keep their stored status and `/health` reports `icmp_mode: disabled` (v0.9). Start times are spread across the interval so the pings don't all go out at once.
@@ -67,9 +67,9 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-308** MUST (v0.9): When a host's IP address changes, its status is reset to `unknown`, its round-trip time and loss are cleared, `last_change` is set if the status changed, and `host.status` is emitted after `host.updated`. The ping streak starts over.
 
 ## 7. Reverse DNS
-- **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20).
+- **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20). It uses Go's resolver (the system's DNS settings), with 5 s per lookup. At startup, the refreshes of the existing hosts are spread across `dns.refresh`. A changed name is saved and emits `host.updated`. When a host's IP changes, its PTR name is cleared at once and looked up again (v0.11).
 - **SPEC-402** MUST: The name shown for a host is its manual name if set, otherwise the first PTR name (without the trailing dot), otherwise its IP address.
-- **SPEC-403** MUST: A temporary DNS error keeps the last known PTR name. An NXDOMAIN answer (the name doesn't exist) clears it. DNS results never affect a host's status.
+- **SPEC-403** MUST: A temporary DNS error keeps the last known PTR name. An NXDOMAIN answer (the name doesn't exist) clears it. Of several PTR names, the first is used. DNS results never affect a host's status.
 
 ## 8. API (REST + SSE)
 - **SPEC-501** MUST: The JSON REST API lives under `/api/v1`:
@@ -124,7 +124,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.
 - **SPEC-802** MUST: Bearer-token authentication is optional, but required when the server listens on a non-loopback address: without a configured token, the server refuses to start. When a token is configured, every request without a valid token gets 401, except the reduced `/health` response (SPEC-501).
 - **SPEC-803** SHOULD: TLS can be turned on by configuring a certificate file and a key file.
-- **SPEC-804** MUST: The server shuts down cleanly on SIGINT or SIGTERM. It finishes database writes and closes SSE streams. Order (v0.8): stop the monitor and flush its pending results, close the SSE streams, stop the HTTP server, close the database.
+- **SPEC-804** MUST: The server shuts down cleanly on SIGINT or SIGTERM. It finishes database writes and closes SSE streams. Order (v0.8, v0.11): cancel discovery jobs and save the hosts found, stop reverse DNS, stop the monitor and flush its pending results, close the SSE streams, stop the HTTP server, close the database.
 - **SPEC-805** MUST: Config files and defaults. Precedence: command-line flags, then environment variables (`INED_URL` and `INED_TOKEN`, clients only), then the config file, then built-in defaults. Default paths follow XDG (`$XDG_CONFIG_HOME`, falling back to `~/.config`, and `$XDG_DATA_HOME`, falling back to `~/.local/share`):
   - Server: `go-ined/server.toml`. Database: `go-ined/ined.db` under the data directory.
   - GUI: `go-ined/gui.toml`. CLI: `go-ined/ctl.toml`.

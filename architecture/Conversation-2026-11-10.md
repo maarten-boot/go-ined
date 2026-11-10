@@ -37,3 +37,5 @@
 10. **User**: "OK, defaults" for network groups.
     **Decision D10:** a network is a group with an optional `cidr`; no link lines; hosts can be moved out of their network group by hand; nested network groups are checked to fit their parent's range.
     **Claude** updated Spec to v0.4: withdrew SPEC-108–110 and 710, added SPEC-113–115, and changed 101/102/105–107/111/201/204/501/502/702/704/706–708. Plan v0.4. Tests: reworked TC-107–109 and 704, added TC-206.
+11. **User** confirmed assumptions A1–A5: up to about 5,000 hosts, IPv4-only range scans, localhost-only by default, TOML config, no status history in v0.1.
+    **Claude** marked A1–A5 as confirmed in Spec.md and removed the item from Plan's open questions. The Go module path is still open.

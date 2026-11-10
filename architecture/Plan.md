@@ -70,4 +70,3 @@ pkg/client/           public Go API client
 
 ## Open questions
 - Go module path (for example `github.com/<owner>/go-ined`)?
-- Confirm assumptions A1–A5 in Spec.md.

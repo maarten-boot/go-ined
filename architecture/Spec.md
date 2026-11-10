@@ -11,7 +11,7 @@ go-ined is a network monitor loosely modelled on Tkined (Scotty). It splits Tkin
 - **`ined-gui`**: a Fyne desktop client that shows hosts and groups (including network groups) on one shared map with live status. Groups can be collapsed and expanded, as in Tkined.
 - **`inedctl`**: a command-line client for scripting and testing.
 
-## 2. Assumptions (confirm or correct)
+## 2. Assumptions (confirmed by the user, 2026-11-10)
 - **A1** Up to about 5,000 hosts per server.
 - **A2** Discovery sweeps are IPv4 only. IPv6 hosts can be added by hand (scanning IPv6 ranges isn't feasible).
 - **A3** By default the server listens on loopback only. A non-loopback address requires a bearer token.

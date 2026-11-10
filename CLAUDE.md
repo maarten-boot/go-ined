@@ -3,7 +3,7 @@
 Go project. These rules supplement the global `~/.claude/CLAUDE.md`.
 
 ## Documentation
-- All planning docs live in `architecture/` (branch `docs/architecture`):
+- All planning docs live in `architecture/`. Docs are edited on branch `docs/architecture` and merged into `main`. Code is developed on `feature/*` branches.
   - `Conversation-YYYY-MM-DD.md` — running conversation log, one file per day.
   - `Plan.md` — implementation plan; keep current.
   - `Spec.md` — specification; every requirement has an ID (`SPEC-NNN`).
@@ -11,6 +11,11 @@ Go project. These rules supplement the global `~/.claude/CLAUDE.md`.
   - `Crosscheck-YYYY-MM-DD-nn.md` — crosscheck reports (`nn` = 01, 02, … restarting daily).
 - `Changes.md` (repo root) records changes between releases.
 - After significant changes, suggest a crosscheck.
+
+## Git
+- Module path: `github.com/maarten-boot/go-ined`. Remote: `github.com/maarten-boot/go-ined` (public).
+- Commits must use the GitHub noreply address `11140490+maarten-boot@users.noreply.github.com` (set in the repo-local git config). Never use a private email.
+- Claude has no push access: suggest push and other remote write commands for the user to run.
 
 ## Input review
 - If a user sentence contains errors or uncertainties, propose corrections and confirm before proceeding.

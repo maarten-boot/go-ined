@@ -1,0 +1,30 @@
+# go-ined server configuration: reference file (SPEC-805).
+# Default location: $XDG_CONFIG_HOME/go-ined/server.toml (falls back to ~/.config/go-ined/server.toml).
+# Every value shown here is the built-in default. Command-line flags override this file.
+
+[server]
+listen   = "127.0.0.1:8470"  # Non-loopback addresses require a token (SPEC-802).
+token    = ""                # Bearer token. Empty = no auth (loopback only).
+tls_cert = ""                # Set both tls_cert and tls_key to turn on TLS (SPEC-803).
+tls_key  = ""
+
+[storage]
+db_path = ""                 # Empty = $XDG_DATA_HOME/go-ined/ined.db (falls back to ~/.local/share/go-ined/ined.db).
+
+[monitor]                    # SPEC-301, SPEC-302
+interval   = "60s"           # Time between ping rounds for each host.
+count      = 3               # Echo requests per round.
+timeout    = "1s"            # How long to wait for each reply.
+down_after = 2               # Failed rounds in a row before a host is marked down.
+
+[discovery]                  # SPEC-203
+max_prefix  = 16             # Largest range allowed (smallest prefix length): /16.
+rate        = 200            # Probes per second.
+concurrency = 64             # Probes in flight at the same time.
+
+[dns]                        # SPEC-401
+refresh     = "1h"           # PTR refresh interval.
+concurrency = 20             # Lookups running at the same time.
+
+[events]                     # SPEC-503
+buffer = 1000                # Events kept for Last-Event-ID replay.

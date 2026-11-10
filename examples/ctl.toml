@@ -1,0 +1,7 @@
+# inedctl configuration: reference file (SPEC-805).
+# Default location: $XDG_CONFIG_HOME/go-ined/ctl.toml (falls back to ~/.config/go-ined/ctl.toml).
+# Every value shown here is the built-in default. Precedence: flags, then INED_URL / INED_TOKEN, then this file.
+
+[server]
+url   = "http://127.0.0.1:8470"
+token = ""

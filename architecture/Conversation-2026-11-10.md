@@ -89,3 +89,12 @@
     **Claude** verified on GitHub: all four branches are there with the same SHAs as local (`main` = `c3d5193`). Handover open item 1 is closed.
 20. **User**: OK, defaults.
     **Claude** wrote Spec v0.8 (SPEC-304 ICMPv6 and health fields, SPEC-307 new, SPEC-502 payloads/keepalive/lag, SPEC-503 resync carries the newest id, SPEC-804 shutdown order), Plan v0.8 (D12), Tests TC-308, TC-309, TC-507. Started M2 on `feature/m2-monitoring-events`.
+21. (continued) **Claude** built M2 on `feature/m2-monitoring-events`:
+    - `internal/events`: bus with replay ring, `<run>-<seq>` ids, `resync` (carries the newest id), slow subscribers dropped with `resync`.
+    - `GET /api/v1/events` (SSE), keepalive 30 s, 503 while shutting down.
+    - `inventory.Service`: notifier with `host.*`/`group.*` events and `group.status` on every computed change; `MonitorTargets`, `ApplyObservations` (one transaction per batch).
+    - `internal/monitor`: scheduler (spread start times, ~1 s result batches, saves pending results at stop) and own ICMP/ICMPv6 prober on `golang.org/x/net/icmp` v0.62.0.
+    - `cmd/ined-server`: wiring and shutdown order monitor → SSE → HTTP → database.
+    - Live smoke test with the real binary: 127.0.0.1 went up, 192.0.2.1 went down after 2 rounds, events streamed, clean SIGTERM.
+    - Tests.md: 40 passing, 1 partial, 32 planned (73). `make all` passes.
+    Open points proposed to the user: (1) add 503 `unavailable` to SPEC-504 (already used in code); (2) `make examples` is no longer deterministic because the server pings; proposed new key `monitor.enabled`; (3) unmonitored hosts stay `stale` forever after a restart; (4) a host keeps its old status after an IP change.

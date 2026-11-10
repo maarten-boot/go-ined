@@ -55,10 +55,10 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] Exclusive database lock (SPEC-604), id sequences (SPEC-116), escaped database path, load repair (SPEC-605)
 - [x] README.md, MIT LICENSE, Makefile, `scripts/gen-api-examples.sh`
 
-### M2: Monitoring + events (branch `feature/m2-monitoring-events`)
-- [ ] Event bus, SSE, replay buffer, run-id event ids (SPEC-502, 503)
-- [ ] ICMP prober, unprivileged first then privileged (SPEC-304)
-- [ ] Ping scheduler, status rules, group aggregation, status persistence and the `stale` flag (SPEC-301..303, 305..307, 105, 603)
+### M2: Monitoring + events ✅ (branch `feature/m2-monitoring-events`)
+- [x] Event bus, SSE, replay buffer, run-id event ids (SPEC-502, 503)
+- [x] ICMP prober (ICMP and ICMPv6), unprivileged first then privileged (SPEC-304)
+- [x] Ping scheduler, status rules, group aggregation, status persistence and the `stale` flag (SPEC-301..303, 305..307, 105, 603)
 
 ### M3: Discovery + DNS
 - [ ] CIDR expansion, rate limit, jobs (SPEC-201..205)
@@ -83,5 +83,6 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] Update `Changes.md`, tag `v0.1.0`
 
 ## Open questions
+- M2 follow-ups waiting for the user (log item 21): 503 `unavailable` in SPEC-504; deterministic `make examples` now that the server pings; `stale` on unmonitored hosts; status after an IP change.
 - Not yet decided: configurable `log/slog` level and format, OpenAPI-first or generated from the handlers (before M7), `inedctl backup`.
 - `staticcheck` / `govulncheck`: run in CI (M7), or locally once allowed.

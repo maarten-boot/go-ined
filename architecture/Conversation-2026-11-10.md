@@ -130,3 +130,12 @@
     - TC-503, TC-807 (CLI), TC-901..906 passing: 76 of 95. `make all` passes.
 31. **User**: pushed; do a crosscheck.
     **Claude** ran crosscheck `Crosscheck-2026-11-10-05.md` on M4. 131/131 tests pass. Tests.md and the Spec are fully traced, and the README's `inedctl` snippet works. A probe with the real binaries found: Ctrl-C during `discover start --wait` prints "context canceled" and exits 1; a relative `ca_cert` is resolved from the current directory. Findings: 0 H, 0 M, 12 L, plus one decision (S3: should `health` exit non-zero when the server is `degraded`?). Recommended: exit 130 for an interrupted command, and keep `health` at exit 0. Fixes are waiting for the user's OK.
+32. **User**: pushed; OK, all.
+    **Claude** applied all crosscheck 05 fixes on `fix/crosscheck-05`:
+    - Ctrl-C exits 130, and `discover --wait` names the job that keeps running.
+    - A relative `ca_cert` is resolved from the config file's folder.
+    - Empty flags override the config file and the environment.
+    - `--json --wait` prints the API's response unchanged; round-trip times under 1 ms get two decimals.
+    - Clients warn about a token sent over plain HTTP.
+    - `API-examples.md` has a generated `inedctl` section.
+    - Spec and Plan v0.15 (SPEC-506, 802, 805, 903). Six new tests; `make all` passes.

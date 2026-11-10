@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.14** (2026-11-10)
+Status: **draft v0.15** (2026-11-10)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -95,7 +95,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   | 503 | `unavailable` | The server is shutting down (for example, a new `GET /events` during shutdown) (v0.9) |
   | 500 | `internal` | Unexpected server error |
 - **SPEC-505** SHOULD: The server serves an OpenAPI document at `/api/v1/openapi.json`.
-- **SPEC-506** MUST: A Go client package (`pkg/client`) wraps the REST and SSE API. The GUI and the CLI both use it. The JSON types live in `pkg/apitypes` and are shared by the server and all clients. API errors are returned as a typed `*client.APIError` with the HTTP status, `code` and message. The event stream reconnects automatically (waiting 1 s at first, doubling up to 30 s), resumes with `Last-Event-ID`, and passes `resync` on to the caller (v0.13).
+- **SPEC-506** MUST: A Go client package (`pkg/client`) wraps the REST and SSE API. The GUI and the CLI both use it. The JSON types live in `pkg/apitypes` and are shared by the server and all clients. API errors are returned as a typed `*client.APIError` with the HTTP status, `code` and message. The event stream reconnects automatically (waiting 1 s at first, doubling up to 30 s), resumes with `Last-Event-ID`, and passes `resync` on to the caller (v0.13). It stops for good on a 4xx answer (for example 401) and retries 5xx answers and connection errors. A connection that sends nothing, not even a keepalive, for 75 s is dropped and reopened. Optionally the first connection attempt may fail at once instead of being retried; `inedctl` uses this to report an unreachable server (v0.15).
 
 ## 9. Storage
 - **SPEC-601** MUST: Data is stored in SQLite through `modernc.org/sqlite` (pure Go, no cgo). The database file path is configurable.
@@ -122,7 +122,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.
-- **SPEC-802** MUST: Bearer-token authentication is optional, but required when the server listens on a non-loopback address: without a configured token, the server refuses to start. When a token is configured, every request without a valid token gets 401, except the reduced `/health` response (SPEC-501).
+- **SPEC-802** MUST: Bearer-token authentication is optional, but required when the server listens on a non-loopback address: without a configured token, the server refuses to start. When a token is configured, every request without a valid token gets 401, except the reduced `/health` response (SPEC-501). Clients warn (on stderr, or in the GUI's status area) when they would send the token over plain `http://` to a host that isn't loopback (v0.15).
 - **SPEC-803** SHOULD: TLS can be turned on by configuring a certificate file and a key file.
 - **SPEC-804** MUST: The server shuts down cleanly on SIGINT or SIGTERM. It finishes database writes and closes SSE streams. Order (v0.8, v0.11): cancel discovery jobs and save the hosts found, stop reverse DNS, stop the monitor and flush its pending results, close the SSE streams, stop the HTTP server, close the database.
 - **SPEC-805** MUST: Config files and defaults. Precedence: command-line flags, then environment variables (`INED_URL` and `INED_TOKEN`, clients only), then the config file, then built-in defaults. Default paths follow XDG (`$XDG_CONFIG_HOME`, falling back to `~/.config`, and `$XDG_DATA_HOME`, falling back to `~/.local/share`):
@@ -144,7 +144,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   | server | `events.buffer` | `1000` |
   | gui, ctl | `server.url` | `http://127.0.0.1:8470` |
   | gui, ctl | `server.token` | `""` |
-  | gui, ctl | `server.ca_cert` | `""` (system roots; set a PEM file to trust a self-signed server) (v0.13) |
+  | gui, ctl | `server.ca_cert` | `""` (system roots; set a PEM file to trust a self-signed server; a relative path is relative to the config file's folder) (v0.13, v0.15) |
   | gui | `contrast.preset` | `AA` (`AA`, `AAA`, `Max` or `custom`) |
   | gui | `contrast.min_ratio` | `4.5` (used only when `preset = "custom"`, range 4.5–21) |
 - **SPEC-806** SHOULD: Every binary supports `-version`, which prints the version (set at build time) and exits.
@@ -162,7 +162,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 
   Shape (v0.13): `inedctl [--url U] [--token T] [--ca-cert F] [--json] [--config F] <object> <action> [flags] [args]`, parsed with the standard library `flag` package. Examples: `host add <ip> [--name N] [--parent ID] [--note T] [--unmonitored]`, `host move <id> <group-id|root>`, `group add [--cidr C] [--name N] [--parent ID]`, `group rm <id> [--reparent|--cascade]`. `discover start` prints the job; with `--wait` it follows the events, shows progress until the job ends, and exits 1 if the job fails or is cancelled (v0.14). `events` prints one line per event (time, type, id, short summary); with `--json`, one JSON object per line: `{"id", "type", "data"}` (v0.14). Global flags are also accepted after the command, and command flags after positional arguments (v0.14). `note set` without text reads stdin and removes trailing newlines (v0.14).
 - **SPEC-902** MUST: Output is a human-readable table by default. `--json` prints the API's JSON unchanged. Tables are sorted by ID. Hosts: ID, IP, NAME, STATUS, RTT, PARENT, MON. Groups: ID, NAME, CIDR, STATUS, PARENT, COLLAPSED (v0.13). A stale host shows `(stale)` after its status, so the status is always in words (v0.14).
-- **SPEC-903** MUST: Exit codes: `0` OK, `1` the API returned an error, `2` usage error, `3` connection or authentication error (including 401).
+- **SPEC-903** MUST: Exit codes: `0` OK, `1` the API returned an error (or a waited-for discovery job failed or was cancelled), `2` usage or config error (bad config file, URL or CA file), `3` connection, TLS or authentication error (including 401), `130` interrupted with Ctrl-C (`events` exits 0 instead). After an interrupted `discover start --wait`, inedctl says that the job keeps running on the server. `health` exits 0 whenever the server answers, also when its status is `degraded`; scripts read `--json` (v0.15).
 
 ## 13. LATER (not in v0.1)
 - A 9P front end that exposes the inventory as a file tree.

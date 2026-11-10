@@ -126,7 +126,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	monCtx, monStop := context.WithCancel(context.Background())
 	defer monStop()
 	var monWG sync.WaitGroup
-	if prober, mode, err := newProber(); err != nil {
+	if !cfg.Monitor.Enabled {
+		icmpMode = apitypes.ICMPDisabled
+		log.Info("monitoring disabled by config (monitor.enabled = false)")
+	} else if prober, mode, err := newProber(); err != nil {
 		icmpErr = err.Error()
 		log.Error("monitoring disabled", "err", err)
 	} else {

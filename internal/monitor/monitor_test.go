@@ -301,3 +301,23 @@ type errProber struct{}
 func (errProber) Ping(context.Context, netip.Addr, int, time.Duration) (Result, error) {
 	return Result{}, errors.New("sendto: network is unreachable")
 }
+
+// TC-310 (monitor part): an IP change starts the failure streak over.
+func TestIPChangeResetsStreak(t *testing.T) {
+	r := newRig(t, Config{Interval: time.Second, Sync: time.Second, Flush: time.Millisecond, DownAfter: 2},
+		target(1, "10.0.0.1"))
+	waitFor(t, "ping 1", func() bool { return len(r.p.got()) == 1 })
+	settle()
+	r.clk.Advance(10 * time.Millisecond) // flush (the clock is fake)
+	waitFor(t, "round 1", func() bool { return len(r.inv.all()) == 1 })
+	r.inv.set(target(1, "10.0.0.9"))
+	r.clk.Advance(time.Second)
+	waitFor(t, "ping 2", func() bool { return len(r.p.got()) == 2 })
+	settle()
+	r.clk.Advance(10 * time.Millisecond)
+	waitFor(t, "round 2", func() bool { return len(r.inv.all()) == 2 })
+	o := r.inv.all()[1]
+	if o.IP.String() != "10.0.0.9" || o.Status != "" {
+		t.Fatalf("round 2 = %+v; want the new IP and no down yet", o)
+	}
+}

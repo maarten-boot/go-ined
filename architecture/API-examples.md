@@ -21,9 +21,9 @@ Response: `200`
 {
   "status": "ok",
   "version": "dev",
-  "icmp_mode": "not started",
+  "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "a323d505debd6b16"
+  "run_id": "a281918b1ab01877"
 }
 ```
 
@@ -47,8 +47,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T12:52:10.544Z",
-  "updated_at": "2026-11-10T12:52:10.544Z"
+  "created_at": "2026-11-10T14:27:26.331Z",
+  "updated_at": "2026-11-10T14:27:26.331Z"
 }
 ```
 
@@ -72,8 +72,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 180,
-  "created_at": "2026-11-10T12:52:10.553Z",
-  "updated_at": "2026-11-10T12:52:10.553Z"
+  "created_at": "2026-11-10T14:27:26.342Z",
+  "updated_at": "2026-11-10T14:27:26.342Z"
 }
 ```
 
@@ -105,8 +105,8 @@ Response: `201`
   "outside_cidr": false,
   "x": 200,
   "y": 180,
-  "created_at": "2026-11-10T12:52:10.562Z",
-  "updated_at": "2026-11-10T12:52:10.562Z"
+  "created_at": "2026-11-10T14:27:26.352Z",
+  "updated_at": "2026-11-10T14:27:26.352Z"
 }
 ```
 
@@ -138,8 +138,8 @@ Response: `200`
   "outside_cidr": false,
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-10T12:52:10.562Z",
-  "updated_at": "2026-11-10T12:52:10.571Z"
+  "created_at": "2026-11-10T14:27:26.352Z",
+  "updated_at": "2026-11-10T14:27:26.361Z"
 }
 ```
 
@@ -163,8 +163,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T12:52:10.544Z",
-  "updated_at": "2026-11-10T12:52:10.582Z"
+  "created_at": "2026-11-10T14:27:26.331Z",
+  "updated_at": "2026-11-10T14:27:26.37Z"
 }
 ```
 
@@ -307,4 +307,27 @@ curl -s -X DELETE "$INED/api/v1/groups/1?children=cascade"
 ```
 
 Response: `204`
+
+### Watch live events (Server-Sent Events)
+
+In one terminal:
+
+```bash
+curl -sN $INED/api/v1/events     # add -H "Last-Event-ID: <id>" to resume after a reconnect
+```
+
+In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The stream shows:
+
+```text
+: connected
+
+id: a281918b1ab01877-10
+event: host.created
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-10T14:27:26.768Z","updated_at":"2026-11-10T14:27:26.768Z"}
+
+id: a281918b1ab01877-11
+event: host.deleted
+data: {"id":2}
+
+```
 

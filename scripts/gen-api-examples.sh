@@ -9,6 +9,10 @@ WORK=$(mktemp -d)
 trap 'kill "${PID:-}" 2>/dev/null || true; rm -rf "$WORK"' EXIT
 
 go build -C "$REPO" -o "$WORK/ined-server" ./cmd/ined-server
+# Monitoring off: the output must not depend on which example addresses
+# answer pings on the machine that runs this script.
+mkdir -p "$WORK/cfg/go-ined"
+printf '[monitor]\nenabled = false\n' >"$WORK/cfg/go-ined/server.toml"
 XDG_CONFIG_HOME="$WORK/cfg" "$WORK/ined-server" -listen 127.0.0.1:0 -db "$WORK/ex.db" >"$WORK/server.log" 2>&1 &
 PID=$!
 
@@ -48,6 +52,32 @@ ex "Error: nested network group outside its parent" POST /groups '{"cidr":"10.0.
 ex "Error: deleting a non-empty group without children=" DELETE /groups/1
 ex "Delete a group and move its contents up one level" DELETE '/groups/2?children=reparent'
 ex "Delete a group with everything in it" DELETE '/groups/1?children=cascade'
+
+# Live events (SSE): capture the stream while a host is added and deleted.
+curl -sN "http://$ADDR/api/v1/events" >"$WORK/events.txt" &
+CURL=$!
+sleep 0.3
+curl -s -o /dev/null -X POST "http://$ADDR/api/v1/hosts" -d '{"ip":"192.168.1.20"}'
+curl -s -o /dev/null -X DELETE "http://$ADDR/api/v1/hosts/2"
+sleep 0.3
+kill "$CURL" 2>/dev/null || true
+wait "$CURL" 2>/dev/null || true
+{
+  echo "### Watch live events (Server-Sent Events)"
+  echo
+  echo "In one terminal:"
+  echo
+  echo '```bash'
+  echo 'curl -sN $INED/api/v1/events     # add -H "Last-Event-ID: <id>" to resume after a reconnect'
+  echo '```'
+  echo
+  echo "In another: \`POST /hosts {\"ip\":\"192.168.1.20\"}\`, then \`DELETE /hosts/2\`. The stream shows:"
+  echo
+  echo '```text'
+  cat "$WORK/events.txt"
+  echo '```'
+  echo
+} >>"$OUT"
 
 {
 cat <<'EOF'

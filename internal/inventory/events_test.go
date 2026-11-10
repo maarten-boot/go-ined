@@ -247,3 +247,54 @@ func TestMonitorTargets(t *testing.T) {
 		t.Fatalf("targets = %+v", got)
 	}
 }
+
+// TC-310: an IP change resets the status and emits host.status.
+func TestIPChangeResets(t *testing.T) {
+	s, _ := newSvc(t)
+	r := &recorder{}
+	s.SetNotifier(r)
+	g := mustGroup(t, s, apitypes.GroupCreate{Name: "g"})
+	h := mustHost(t, s, apitypes.HostCreate{IP: "10.0.0.1", ParentID: &g.ID})
+	observe(t, s, up(h.ID, "10.0.0.1"))
+	r.take()
+	got, err := s.UpdateHost(context.Background(), h.ID, apitypes.HostPatch{IP: apitypes.Some("10.0.0.2")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != apitypes.StatusUnknown || got.RTTms != nil || got.LossPct != nil || got.LastChange.Equal(time.Unix(100, 0)) {
+		t.Fatalf("after IP change: %+v", got)
+	}
+	if ev := r.take(); ev != "host.updated 1 unknown; host.status 1 unknown; group.status 1 unknown" {
+		t.Fatalf("events: %s", ev)
+	}
+	// Same IP again, or another field: no reset, no host.status.
+	observe(t, s, up(h.ID, "10.0.0.2"))
+	r.take()
+	if _, err := s.UpdateHost(context.Background(), h.ID, apitypes.HostPatch{IP: apitypes.Some("10.0.0.2"), Name: apitypes.Some("x")}); err != nil {
+		t.Fatal(err)
+	}
+	if ev := r.take(); ev != "host.updated 1 up" {
+		t.Fatalf("no-op IP: %s", ev)
+	}
+}
+
+// TC-603: unmonitored hosts are never stale.
+func TestStaleOnlyMonitored(t *testing.T) {
+	s, repo := newSvc(t)
+	mustHost(t, s, apitypes.HostCreate{IP: "10.0.0.1"})
+	mustHost(t, s, apitypes.HostCreate{IP: "10.0.0.2", Monitored: ptr(false)})
+	s2, err := NewService(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := s2.Host(1); !h.Stale {
+		t.Error("monitored host not stale after restart")
+	}
+	if h, _ := s2.Host(2); h.Stale {
+		t.Error("unmonitored host stale after restart")
+	}
+	h, err := s2.UpdateHost(context.Background(), 1, apitypes.HostPatch{Monitored: apitypes.Some(false)})
+	if err != nil || h.Stale {
+		t.Fatalf("turning monitoring off: %v %+v", err, h)
+	}
+}

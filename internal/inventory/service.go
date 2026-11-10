@@ -86,8 +86,8 @@ func (s *Service) emitGroupStatus(before map[int64]Counts) {
 	}
 }
 
-// NewService loads the inventory from repo. Every loaded host is marked
-// stale until it has been pinged again (SPEC-603). The tree is checked
+// NewService loads the inventory from repo. Every loaded monitored host is
+// marked stale until it has been pinged again (SPEC-603). The tree is checked
 // (SPEC-605): items whose parent is missing are moved to the root and
 // reported by LoadWarnings; a cycle is an error.
 func NewService(ctx context.Context, repo Repository) (*Service, error) {
@@ -103,7 +103,7 @@ func NewService(ctx context.Context, repo Repository) (*Service, error) {
 	}
 	for i := range st.Hosts {
 		h := st.Hosts[i]
-		h.Stale = true
+		h.Stale = h.Monitored
 		s.m.Hosts[h.ID] = &h
 		s.nextHost = max(s.nextHost, h.ID+1)
 	}
@@ -303,6 +303,7 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 		return apitypes.Host{}, notFoundf("host %d not found", id)
 	}
 	h := *cur
+	ipChanged := false
 	if p.IP.Set {
 		ip, err := ParseIP(p.IP.Value)
 		if err != nil {
@@ -311,13 +312,25 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 		if err := s.checkIPFree(ip, id); err != nil {
 			return apitypes.Host{}, err
 		}
-		h.IP = ip
+		if ip != h.IP {
+			// The old results belong to another address (SPEC-308).
+			ipChanged = true
+			h.IP = ip
+			h.RTTms, h.LossPct = nil, nil
+			if h.Status != apitypes.StatusUnknown {
+				h.Status = apitypes.StatusUnknown
+				h.LastChange = s.stamp()
+			}
+		}
 	}
 	setIf(&h.Name, p.Name, strings.TrimSpace)
 	setIf(&h.Description, p.Description, nil)
 	setIf(&h.Note, p.Note, nil)
 	if p.Monitored.Set {
 		h.Monitored = p.Monitored.Value
+		if !h.Monitored {
+			h.Stale = false // SPEC-603: unmonitored hosts are never stale
+		}
 	}
 	if p.ParentID.Set {
 		parent := Root
@@ -349,6 +362,9 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 	*cur = h
 	v := s.hostView(cur)
 	s.notify.Publish(apitypes.EventHostUpdated, v)
+	if ipChanged {
+		s.notify.Publish(apitypes.EventHostStatus, v)
+	}
 	s.emitGroupStatus(before)
 	return v, nil
 }

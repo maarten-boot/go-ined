@@ -251,6 +251,27 @@ func TestNoICMP(t *testing.T) {
 	}
 }
 
+// TC-311: monitor.enabled = false pings nothing and /health says so.
+func TestMonitorDisabled(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "s.toml")
+	if err := os.WriteFile(cfg, []byte("[monitor]\nenabled = false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := newProber
+	newProber = func() (monitor.Prober, string, error) {
+		t.Error("prober created although monitoring is disabled")
+		return fakeProber{}, apitypes.ICMPUnprivileged, nil
+	}
+	t.Cleanup(func() { newProber = old })
+	addr, _, _ := startServer(t, "-config", cfg, "-listen", "127.0.0.1:0", "-db", filepath.Join(dir, "x.db"))
+	var hv apitypes.Health
+	getJSON(t, "http://"+addr+"/api/v1/health", &hv)
+	if hv.Status != "ok" || hv.ICMPMode != apitypes.ICMPDisabled {
+		t.Errorf("health: %+v", hv)
+	}
+}
+
 // TC-803: with tls_cert and tls_key the server speaks HTTPS.
 func TestTLS(t *testing.T) {
 	dir := t.TempDir()

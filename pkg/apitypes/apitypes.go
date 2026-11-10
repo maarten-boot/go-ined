@@ -76,6 +76,7 @@ const (
 	ICMPPrivileged   = "privileged"
 	ICMPUnavailable  = "unavailable"
 	ICMPNotStarted   = "not started"
+	ICMPDisabled     = "disabled" // monitor.enabled = false
 )
 
 // Host is a host as returned by the API (SPEC-101).

@@ -12,6 +12,7 @@ tls_key  = ""
 db_path = ""                 # Empty = $XDG_DATA_HOME/go-ined/ined.db (falls back to ~/.local/share/go-ined/ined.db).
 
 [monitor]                    # SPEC-301, SPEC-302
+enabled    = true            # false = no pinging at all; hosts keep their stored status.
 interval   = "60s"           # Time between ping rounds for each host.
 count      = 3               # Echo requests per round.
 timeout    = "1s"            # How long to wait for each reply.

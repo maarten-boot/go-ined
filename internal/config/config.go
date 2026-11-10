@@ -48,6 +48,7 @@ type StorageSection struct {
 
 // MonitorSection holds the ping settings (SPEC-301, SPEC-302).
 type MonitorSection struct {
+	Enabled   bool          `toml:"enabled"`
 	Interval  time.Duration `toml:"interval"`
 	Count     int           `toml:"count"`
 	Timeout   time.Duration `toml:"timeout"`
@@ -100,7 +101,7 @@ type ContrastSection struct {
 func DefaultServer() Server {
 	return Server{
 		Server:    ServerSection{Listen: "127.0.0.1:8470"},
-		Monitor:   MonitorSection{Interval: 60 * time.Second, Count: 3, Timeout: time.Second, DownAfter: 2},
+		Monitor:   MonitorSection{Enabled: true, Interval: 60 * time.Second, Count: 3, Timeout: time.Second, DownAfter: 2},
 		Discovery: DiscoverySection{MaxPrefix: 16, Rate: 200, Concurrency: 64},
 		DNS:       DNSSection{Refresh: time.Hour, Concurrency: 20},
 		Events:    EventsSection{Buffer: 1000},

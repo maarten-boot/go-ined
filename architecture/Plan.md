@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.11** (2026-11-10)
+Status: **draft v0.12** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -70,6 +70,9 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] CIDR expansion, rate limit, jobs (SPEC-201..205)
 - [x] Reverse DNS with a concurrency limit (SPEC-401..403), `dns.enabled`
 - [x] README: SVG architecture overview (`architecture/overview.svg`)
+
+### Crosscheck 04 fixes ✅ (branch `fix/crosscheck-04`)
+- [x] Probe errors in discovery jobs; one goroutine per free slot in monitor and DNS; WaitGroup at close; `discovery.rate` bounds; A1 warning (SPEC-203, 205)
 
 ### M4: Client package + CLI
 - [ ] `pkg/client` (SPEC-506), with Go `Example*` functions

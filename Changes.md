@@ -23,6 +23,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - Discovery: `POST /discovery` probes an IPv4 range (up to /16) at a configurable rate and adds the hosts that answer, into the most specific matching network group; jobs can be followed (`GET`, events) and cancelled (`DELETE`).
 - Reverse DNS: PTR names are looked up when a host is added or re-addressed, and refreshed every `dns.refresh`; config key `dns.enabled`.
 - Architecture overview diagram (`architecture/overview.svg`) in the README.
+- Go client package `pkg/client`: typed calls for every endpoint, `*client.APIError`, and an event stream that reconnects (1 s doubling to 30 s), resumes with `Last-Event-ID` and passes `resync` on.
+- `inedctl`: hosts, groups, notes, discovery (`--wait` follows a job), events and health; tables or `--json`; exit codes 0–3.
+- Client config key `server.ca_cert` (and `inedctl --ca-cert`) to trust a self-signed server certificate.
 - Spec: a Hosts tab for the GUI (sortable list by IP and DNS name, with find) listed as a future enhancement.
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 

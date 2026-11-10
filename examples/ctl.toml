@@ -5,3 +5,6 @@
 [server]
 url   = "http://127.0.0.1:8470"
 token = ""
+# PEM file with extra trusted CA certificates, e.g. for a self-signed server
+# certificate. Empty = the system roots only.
+ca_cert = ""

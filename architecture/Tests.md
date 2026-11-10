@@ -66,7 +66,7 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-408 | SPEC-401, 301 | U | Hosts waiting for a lookup or ping slot don't each hold a goroutine: with concurrency 4 and 50 due hosts, only about 4 workers exist | dnsname: TestNoGoroutinePerWaitingHost; monitor: TestNoGoroutinePerWaitingRound | passing |
 | TC-501 | SPEC-501, 504 | I | CRUD round trip for hosts and groups (with and without `cidr`). Every error case returns the HTTP status and `code` from the SPEC-504 table | api: TestCRUD, TestRequestErrors; apitypes: TestOpt; inventory: TestRepoFailureKeepsModel | passing |
 | TC-502 | SPEC-502, 503 | I | SSE: events arrive in order. Reconnecting with Last-Event-ID replays missed events; an id that has dropped out of the buffer gets `resync` | events: TestReplay, TestResync; api: TestEventsStream, TestEventsReplayAndResync; api: TestEventsKeepalive | passing |
-| TC-503 | SPEC-506 | I | `pkg/client` works against a test server for all endpoints and the event stream | — | planned |
+| TC-503 | SPEC-506 | I | `pkg/client` works against a test server for all endpoints and the event stream | client: TestCRUD, TestDoRaw, TestErrors, TestDiscovery, TestCancelDiscovery, TestEventsUnauthorized, TestEventsFailFirst, TestEventsIdleTimeout | passing |
 | TC-504 | SPEC-501 | I | `GET /map` returns every item with its type, parent, position, collapsed flag, `cidr`, status, `stale`, `has_note` and `outside_cidr` | api: TestMap | passing |
 | TC-505 | SPEC-505 | I | `/api/v1/openapi.json` is valid OpenAPI 3 and lists every route the server registers | — | planned |
 | TC-506 | SPEC-503 | I | Event ids have the form `<run>-<seq>`. After a restart, a `Last-Event-ID` from the previous run gets `resync` | events: TestEventIDs, TestResync; api: TestEventsReplayAndResync | passing |
@@ -94,10 +94,10 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-804 | SPEC-805 | U | Config precedence (flag, then environment, then file, then default) and XDG path fallbacks when the variables are unset | config: TestServerFileOverridesDefaults, TestMissingFiles, TestXDGPaths, TestClientEnvOverridesFile; config: TestValidate | passing |
 | TC-805 | SPEC-805 | U | Each file in `examples/*.toml` parses, has no unknown keys, and every value equals the built-in default (keeps the examples and the code in sync) | config: TestExamplesMatchDefaults, TestUnknownKeysRejected | passing |
 | TC-806 | SPEC-501, 802 | I | `/health` without a token returns only `{status, version}`; with a valid token, the full details | api: TestAuthAndHealth; api: TestHealthDegraded | passing |
-| TC-807 | SPEC-806 | U | `-version` prints the program name and version to stdout and exits 0 | ined-server: TestVersionFlag | passing (server; GUI and CLI later) |
-| TC-901 | SPEC-901 | I | Each `inedctl` subcommand works against a test server, including `note set` from stdin | — | planned |
-| TC-902 | SPEC-902 | I | `--json` output equals the API response; the default output is a table | — | planned |
-| TC-903 | SPEC-903 | I | Exit codes: 0 OK, 1 API error, 2 usage error, 3 server unreachable or wrong token | — | planned |
-| TC-904 | SPEC-805, 803 | I | `server.ca_cert` / `--ca-cert` lets the CLI talk to a server with a self-signed certificate; without it the connection fails with exit code 3 | — | planned |
-| TC-905 | SPEC-506, 503 | I | The client's event stream reconnects after the server restarts or the connection drops, resumes with `Last-Event-ID`, and passes `resync` on | — | planned |
-| TC-906 | SPEC-901 | I | `discover start --wait` shows progress and exits 0 on `done`, 1 on `failed` | — | planned |
+| TC-807 | SPEC-806 | U | `-version` prints the program name and version to stdout and exits 0 | ined-server: TestVersionFlag; inedctl: TestVersion | passing (server and CLI; GUI later) |
+| TC-901 | SPEC-901 | I | Each `inedctl` subcommand works against a test server, including `note set` from stdin | inedctl: TestCommands, TestDiscoverCancel, TestEvents | passing |
+| TC-902 | SPEC-902 | I | `--json` output equals the API response; the default output is a table | inedctl: TestJSON, TestCommands | passing |
+| TC-903 | SPEC-903 | I | Exit codes: 0 OK, 1 API error, 2 usage error, 3 server unreachable or wrong token | inedctl: TestExitCodes | passing |
+| TC-904 | SPEC-805, 803 | I | `server.ca_cert` / `--ca-cert` lets the CLI talk to a server with a self-signed certificate; without it the connection fails with exit code 3 | client: TestCACert; inedctl: TestConfigAndCACert | passing |
+| TC-905 | SPEC-506, 503 | I | The client's event stream reconnects after the server restarts or the connection drops, resumes with `Last-Event-ID`, and passes `resync` on | client: TestEventsReconnect, TestEventsRestart | passing |
+| TC-906 | SPEC-901 | I | `discover start --wait` shows progress and exits 0 on `done`, 1 on `failed` | inedctl: TestDiscoverWait | passing |

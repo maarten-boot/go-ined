@@ -129,7 +129,11 @@ func ms(v *float64) string {
 	if v == nil {
 		return "-"
 	}
-	return strconv.FormatFloat(*v, 'f', 1, 64) + " ms"
+	prec := 1
+	if *v < 1 {
+		prec = 2 // loopback and LAN times are often below 0.1 ms
+	}
+	return strconv.FormatFloat(*v, 'f', prec, 64) + " ms"
 }
 
 func when(t *time.Time) string {

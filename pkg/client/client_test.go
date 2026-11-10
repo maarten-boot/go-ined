@@ -453,3 +453,55 @@ func TestEventsIdleTimeout(t *testing.T) {
 		t.Fatalf("states %+v", sts.l)
 	}
 }
+
+// I1 (crosscheck 05): a token over plain HTTP to a non-loopback host.
+func TestTokenInClear(t *testing.T) {
+	for _, c := range []struct {
+		url, token string
+		want       bool
+	}{
+		{"http://127.0.0.1:8470", "t", false},
+		{"http://[::1]:8470", "t", false},
+		{"http://localhost:8470", "t", false},
+		{"http://ined.localhost", "t", false},
+		{"https://192.0.2.1:8470", "t", false},
+		{"http://192.0.2.1:8470", "", false},
+		{"http://192.0.2.1:8470", "t", true},
+		{"http://[2001:db8::1]:8470", "t", true},
+		{"http://ined.example.org", "t", true},
+	} {
+		cl, err := client.New(client.Options{URL: c.url, Token: c.token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := cl.TokenInClear(); got != c.want {
+			t.Errorf("%s token %q: %v, want %v", c.url, c.token, got, c.want)
+		}
+	}
+}
+
+// P3 (crosscheck 05): the one-line summary of every event type.
+func TestEventShort(t *testing.T) {
+	for _, c := range []struct {
+		typ, data, want string
+	}{
+		{apitypes.EventHostCreated, `{"id":3,"ip":"192.0.2.1","display_name":"web","status":"up"}`, "host 3 192.0.2.1 web up"},
+		{apitypes.EventHostUpdated, `{"id":3,"ip":"192.0.2.1","display_name":"web","status":"down"}`, "host 3 192.0.2.1 web down"},
+		{apitypes.EventHostStatus, `{"id":3,"ip":"192.0.2.1","display_name":"web","status":"unknown"}`, "host 3 192.0.2.1 web unknown"},
+		{apitypes.EventGroupCreated, `{"id":1,"name":"10.0.0.0/24","cidr":"10.0.0.0/24","status":"up"}`, "group 1 10.0.0.0/24 up"},
+		{apitypes.EventGroupUpdated, `{"id":1,"name":"office","cidr":"10.0.0.0/24","status":"up"}`, "group 1 office 10.0.0.0/24 up"},
+		{apitypes.EventHostDeleted, `{"id":4}`, "host 4"},
+		{apitypes.EventGroupDeleted, `{"id":5}`, "group 5"},
+		{apitypes.EventGroupStatus, `{"id":5,"status":"down"}`, "group 5 down"},
+		{apitypes.EventDiscoveryProgress, `{"id":"r-1","cidr":"10.0.0.0/30","state":"running","probed":1,"total":2}`, "job r-1 10.0.0.0/30 running probed 1/2 found 0 added 0"},
+		{apitypes.EventDiscoveryFinished, `{"id":"r-1","cidr":"10.0.0.0/30","state":"failed","probed":2,"total":2,"errors":2,"error":"no route"}`, "job r-1 10.0.0.0/30 failed probed 2/2 found 0 added 0 errors 2: no route"},
+		{apitypes.EventResync, `{"reason":"client fell behind"}`, "reload: client fell behind"},
+		{"other.type", `{"x":1}`, `{"x":1}`},
+		{apitypes.EventHostCreated, `not json`, `not json`},
+	} {
+		ev := client.Event{Type: c.typ, Data: json.RawMessage(c.data)}
+		if got := ev.Short(); got != c.want {
+			t.Errorf("%s: %q, want %q", c.typ, got, c.want)
+		}
+	}
+}

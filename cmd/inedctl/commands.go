@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -378,11 +380,19 @@ func (a *app) discoverWait(in apitypes.DiscoveryCreate) error {
 		}
 		return a.ctx.Err()
 	}
-	job, err := a.c.StartDiscovery(a.ctx, in)
-	if err != nil {
+	var raw json.RawMessage
+	if err := a.c.Do(a.ctx, http.MethodPost, "/discovery", in, &raw); err != nil {
 		return err
 	}
-	a.jobLine(job, nil)
+	var job apitypes.Discovery
+	if err := json.Unmarshal(raw, &job); err != nil {
+		return fmt.Errorf("decoding the job: %w", err)
+	}
+	var compact bytes.Buffer
+	if json.Compact(&compact, raw) == nil {
+		raw = compact.Bytes()
+	}
+	a.jobLine(job, raw) // with --json: the API's response, on one line
 	for ev := range st.C() {
 		var d apitypes.Discovery
 		switch ev.Type {
@@ -393,7 +403,11 @@ func (a *app) discoverWait(in apitypes.DiscoveryCreate) error {
 			a.jobLine(d, ev.Data)
 		case apitypes.EventResync:
 			// Events were lost: ask for the job's state.
+			var err error
 			if d, err = a.c.Discovery(a.ctx, job.ID); err != nil {
+				if a.ctx.Err() != nil {
+					return jobInterrupted(job.ID)
+				}
 				return err
 			}
 			a.jobLine(d, nil)
@@ -410,11 +424,18 @@ func (a *app) discoverWait(in apitypes.DiscoveryCreate) error {
 	if err := st.Err(); err != nil {
 		return err
 	}
-	return a.ctx.Err()
+	if a.ctx.Err() != nil {
+		return jobInterrupted(job.ID)
+	}
+	return errors.New("event stream ended")
+}
+
+func jobInterrupted(id string) error {
+	return interrupted{fmt.Sprintf("interrupted; job %s keeps running on the server (inedctl discover cancel %s)", id, id)}
 }
 
 // jobLine prints a job's state: the summary line, or with --json the job
-// as one line of JSON.
+// as one line of JSON (data, the response or event payload, if not nil).
 func (a *app) jobLine(d apitypes.Discovery, data json.RawMessage) {
 	if !a.g.json {
 		fmt.Fprintln(a.out, client.DiscoveryLine(d))

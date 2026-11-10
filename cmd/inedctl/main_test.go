@@ -283,6 +283,10 @@ func TestDiscoverWait(t *testing.T) {
 	out = ok(t, u, "--json", "discover", "start", "--group", "1", "--wait")
 	var last apitypes.Discovery
 	ls := strings.Split(strings.TrimSpace(out), "\n")
+	// The first line is the POST response, compact (C3, crosscheck 05).
+	if !strings.HasPrefix(ls[0], `{"id":`) || !strings.Contains(ls[0], `"state":"running"`) {
+		t.Fatalf("first --json line: %s", ls[0])
+	}
 	if err := json.Unmarshal([]byte(ls[len(ls)-1]), &last); err != nil || last.State != apitypes.DiscoveryDone || last.Added != 0 {
 		t.Fatalf("--json --wait: %v\n%s", err, out)
 	}
@@ -369,5 +373,67 @@ func TestEvents(t *testing.T) {
 		} else if !strings.Contains(line, "host.created") || !strings.Contains(line, "run1-") {
 			t.Fatalf("event line %q", line)
 		}
+	}
+}
+
+// C1 (crosscheck 05): Ctrl-C during discover --wait exits 130 and says the
+// job keeps running.
+func TestInterruptWait(t *testing.T) {
+	isolate(t)
+	gate := make(chan struct{}) // probes never finish
+	s := testserver.Start(t, testserver.Options{Gate: gate})
+	ctx, cancel := context.WithCancel(context.Background())
+	var out, errOut syncBuf
+	done := make(chan int)
+	go func() {
+		done <- run(ctx, []string{"--url=" + s.URL(), "discover", "start", "10.5.0.0/29", "--wait"}, nil, &out, &errOut)
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(out.String(), "running") {
+		if time.Now().After(deadline) {
+			t.Fatal("job didn't start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	if code := <-done; code != 130 {
+		t.Fatalf("exit %d", code)
+	}
+	contains(t, errOut.String(), "interrupted; job run1-1 keeps running on the server (inedctl discover cancel run1-1)")
+	if strings.Contains(errOut.String(), "inedctl -h") {
+		t.Fatal("usage hint on an interrupt")
+	}
+}
+
+// C4 (crosscheck 05): an empty flag still overrides; I1: token warning.
+func TestEmptyFlagAndWarning(t *testing.T) {
+	isolate(t)
+	s := testserver.Start(t, testserver.Options{Token: "secret"})
+	t.Setenv("INED_URL", s.URL())
+	t.Setenv("INED_TOKEN", "secret")
+	ok(t, "host", "list")
+	if r := ctl(t, "--token=", "host", "list"); r.code != 3 {
+		t.Fatalf("--token= didn't clear the token: %+v", r)
+	}
+	if r := ctl(t, "host", "list"); strings.Contains(r.errOut, "warning") {
+		t.Fatalf("warning on loopback: %q", r.errOut)
+	}
+	// Config errors don't get the usage hint (C2).
+	if r := ctl(t, "--ca-cert=/nonexistent.pem", "host", "list"); r.code != 2 || strings.Contains(r.errOut, "inedctl -h") {
+		t.Fatalf("config error: %+v", r)
+	}
+	// 0.0.0.0 isn't loopback: the token would cross the network.
+	r := ctl(t, "--url=http://0.0.0.0:1", "health")
+	contains(t, r.errOut, "warning: sending the token unencrypted to http://0.0.0.0:1")
+}
+
+func TestFormatRTT(t *testing.T) {
+	for v, want := range map[float64]string{0.042: "0.04 ms", 0.5: "0.50 ms", 1: "1.0 ms", 12.345: "12.3 ms"} {
+		if got := ms(&v); got != want {
+			t.Errorf("%v: %q, want %q", v, got, want)
+		}
+	}
+	if ms(nil) != "-" {
+		t.Error("nil")
 	}
 }

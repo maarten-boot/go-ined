@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "8e7bc5032c26ebf7"
+  "run_id": "66b162d5134535d0"
 }
 ```
 
@@ -47,8 +47,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T18:10:00.227Z",
-  "updated_at": "2026-11-10T18:10:00.227Z"
+  "created_at": "2026-11-10T22:22:00.879Z",
+  "updated_at": "2026-11-10T22:22:00.879Z"
 }
 ```
 
@@ -72,8 +72,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 180,
-  "created_at": "2026-11-10T18:10:00.236Z",
-  "updated_at": "2026-11-10T18:10:00.236Z"
+  "created_at": "2026-11-10T22:22:00.89Z",
+  "updated_at": "2026-11-10T22:22:00.89Z"
 }
 ```
 
@@ -105,8 +105,8 @@ Response: `201`
   "outside_cidr": false,
   "x": 200,
   "y": 180,
-  "created_at": "2026-11-10T18:10:00.245Z",
-  "updated_at": "2026-11-10T18:10:00.245Z"
+  "created_at": "2026-11-10T22:22:00.902Z",
+  "updated_at": "2026-11-10T22:22:00.902Z"
 }
 ```
 
@@ -138,8 +138,8 @@ Response: `200`
   "outside_cidr": false,
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-10T18:10:00.245Z",
-  "updated_at": "2026-11-10T18:10:00.253Z"
+  "created_at": "2026-11-10T22:22:00.902Z",
+  "updated_at": "2026-11-10T22:22:00.914Z"
 }
 ```
 
@@ -163,8 +163,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T18:10:00.227Z",
-  "updated_at": "2026-11-10T18:10:00.262Z"
+  "created_at": "2026-11-10T22:22:00.879Z",
+  "updated_at": "2026-11-10T22:22:00.923Z"
 }
 ```
 
@@ -321,11 +321,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: 8e7bc5032c26ebf7-10
+id: 66b162d5134535d0-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-10T18:10:00.646Z","updated_at":"2026-11-10T18:10:00.646Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-10T22:22:01.319Z","updated_at":"2026-11-10T22:22:01.319Z"}
 
-id: 8e7bc5032c26ebf7-11
+id: 66b162d5134535d0-11
 event: host.deleted
 data: {"id":2}
 
@@ -341,7 +341,7 @@ Response: `202`
 
 ```json
 {
-  "id": "8e7bc5032c26ebf7-1",
+  "id": "66b162d5134535d0-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -350,7 +350,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-10T18:10:00.982Z",
+  "started_at": "2026-11-10T22:22:01.655Z",
   "finished_at": null
 }
 ```
@@ -358,14 +358,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/8e7bc5032c26ebf7-1
+curl -s $INED/api/v1/discovery/66b162d5134535d0-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "8e7bc5032c26ebf7-1",
+  "id": "66b162d5134535d0-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -374,8 +374,8 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-10T18:10:00.982Z",
-  "finished_at": "2026-11-10T18:10:00.988Z"
+  "started_at": "2026-11-10T22:22:01.655Z",
+  "finished_at": "2026-11-10T22:22:01.663Z"
 }
 ```
 
@@ -412,4 +412,200 @@ Response: `400`
   }
 }
 ```
+
+## inedctl
+
+The same server through the command-line client. `INED_URL` (or `--url`) points it at the server.
+
+### Delete a group with everything in it
+
+```bash
+inedctl group rm 3 --cascade
+```
+
+No output.
+
+Exit code: `0`
+
+### Add a network group
+
+```bash
+inedctl group add --cidr 10.10.0.0/24 --name lab
+```
+
+```text
+ID:          4
+Name:        lab
+CIDR:        10.10.0.0/24
+Description: -
+Parent:      root
+Status:      unknown
+Collapsed:   yes
+Position:    40, 40
+Created:     2026-11-10 23:22:03
+Updated:     2026-11-10 23:22:03
+Note:        -
+```
+
+Exit code: `0`
+
+### Add a host (goes into the matching network group)
+
+```bash
+inedctl host add 10.10.0.5 --name printer --note '2nd floor'
+```
+
+```text
+ID:           5
+IP:           10.10.0.5
+Name:         printer
+PTR name:     -
+Display name: printer
+Description:  -
+Parent:       4
+Monitored:    yes
+Status:       unknown
+RTT:          -
+Loss:         -
+Last seen:    -
+Last change:  -
+Outside CIDR: no
+Position:     40, 120
+Created:      2026-11-10 23:22:03
+Updated:      2026-11-10 23:22:03
+Note:         2nd floor
+```
+
+Exit code: `0`
+
+### List the hosts
+
+```bash
+inedctl host list
+```
+
+```text
+ID  IP         NAME     STATUS   RTT  PARENT  MON
+5   10.10.0.5  printer  unknown  -    4       yes
+```
+
+Exit code: `0`
+
+### List the groups
+
+```bash
+inedctl group list
+```
+
+```text
+ID  NAME  CIDR          STATUS   PARENT  COLLAPSED
+4   lab   10.10.0.0/24  unknown  root    yes
+```
+
+Exit code: `0`
+
+### The API's JSON instead of a table
+
+```bash
+inedctl --json host show 5
+```
+
+```text
+{
+  "id": 5,
+  "ip": "10.10.0.5",
+  "ptr_name": "",
+  "name": "printer",
+  "display_name": "printer",
+  "description": "",
+  "note": "2nd floor",
+  "parent_id": 4,
+  "monitored": true,
+  "status": "unknown",
+  "rtt_ms": null,
+  "loss_pct": null,
+  "last_seen": null,
+  "last_change": null,
+  "stale": false,
+  "outside_cidr": false,
+  "x": 40,
+  "y": 120,
+  "created_at": "2026-11-10T22:22:03.763Z",
+  "updated_at": "2026-11-10T22:22:03.763Z"
+}
+```
+
+Exit code: `0`
+
+### Replace a note from stdin
+
+```bash
+inedctl note set host 5 < note.txt
+```
+
+No output.
+
+Exit code: `0`
+
+### Read the note
+
+```bash
+inedctl note get host 5
+```
+
+```text
+Toner replaced 2026-11
+```
+
+Exit code: `0`
+
+### Discover a range and wait for the result (progress lines in between left out here)
+
+```bash
+inedctl discover start 127.0.0.4/30 --wait
+```
+
+```text
+job 66b162d5134535d0-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job 66b162d5134535d0-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+```
+
+Exit code: `0`
+
+### Error from the API: exit code 1
+
+```bash
+inedctl host show 99
+```
+
+```text
+inedctl: not_found (HTTP 404): host 99 not found
+```
+
+Exit code: `1`
+
+### Usage error: exit code 2
+
+```bash
+inedctl host move 5
+```
+
+```text
+inedctl: host move: missing argument
+Run 'inedctl -h' for usage.
+```
+
+Exit code: `2`
+
+### Server not reachable: exit code 3
+
+```bash
+inedctl --url http://127.0.0.1:1 health
+```
+
+```text
+inedctl: Get "http://127.0.0.1:1/api/v1/health": dial tcp 127.0.0.1:1: connect: connection refused
+```
+
+Exit code: `3`
 

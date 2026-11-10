@@ -30,6 +30,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 
 ### Fixed
+- `inedctl`: Ctrl-C exits 130 and, for `discover start --wait`, says the job keeps running on the server; a relative `ca_cert` is read from the config file's folder; `--token ""` clears a token from the config or environment; `--json --wait` prints the API's response unchanged; round-trip times below 1 ms get two decimals.
+- `inedctl` warns when it sends a token unencrypted to a host that isn't loopback.
+- `architecture/API-examples.md` has generated `inedctl` examples.
 - Discovery jobs report probes that fail with an error (`errors`, and the first message in `error`).
 - Monitoring and reverse DNS no longer keep a waiting goroutine per due host; memory stays flat after a large discovery.
 - `discovery.rate` is limited to 1–100,000 (a larger value crashed the server at start); ranges above ~5,000 addresses log a warning.

@@ -27,3 +27,5 @@
    **Claude** proposed spelling fixes and laid out options: API (9P / REST+SSE / gRPC / ZMQ), storage, ICMP privileges, group model, GUI toolkit, layout storage, security. Waiting for the user's choices.
 6. **User** chose: groups as a tree, REST + SSE first, SQLite, Fyne GUI.
    **Claude** wrote Spec v0.2 (SPEC-001..804), Plan v0.2 (decisions D1–D6, package layout, milestones M1–M7) and Tests.md (TC-001..802). Assumed defaults to confirm: A1 ≤ 5k hosts, A2 discovery sweeps IPv4 only, A3 loopback by default + token otherwise, A4 TOML config, A5 no status history in v0.1, D5 positions stored on the server, D6 no .tki import. Module path still open.
+7. **User** asked for notes on hosts, groups and probably networks (like Tkined), and for groups that collapse (members hidden) and expand (members shown), like Tkined.
+   **Claude** proposed spelling fixes. Raised three things: what a "network" object is, what form notes take, and that in-place expand/collapse conflicts with the drill-down navigation in SPEC-106/703. Waiting for the user's confirmation.

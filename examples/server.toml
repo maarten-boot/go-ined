@@ -24,6 +24,7 @@ rate        = 200            # Probes per second.
 concurrency = 64             # Probes in flight at the same time.
 
 [dns]                        # SPEC-401
+enabled     = true           # false = no reverse lookups; PTR names stay as stored.
 refresh     = "1h"           # PTR refresh interval.
 concurrency = 20             # Lookups running at the same time.
 

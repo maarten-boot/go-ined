@@ -49,6 +49,9 @@ const (
 	EventGroupUpdated = "group.updated"
 	EventGroupDeleted = "group.deleted"
 	EventGroupStatus  = "group.status"
+
+	EventDiscoveryProgress = "discovery.progress"
+	EventDiscoveryFinished = "discovery.finished"
 	EventResync       = "resync"
 )
 
@@ -193,6 +196,40 @@ type GroupPatch struct {
 	Collapsed   Opt[bool]    `json:"collapsed,omitzero"`
 	X           Opt[float64] `json:"x,omitzero"`
 	Y           Opt[float64] `json:"y,omitzero"`
+}
+
+// Discovery job states (SPEC-205).
+const (
+	DiscoveryRunning   = "running"
+	DiscoveryDone      = "done"
+	DiscoveryCancelled = "cancelled"
+	DiscoveryFailed    = "failed"
+)
+
+// DiscoveryCreate is the body of POST /discovery (SPEC-201). Give either
+// CIDR or GroupID (an IPv4 network group). ParentID is where a new network
+// group for CIDR is created; it is ignored when a network group with that
+// CIDR exists.
+type DiscoveryCreate struct {
+	CIDR     string `json:"cidr,omitempty"`
+	GroupID  *int64 `json:"group_id,omitempty"`
+	ParentID *int64 `json:"parent_id,omitempty"`
+}
+
+// Discovery is a discovery job (SPEC-205). It is also the payload of
+// discovery.progress and discovery.finished.
+type Discovery struct {
+	ID         string     `json:"id"`
+	CIDR       string     `json:"cidr"`
+	GroupID    int64      `json:"group_id"`
+	State      string     `json:"state"`
+	Probed     int        `json:"probed"`
+	Total      int        `json:"total"`
+	Found      int        `json:"found"` // addresses that answered
+	Added      int        `json:"added"` // of those, new hosts
+	Error      string     `json:"error,omitempty"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
 }
 
 // Health is the response of GET /health. Without a valid token only Status

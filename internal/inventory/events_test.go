@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
@@ -319,5 +320,110 @@ func TestSeenAt(t *testing.T) {
 	got, _ := s.Host(h.ID)
 	if !got.LastSeen.Equal(time.Unix(90, 0)) || !got.LastChange.Equal(time.Unix(100, 0)) {
 		t.Fatalf("last_seen %v, last_change %v", got.LastSeen, got.LastChange)
+	}
+}
+
+// TC-203, TC-209, TC-210 (inventory part): AddDiscovered.
+func TestAddDiscovered(t *testing.T) {
+	s, repo := newSvc(t)
+	r := &recorder{}
+	s.SetNotifier(r)
+	wide := mustGroup(t, s, apitypes.GroupCreate{CIDR: "10.0.0.0/16"})
+	sub := mustGroup(t, s, apitypes.GroupCreate{CIDR: "10.0.1.0/24", ParentID: &wide.ID})
+	elsewhere := mustGroup(t, s, apitypes.GroupCreate{CIDR: "10.0.2.0/24"}) // not under wide
+	mustHost(t, s, apitypes.HostCreate{IP: "10.0.0.9", ParentID: &sub.ID})
+	r.take()
+	applies := repo.applies
+	at := time.Unix(300, 0)
+	n, err := s.AddDiscovered(context.Background(), wide.ID, []Found{
+		{IP: netip.MustParseAddr("10.0.0.5"), RTTms: 1, At: at},
+		{IP: netip.MustParseAddr("10.0.1.5"), RTTms: 2, LossPct: 50, At: at},
+		{IP: netip.MustParseAddr("10.0.2.5"), RTTms: 3, At: at}, // only inside wide's subtree counts
+		{IP: netip.MustParseAddr("10.0.0.9"), RTTms: 4, At: at}, // exists: skipped, not moved
+	})
+	if err != nil || n != 3 || repo.applies != applies+1 {
+		t.Fatalf("n=%d err=%v applies=%d", n, err, repo.applies-applies)
+	}
+	want := map[string]int64{"10.0.0.5": wide.ID, "10.0.1.5": sub.ID, "10.0.2.5": wide.ID, "10.0.0.9": sub.ID}
+	pos := map[[2]float64]bool{}
+	for _, h := range s.Hosts() {
+		if *h.ParentID != want[h.IP] {
+			t.Errorf("%s in %d, want %d", h.IP, *h.ParentID, want[h.IP])
+		}
+		if h.IP != "10.0.0.9" && (h.Status != apitypes.StatusUp || !h.Monitored || !h.LastSeen.Equal(at) || h.RTTms == nil) {
+			t.Errorf("%s: %+v", h.IP, h)
+		}
+		if *h.ParentID == wide.ID {
+			p := [2]float64{h.X, h.Y}
+			if pos[p] {
+				t.Errorf("two hosts at %v", p)
+			}
+			pos[p] = true
+		}
+	}
+	// One event per new host. No group.status: both groups contain the
+	// still-unknown host 10.0.0.9, so they stay unknown.
+	if ev := r.take(); ev != "host.created 2 up; host.created 3 up; host.created 4 up" {
+		t.Errorf("events: %s", ev)
+	}
+	if g, _ := s.Group(wide.ID); g.Status != apitypes.StatusUnknown {
+		t.Errorf("wide status %s", g.Status)
+	}
+
+	// The group was deleted meanwhile: the most specific network group anywhere.
+	if err := s.DeleteGroup(context.Background(), sub.ID, apitypes.ChildrenReparent); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddDiscovered(context.Background(), 999, []Found{{IP: netip.MustParseAddr("10.0.2.7"), At: at}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range s.Hosts() {
+		if h.IP == "10.0.2.7" && *h.ParentID != elsewhere.ID {
+			t.Errorf("fallback placement: %+v", h)
+		}
+	}
+	// A failing repository adds nothing.
+	repo.fail = errors.New("disk full")
+	if _, err := s.AddDiscovered(context.Background(), wide.ID, []Found{{IP: netip.MustParseAddr("10.0.0.77"), At: at}}); err == nil {
+		t.Fatal("no error")
+	}
+	for _, h := range s.Hosts() {
+		if h.IP == "10.0.0.77" {
+			t.Fatal("host kept after a failed save")
+		}
+	}
+}
+
+// TC-405 (inventory part): SetPTRName and the reset on an IP change.
+func TestPTRName(t *testing.T) {
+	s, repo := newSvc(t)
+	r := &recorder{}
+	s.SetNotifier(r)
+	h := mustHost(t, s, apitypes.HostCreate{IP: "10.0.0.1"})
+	r.take()
+	ip := netip.MustParseAddr("10.0.0.1")
+	if err := s.SetPTRName(context.Background(), h.ID, ip, "nas.example."); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Host(h.ID)
+	if got.PTRName != "nas.example." || got.DisplayName != "nas.example" || repo.hosts[h.ID].PTRName != "nas.example." {
+		t.Fatalf("after set: %+v", got)
+	}
+	if ev := r.take(); ev != "host.updated 1 unknown" {
+		t.Fatalf("events: %s", ev)
+	}
+	// Same name, a stale IP, or an unknown host: nothing happens.
+	s.SetPTRName(context.Background(), h.ID, ip, "nas.example.")
+	s.SetPTRName(context.Background(), h.ID, netip.MustParseAddr("10.0.0.2"), "x.")
+	s.SetPTRName(context.Background(), 99, ip, "x.")
+	if ev := r.take(); ev != "" {
+		t.Fatalf("no-ops emitted %s", ev)
+	}
+	got, _ = s.UpdateHost(context.Background(), h.ID, apitypes.HostPatch{IP: apitypes.Some("10.0.0.2")})
+	if got.PTRName != "" || got.DisplayName != "10.0.0.2" {
+		t.Fatalf("after IP change: %+v", got)
+	}
+	if ts := s.DNSTargets(); len(ts) != 1 || ts[0].IP.String() != "10.0.0.2" {
+		t.Fatalf("targets %+v", ts)
 	}
 }

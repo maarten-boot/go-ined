@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400" viewBox="0 0 800 400" role="img" aria-labelledby="t d">
+  <title id="t">go-ined architecture</title>
+  <desc id="d">Clients talk REST and Server-Sent Events to ined-server. Inside the server, the api package calls the inventory and discovery; discovery, monitor and dnsname write results into the inventory; the inventory persists to SQLite through the store and publishes changes on the event bus, which feeds the SSE stream of the api.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+  </defs>
+
+  <rect width="800" height="400" fill="#FFFFFF"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="16" font-weight="700" x="20" y="26">go-ined architecture</text>
+
+  <!-- clients -->
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="20" y="56">Clients</text>
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" x="20" y="66" width="160" height="40" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="30" y="83">curl, scripts</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="30" y="99">any HTTP client</text>
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" stroke-dasharray="5 4" x="20" y="120" width="160" height="40" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="30" y="137">inedctl (CLI)</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="30" y="153">planned, M4</text>
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" stroke-dasharray="5 4" x="20" y="174" width="160" height="40" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="30" y="191">ined-gui (Fyne)</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="30" y="207">planned, M5–M6</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="20" y="236">Dashed: planned</text>
+
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M180,86 L238,86"/>
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M180,140 L210,140 L210,94 L238,94"/>
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M180,194 L216,194 L216,100 L238,100"/>
+
+  <!-- server -->
+  <rect x="226" y="40" width="560" height="344" rx="10" fill="#F5F5F5" stroke="#000" stroke-width="1.4"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="238" y="58">ined-server</text>
+
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" x="240" y="66" width="520" height="40" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="252" y="83">api</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="252" y="99">REST /api/v1 · SSE /api/v1/events · bearer token · optional TLS</text>
+
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" x="240" y="146" width="160" height="50" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="252" y="166">discovery</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="252" y="184">jobs, rate limit, ICMP</text>
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" x="420" y="146" width="160" height="50" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="432" y="166">monitor</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="432" y="184">ping scheduler, ICMP</text>
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" x="600" y="146" width="150" height="50" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="612" y="166">dnsname</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="612" y="184">PTR lookups, refresh</text>
+
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" x="240" y="236" width="510" height="50" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="252" y="256">inventory</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="252" y="274">hosts, groups, network groups, tree rules, status · in memory, single writer</text>
+
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" x="240" y="326" width="240" height="44" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="252" y="344">store</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="252" y="361">SQLite (pure Go), migrations</text>
+  <rect fill="#FFFFFF" stroke="#000000" stroke-width="1.4" x="510" y="326" width="240" height="44" rx="6"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="13" font-weight="600" x="522" y="344">events</text>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="522" y="361">bus + replay buffer, ids &lt;run&gt;-&lt;seq&gt;</text>
+
+  <!-- flows -->
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M320,106 L320,144"/>
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M410,106 L410,234"/>
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M320,196 L320,234"/>
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M500,196 L500,234"/>
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M675,196 L675,234"/>
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M360,286 L360,324"/>
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M630,286 L630,324"/>
+  <path fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#a)" d="M750,348 L772,348 L772,86 L762,86"/>
+  <text font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#000000" font-size="11.5" x="0" y="0" transform="translate(768,228) rotate(-90)" text-anchor="middle">SSE</text>
+</svg>

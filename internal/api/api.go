@@ -1,6 +1,7 @@
 // Package api serves the go-ined REST API under /api/v1 (SPEC-501,
 // SPEC-504, SPEC-802) and the Server-Sent Events stream (SPEC-502).
-// Discovery endpoints arrive in M3.
+// Discovery endpoints (SPEC-201..205) are served when Options.Discovery is
+// set.
 package api
 
 import (
@@ -37,11 +38,20 @@ type Options struct {
 	// ICMP reports the monitor's ICMP state for /health (SPEC-304).
 	// nil = "not started".
 	ICMP func() ICMPInfo
+	// Discovery runs discovery jobs; nil = the endpoints answer 404.
+	Discovery Discovery
 	// Keepalive is the SSE keepalive interval; 0 = 30 s (SPEC-502).
 	Keepalive time.Duration
 	// WriteTimeout disconnects an SSE client that accepts no data for this
 	// long; 0 = 10 s (SPEC-502, SPEC-804).
 	WriteTimeout time.Duration
+}
+
+// Discovery is what the API needs from discovery.Manager.
+type Discovery interface {
+	Start(ctx context.Context, in apitypes.DiscoveryCreate) (apitypes.Discovery, error)
+	Get(id string) (apitypes.Discovery, error)
+	Cancel(id string) (apitypes.Discovery, error)
 }
 
 // ICMPInfo is the ICMP state shown by /health. Error set and Mode
@@ -88,6 +98,10 @@ func New(svc *inventory.Service, opts Options) http.Handler {
 	route("/map", map[string]http.HandlerFunc{"GET": s.getMap})
 	if opts.Events != nil {
 		route("/events", map[string]http.HandlerFunc{"GET": s.events})
+	}
+	if opts.Discovery != nil {
+		route("/discovery", map[string]http.HandlerFunc{"POST": s.startDiscovery})
+		route("/discovery/{id}", map[string]http.HandlerFunc{"GET": s.getDiscovery, "DELETE": s.cancelDiscovery})
 	}
 	route("/hosts", map[string]http.HandlerFunc{"GET": s.listHosts, "POST": s.createHost})
 	route("/hosts/{id}", map[string]http.HandlerFunc{"GET": s.getHost, "PATCH": s.patchHost, "DELETE": s.deleteHost})
@@ -245,6 +259,27 @@ func (s *server) deleteGroup(w http.ResponseWriter, r *http.Request) {
 	s.respond(w, http.StatusNoContent, nil, err)
 }
 
+func (s *server) startDiscovery(w http.ResponseWriter, r *http.Request) {
+	var in apitypes.DiscoveryCreate
+	if !decode(w, r, &in) {
+		return
+	}
+	d, err := s.opts.Discovery.Start(r.Context(), in)
+	s.respond(w, http.StatusAccepted, d, err)
+}
+
+func (s *server) getDiscovery(w http.ResponseWriter, r *http.Request) {
+	d, err := s.opts.Discovery.Get(r.PathValue("id"))
+	s.respond(w, http.StatusOK, d, err)
+}
+
+// cancelDiscovery asks the job to stop; the response shows its state at
+// that moment, and discovery.finished follows (SPEC-205).
+func (s *server) cancelDiscovery(w http.ResponseWriter, r *http.Request) {
+	d, err := s.opts.Discovery.Cancel(r.PathValue("id"))
+	s.respond(w, http.StatusOK, d, err)
+}
+
 // ---- helpers ----
 
 func (s *server) respond(w http.ResponseWriter, status int, v any, err error) {
@@ -270,6 +305,8 @@ func (s *server) writeDomainError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, apitypes.CodeConflict, err.Error())
 	case inventory.TooLarge:
 		writeError(w, http.StatusRequestEntityTooLarge, apitypes.CodeTooLarge, err.Error())
+	case inventory.Unavailable:
+		writeError(w, http.StatusServiceUnavailable, apitypes.CodeUnavailable, err.Error())
 	default:
 		s.log.Error("internal error", "err", err)
 		writeError(w, http.StatusInternalServerError, apitypes.CodeInternal, "internal server error")

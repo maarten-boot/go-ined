@@ -15,6 +15,7 @@ const (
 	NotFound
 	Conflict
 	TooLarge
+	Unavailable // a needed facility (e.g. ICMP) is not available
 )
 
 // Error is a domain error with a user-facing message.
@@ -44,4 +45,10 @@ func notFoundf(format string, a ...any) error {
 
 func conflictf(format string, a ...any) error {
 	return &Error{Kind: Conflict, Msg: fmt.Sprintf(format, a...)}
+}
+
+// Errorf returns an *Error of the given kind, for packages that build on
+// the inventory (discovery).
+func Errorf(k Kind, format string, a ...any) error {
+	return &Error{Kind: k, Msg: fmt.Sprintf(format, a...)}
 }

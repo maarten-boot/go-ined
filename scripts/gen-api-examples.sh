@@ -11,10 +11,11 @@ WORK=$(mktemp -d /tmp/go-ined/gen-examples.XXXXXX)
 trap 'kill "${PID:-}" 2>/dev/null || true; rm -rf "$WORK"; rmdir /tmp/go-ined 2>/dev/null || true' EXIT
 
 go build -C "$REPO" -o "$WORK/ined-server" ./cmd/ined-server
-# Monitoring off: the output must not depend on which example addresses
-# answer pings on the machine that runs this script.
+# Monitoring and reverse DNS off: the output must not depend on which
+# example addresses answer pings or have names on the machine that runs
+# this script. Discovery probes 127.0.0.0/30, which answers on Linux.
 mkdir -p "$WORK/cfg/go-ined"
-printf '[monitor]\nenabled = false\n' >"$WORK/cfg/go-ined/server.toml"
+printf '[monitor]\nenabled = false\n\n[dns]\nenabled = false\n' >"$WORK/cfg/go-ined/server.toml"
 XDG_CONFIG_HOME="$WORK/cfg" "$WORK/ined-server" -listen 127.0.0.1:0 -db "$WORK/ex.db" >"$WORK/server.log" 2>&1 &
 PID=$!
 
@@ -80,6 +81,14 @@ wait "$CURL" 2>/dev/null || true
   echo '```'
   echo
 } >>"$OUT"
+
+# Discovery: start a job, wait, fetch the result.
+ex "Start a discovery job (a network group 127.0.0.0/30 is created)" POST /discovery '{"cidr":"127.0.0.0/30"}'
+JOB=$(grep -o '"id": "[^"]*-[0-9]*"' "$OUT" | tail -1 | sed 's/.*"\([^"]*\)"$/\1/')
+sleep 2
+ex "Get the job: done, with 2 hosts found and added" GET "/discovery/$JOB"
+ex "Error: a range larger than discovery.max_prefix (/16)" POST /discovery '{"cidr":"10.0.0.0/8"}'
+ex "Error: discovery is IPv4 only" POST /discovery '{"cidr":"2001:db8::/120"}'
 
 {
 cat <<'EOF'

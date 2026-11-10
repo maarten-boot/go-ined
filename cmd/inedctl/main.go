@@ -51,8 +51,8 @@ Commands:
   host edit <id> [--ip A] [--name N] [--description D] [--monitored=true|false]
   host rm <id>
   host move <id> <group-id|root>
-  group list
-  group add [--cidr C] [--name N] [--description D] [--parent ID] [--note T] [--expanded]
+  group list [--view ID]
+  group add [--cidr C] [--name N] [--description D] [--parent ID] [--note T] [--expanded] [--view ID]
   group show <id>
   group edit <id> [--name N] [--cidr C] [--description D]
   group rm <id> [--reparent | --cascade]
@@ -60,6 +60,14 @@ Commands:
   group collapse <id>
   group expand <id>
   note get|set|clear host|group <id> [text...]   (set reads stdin when no text is given)
+  view list
+  view add <name> [--order N]
+  view show <id>                               (the view and its hosts)
+  view rename <id> <name>
+  view order <id> <n>
+  view rm <id>                                 (its groups and placements go; hosts stay)
+  view place <view-id> <host-id> [--parent ID] [--x X --y Y]
+  view unplace <view-id> <host-id>
   discover start <cidr> | --group ID [--parent ID] [--wait]
   discover status <job-id>
   discover cancel <job-id>

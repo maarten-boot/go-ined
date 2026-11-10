@@ -304,6 +304,30 @@ func (e Event) Short() string {
 		if e.Decode(&d) == nil {
 			return DiscoveryLine(d)
 		}
+	case apitypes.EventViewCreated, apitypes.EventViewUpdated:
+		var v apitypes.View
+		if e.Decode(&v) == nil {
+			return fmt.Sprintf("view %d %s order %d", v.ID, v.Name, v.Order)
+		}
+	case apitypes.EventViewDeleted:
+		var d apitypes.DeletedEvent
+		if e.Decode(&d) == nil {
+			return fmt.Sprintf("view %d", d.ID)
+		}
+	case apitypes.EventPlacementUpdated:
+		var p apitypes.Placement
+		if e.Decode(&p) == nil {
+			parent := "root"
+			if p.ParentID != nil {
+				parent = fmt.Sprintf("group %d", *p.ParentID)
+			}
+			return fmt.Sprintf("view %d host %d in %s", p.ViewID, p.HostID, parent)
+		}
+	case apitypes.EventPlacementDeleted:
+		var p apitypes.PlacementDeletedEvent
+		if e.Decode(&p) == nil {
+			return fmt.Sprintf("view %d host %d removed", p.ViewID, p.HostID)
+		}
 	case apitypes.EventResync:
 		var r apitypes.ResyncEvent
 		if e.Decode(&r) == nil {

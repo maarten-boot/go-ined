@@ -335,3 +335,60 @@ func (c *Client) CancelDiscovery(ctx context.Context, jobID string) (apitypes.Di
 	var d apitypes.Discovery
 	return d, c.Do(ctx, http.MethodDelete, "/discovery/"+url.PathEscape(jobID), nil, &d)
 }
+
+// ---- views (SPEC-117..122) ----
+
+// Views lists the views in tab order.
+func (c *Client) Views(ctx context.Context) ([]apitypes.View, error) {
+	var vs []apitypes.View
+	return vs, c.Do(ctx, http.MethodGet, "/views", nil, &vs)
+}
+
+// View returns one view.
+func (c *Client) View(ctx context.Context, viewID int64) (apitypes.View, error) {
+	var v apitypes.View
+	return v, c.Do(ctx, http.MethodGet, "/views/"+id(viewID), nil, &v)
+}
+
+// CreateView adds a custom view.
+func (c *Client) CreateView(ctx context.Context, in apitypes.ViewCreate) (apitypes.View, error) {
+	var v apitypes.View
+	return v, c.Do(ctx, http.MethodPost, "/views", in, &v)
+}
+
+// UpdateView renames or reorders a view.
+func (c *Client) UpdateView(ctx context.Context, viewID int64, p apitypes.ViewPatch) (apitypes.View, error) {
+	var v apitypes.View
+	return v, c.Do(ctx, http.MethodPatch, "/views/"+id(viewID), p, &v)
+}
+
+// DeleteView removes a custom view with its groups and placements.
+func (c *Client) DeleteView(ctx context.Context, viewID int64) error {
+	return c.Do(ctx, http.MethodDelete, "/views/"+id(viewID), nil, nil)
+}
+
+// ViewMap returns the items of one view. Map returns the network view.
+func (c *Client) ViewMap(ctx context.Context, viewID int64) (apitypes.Map, error) {
+	var m apitypes.Map
+	return m, c.Do(ctx, http.MethodGet, "/map?view="+id(viewID), nil, &m)
+}
+
+// ViewGroups lists the groups of one view.
+func (c *Client) ViewGroups(ctx context.Context, viewID int64) ([]apitypes.Group, error) {
+	var gs []apitypes.Group
+	return gs, c.Do(ctx, http.MethodGet, "/groups?view="+id(viewID), nil, &gs)
+}
+
+// PlaceHost adds a host to a custom view, or moves it there.
+func (c *Client) PlaceHost(ctx context.Context, viewID, hostID int64, in apitypes.PlacementSet) (apitypes.Placement, error) {
+	var p apitypes.Placement
+	return p, c.Do(ctx, http.MethodPut, PlacementPath(viewID, hostID), in, &p)
+}
+
+// UnplaceHost removes a host from a custom view; the host stays.
+func (c *Client) UnplaceHost(ctx context.Context, viewID, hostID int64) error {
+	return c.Do(ctx, http.MethodDelete, PlacementPath(viewID, hostID), nil, nil)
+}
+
+// PlacementPath is the path PlaceHost and UnplaceHost use.
+func PlacementPath(viewID, hostID int64) string { return "/views/" + id(viewID) + "/hosts/" + id(hostID) }

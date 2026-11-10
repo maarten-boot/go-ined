@@ -8,12 +8,14 @@ A network monitor loosely modelled on [Tkined](https://github.com/flightaware/sc
 
 Hosts and groups form a tree. A group with a CIDR is a **network group**: discovery fills it, and a host added by hand goes into the most specific network group that contains its IP address. Every host and group can have a note.
 
+Besides this **network view**, you can make **custom views**: extra maps (tabs in the GUI) with your own groups, for example "Payroll" with the application server, the database and the file share. A host can appear in several views; it is pinged once and has the same status everywhere.
+
 ![go-ined architecture: clients use REST and SSE; inside ined-server, the api calls the inventory and discovery; discovery, monitor and dnsname feed the inventory, which persists to SQLite and publishes events for the SSE stream](architecture/overview.svg)
 
 ## Status
 
-Early development. **Milestones 1–4 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package and `inedctl`.
-Next up: views (M4b: extra map tabs with your own grouping of hosts), then the GUI (M5–M6).
+Early development. **Milestones 1–4b are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, and custom views.
+Next up: the GUI (M5–M6).
 See [`architecture/Plan.md`](architecture/Plan.md) for the roadmap.
 
 ## Build and run
@@ -50,6 +52,9 @@ bin/inedctl host add 192.168.1.10 --name nas
 bin/inedctl discover start 192.168.1.0/24 --wait    # shows progress until the job ends
 bin/inedctl host list                               # table; add --json for the API's JSON
 echo "replaced disk 3" | bin/inedctl note set host 1
+bin/inedctl view add Storage                        # a custom view (id 2)
+bin/inedctl view place 2 1                          # show host 1 there too
+bin/inedctl view show 2
 bin/inedctl events                                  # live events; Ctrl-C to stop
 bin/inedctl -h                                      # all commands
 ```

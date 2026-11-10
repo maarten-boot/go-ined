@@ -123,6 +123,18 @@ ctl "Error from the API: exit code 1" "host show 99" host show 99
 ctl "Usage error: exit code 2" "host move 5" host move 5
 ctl "Server not reachable: exit code 3" "--url http://127.0.0.1:1 health" --url http://127.0.0.1:1 health
 
+# Views (SPEC-117..124): a custom view with its own grouping of hosts.
+{ echo "## Views"; echo
+  echo 'Each view is its own map (a tab in the GUI). Hosts are shared: a host placed in a custom view keeps its place in the network view (view 1).'; echo; } >>"$OUT"
+ex "Create a custom view" POST /views '{"name":"Printers"}'
+ex "Add a group to the view" POST /groups '{"name":"2nd floor","view_id":2,"collapsed":false}'
+ex "Put host 5 in that group (only in this view)" PUT /views/2/hosts/5 '{"parent_id":6}'
+ex "The view's map" GET '/map?view=2'
+ex "Error: network groups exist only in the network view" POST /groups '{"cidr":"10.20.0.0/24","view_id":2}'
+ex "Error: the network view can't be deleted" DELETE /views/1
+ctl "The views in tab order" "view list" view list
+ctl "A view and its hosts" "view show 2" view show 2
+
 {
 cat <<'EOF'
 # API examples — go-ined

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/netip"
 	"path/filepath"
 	"strings"
@@ -407,3 +408,57 @@ func TestCloseSavesFound(t *testing.T) {
 	_, err := r.m.Start(context.Background(), apitypes.DiscoveryCreate{CIDR: "10.11.0.0/30"})
 	wantKind(t, err, inventory.Unavailable)
 }
+
+// errProber fails every probe of addresses ending in .1 with an error.
+type errProber struct{}
+
+func (errProber) Ping(_ context.Context, ip netip.Addr, count int, _ time.Duration) (monitor.Result, error) {
+	if ip.As4()[3] == 1 {
+		return monitor.Result{}, errors.New("sendto: network is unreachable")
+	}
+	return monitor.Result{Sent: count, Received: count, RTTs: []time.Duration{time.Millisecond}}, nil
+}
+
+// TC-213: probe errors are counted and reported; the job still ends done.
+func TestProbeErrors(t *testing.T) {
+	r := newRig(t, errProber{}, Config{})
+	r.start(t, apitypes.DiscoveryCreate{CIDR: "10.12.0.0/30"})
+	d := r.finished(t)
+	if d.State != apitypes.DiscoveryDone || d.Probed != 2 || d.Found != 1 || d.Errors != 1 ||
+		!strings.Contains(d.Error, "1 probes failed") || !strings.Contains(d.Error, "network is unreachable") {
+		t.Fatalf("job: %+v", d)
+	}
+	// Without errors, error stays empty.
+	r.start(t, apitypes.DiscoveryCreate{CIDR: "10.12.1.4/30"})
+	if d := r.finished(t); d.Errors != 0 || d.Error != "" {
+		t.Fatalf("clean job: %+v", d)
+	}
+}
+
+// TC-214: a range larger than A1 logs a warning.
+func TestLargeRangeWarning(t *testing.T) {
+	var buf safeBuf
+	r := newRig(t, &prober{answer: func(netip.Addr, int) bool { return false }}, Config{})
+	r.m.log = slog.New(slog.NewTextHandler(&buf, nil))
+	d := r.start(t, apitypes.DiscoveryCreate{CIDR: "10.13.0.0/19"}) // 8,190 addresses
+	r.m.Cancel(d.ID)
+	r.finished(t)
+	if !strings.Contains(buf.String(), "large discovery range") || !strings.Contains(buf.String(), "addresses=8190") {
+		t.Fatalf("log: %s", buf.String())
+	}
+	buf.Reset()
+	d = r.start(t, apitypes.DiscoveryCreate{CIDR: "10.14.0.0/24"})
+	r.finished(t)
+	if strings.Contains(buf.String(), "large discovery range") {
+		t.Fatalf("warning for a /24: %s", buf.String())
+	}
+}
+
+type safeBuf struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *safeBuf) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.b.Write(p) }
+func (s *safeBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
+func (s *safeBuf) Reset()                      { s.mu.Lock(); defer s.mu.Unlock(); s.b.Reset() }

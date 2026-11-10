@@ -222,6 +222,7 @@ func (m *Monitor) Run(ctx context.Context) {
 			hosts[t.ID] = &hostState{ip: t.IP, next: now.Add(off)}
 		}
 	}
+	// start runs a round; the caller has taken a slot in sem.
 	start := func(id int64, st *hostState, now time.Time) {
 		st.busy = true
 		st.next = st.next.Add(m.cfg.Interval)
@@ -232,16 +233,9 @@ func (m *Monitor) Run(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			var d done
-			select {
-			case sem <- struct{}{}:
-				res, err := m.p.Ping(pctx, ip, m.cfg.Count, m.cfg.Timeout)
-				<-sem
-				d = done{id: id, ip: ip, at: m.cfg.Now(), res: res, err: err}
-			case <-pctx.Done():
-				d = done{id: id, ip: ip, err: pctx.Err()}
-			}
-			results <- d
+			res, err := m.p.Ping(pctx, ip, m.cfg.Count, m.cfg.Timeout)
+			<-sem
+			results <- done{id: id, ip: ip, at: m.cfg.Now(), res: res, err: err}
 		}()
 	}
 
@@ -253,9 +247,17 @@ func (m *Monitor) Run(ctx context.Context) {
 		if now.Sub(lastSync) >= m.cfg.Sync {
 			refresh(now)
 		}
+		// Start due rounds while slots are free; the others stay due and
+		// wait here, without a goroutine each.
+	due:
 		for id, st := range hosts {
 			if !st.busy && st.ip.IsValid() && !now.Before(st.next) {
-				start(id, st, now)
+				select {
+				case sem <- struct{}{}:
+					start(id, st, now)
+				default:
+					break due
+				}
 			}
 		}
 		if now.Sub(lastSave) >= m.cfg.Flush {

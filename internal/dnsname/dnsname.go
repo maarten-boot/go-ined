@@ -133,13 +133,9 @@ func (f *Refresher) Run(ctx context.Context) {
 		}
 		started = true
 	}
+	// lookup runs one lookup; the caller has taken a slot in sem.
 	lookup := func(id int64, ip netip.Addr) {
 		defer wg.Done()
-		select {
-		case sem <- struct{}{}:
-		case <-ctx.Done():
-			return // Run is stopping and no longer reads done
-		}
 		lctx, cancel := context.WithTimeout(ctx, f.cfg.Timeout)
 		names, err := f.r.LookupAddr(lctx, ip.String())
 		cancel()
@@ -167,8 +163,16 @@ func (f *Refresher) Run(ctx context.Context) {
 		if now.Sub(lastSync) >= f.cfg.Sync {
 			refresh(now)
 		}
+		// Start due lookups while slots are free; the others stay due and
+		// wait here, without a goroutine each.
+	due:
 		for id, st := range hosts {
 			if !st.busy && !now.Before(st.next) {
+				select {
+				case sem <- struct{}{}:
+				default:
+					break due
+				}
 				st.busy = true
 				st.next = now.Add(f.cfg.Refresh)
 				wg.Add(1)

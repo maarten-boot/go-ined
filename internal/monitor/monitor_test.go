@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -349,4 +350,31 @@ func (p seenProber) Ping(_ context.Context, ip netip.Addr, count int, _ time.Dur
 		return Result{}, ErrFamilyUnavailable
 	}
 	return Result{Sent: count, Received: 1, RTTs: []time.Duration{time.Millisecond}, LastReply: p.reply}, nil
+}
+
+// TC-408: rounds waiting for a slot don't each hold a goroutine.
+func TestNoGoroutinePerWaitingRound(t *testing.T) {
+	var ts []inventory.Target
+	for i := 1; i <= 50; i++ {
+		ts = append(ts, target(int64(i), netip.AddrFrom4([4]byte{10, 0, 3, byte(i)}).String()))
+	}
+	base := runtime.NumGoroutine()
+	r := newRig(t, Config{Interval: time.Hour, Concurrency: 4}, ts...)
+	block := make(chan struct{})
+	r.p.mu.Lock()
+	r.p.block = block
+	r.p.mu.Unlock()
+	defer close(block)
+	waitFor(t, "first ping", func() bool { return len(r.p.got()) >= 1 })
+	r.clk.Advance(2 * time.Hour) // all 50 hosts are due
+	waitFor(t, "4 in flight", func() bool { return len(r.p.got()) >= 4 })
+	settle()
+	// 4 blocked rounds, plus possibly the first one if it finished before
+	// the block was set.
+	if n := len(r.p.got()); n > 5 {
+		t.Fatalf("%d pings started with 4 slots", n)
+	}
+	if n := runtime.NumGoroutine() - base; n > 10 {
+		t.Fatalf("%d extra goroutines for 4 slots and 50 due hosts", n)
+	}
 }

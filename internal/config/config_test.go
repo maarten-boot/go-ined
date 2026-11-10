@@ -133,3 +133,14 @@ func TestValidate(t *testing.T) {
 		t.Errorf("want both errors, got %v", err)
 	}
 }
+
+// TC-214 (config part): discovery.rate must be within 1..100000.
+func TestDiscoveryRateBounds(t *testing.T) {
+	for rate, ok := range map[int]bool{0: false, 1: true, 200: true, 100000: true, 100001: false, 2_000_000_000: false} {
+		c := DefaultServer()
+		c.Discovery.Rate = rate
+		if err := c.Validate(); (err == nil) != ok {
+			t.Errorf("rate %d: err = %v", rate, err)
+		}
+	}
+}

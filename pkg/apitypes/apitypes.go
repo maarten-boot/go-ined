@@ -225,8 +225,9 @@ type Discovery struct {
 	State      string     `json:"state"`
 	Probed     int        `json:"probed"`
 	Total      int        `json:"total"`
-	Found      int        `json:"found"` // addresses that answered
-	Added      int        `json:"added"` // of those, new hosts
+	Found      int        `json:"found"`  // addresses that answered
+	Added      int        `json:"added"`  // of those, new hosts
+	Errors     int        `json:"errors"` // probes that failed with an error
 	Error      string     `json:"error,omitempty"`
 	StartedAt  time.Time  `json:"started_at"`
 	FinishedAt *time.Time `json:"finished_at"`

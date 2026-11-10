@@ -59,7 +59,7 @@ Only one `ined-server` can use a database at a time; a second one refuses to sta
 
 Ping: the server first tries unprivileged ICMP sockets, then raw sockets. On Linux, unprivileged ICMP needs the server's group inside `sysctl net.ipv4.ping_group_range` (many distributions allow all groups). Otherwise, give the binary `CAP_NET_RAW` (`sudo setcap cap_net_raw+ep bin/ined-server`). If neither works, the server still runs: hosts stay `unknown`, and `/api/v1/health` (with a token) reports the problem. The startup log shows the mode in use. Set `monitor.enabled = false` to turn background pinging off (discovery still works).
 
-Discovery probes IPv4 ranges up to `/16` (`discovery.max_prefix`) at 200 addresses per second (`discovery.rate`). Reverse DNS uses the system's resolver; set `dns.enabled = false` to turn it off.
+Discovery probes IPv4 ranges up to `/16` (`discovery.max_prefix`) at 200 addresses per second (`discovery.rate`). The server is designed for about 5,000 hosts; a range with more addresses than that logs a warning. Reverse DNS uses the system's resolver; set `dns.enabled = false` to turn it off.
 
 ## Documentation
 

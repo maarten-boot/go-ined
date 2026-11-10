@@ -243,8 +243,8 @@ func (c Server) Validate() error {
 	if c.Discovery.MaxPrefix < 0 || c.Discovery.MaxPrefix > 32 {
 		errs = append(errs, errors.New("discovery.max_prefix must be between 0 and 32"))
 	}
-	if c.Discovery.Rate < 1 || c.Discovery.Concurrency < 1 {
-		errs = append(errs, errors.New("discovery.rate and discovery.concurrency must be at least 1"))
+	if c.Discovery.Rate < 1 || c.Discovery.Rate > 100000 || c.Discovery.Concurrency < 1 {
+		errs = append(errs, errors.New("discovery.rate must be between 1 and 100000, and discovery.concurrency at least 1"))
 	}
 	if c.DNS.Refresh <= 0 || c.DNS.Concurrency < 1 {
 		errs = append(errs, errors.New("dns.refresh must be positive and dns.concurrency at least 1"))

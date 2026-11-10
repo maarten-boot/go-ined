@@ -321,3 +321,32 @@ func TestIPChangeResetsStreak(t *testing.T) {
 		t.Fatalf("round 2 = %+v; want the new IP and no down yet", o)
 	}
 }
+
+// TC-315: last_seen is the arrival of the last reply, not the end of the
+// round; TC-313: a host of an unavailable family yields no result at all.
+func TestSeenAtAndSkippedFamily(t *testing.T) {
+	inv := &fakeInv{}
+	inv.set(target(1, "10.0.0.1"), target(2, "2001:db8::2"))
+	reply := time.Unix(500, 0)
+	m := New(seenProber{reply}, inv, Config{Interval: time.Hour, Flush: time.Millisecond, Tick: time.Millisecond}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { m.Run(ctx); close(done) }()
+	waitFor(t, "result", func() bool { return len(inv.all()) >= 1 })
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	<-done
+	obs := inv.all()
+	if len(obs) != 1 || obs[0].HostID != 1 || !obs[0].SeenAt.Equal(reply) || obs[0].At.Equal(reply) {
+		t.Fatalf("observations = %+v", obs)
+	}
+}
+
+type seenProber struct{ reply time.Time }
+
+func (p seenProber) Ping(_ context.Context, ip netip.Addr, count int, _ time.Duration) (Result, error) {
+	if ip.Is6() {
+		return Result{}, ErrFamilyUnavailable
+	}
+	return Result{Sent: count, Received: 1, RTTs: []time.Duration{time.Millisecond}, LastReply: p.reply}, nil
+}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,9 +10,6 @@ import (
 	"github.com/maarten-boot/go-ined/internal/events"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
-
-// Keepalive is the interval of the SSE keepalive comment (SPEC-502).
-var Keepalive = 30 * time.Second
 
 // events serves GET /api/v1/events (SPEC-502, SPEC-503). The stream ends
 // when the client goes away, when it falls behind (after a resync event),
@@ -30,14 +28,23 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 
-	send := func(ev events.Event) bool {
-		if err := writeEvent(w, ev); err != nil {
+	// write sends one frame. A client that accepts nothing for WriteTimeout
+	// is cut off, so it can't block the handler or the shutdown (SPEC-804).
+	write := func(frame func() error) bool {
+		if err := rc.SetWriteDeadline(time.Now().Add(s.opts.WriteTimeout)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+			return false
+		}
+		if err := frame(); err != nil {
 			return false
 		}
 		return rc.Flush() == nil
 	}
+	send := func(ev events.Event) bool { return write(func() error { return writeEvent(w, ev) }) }
+	comment := func(text string) bool {
+		return write(func() error { _, err := io.WriteString(w, ": "+text+"\n\n"); return err })
+	}
 	// An initial comment makes the headers reach the client at once.
-	if _, err := io.WriteString(w, ": connected\n\n"); err != nil || rc.Flush() != nil {
+	if !comment("connected") {
 		return
 	}
 	for _, ev := range replay {
@@ -45,7 +52,7 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	ka := time.NewTicker(Keepalive)
+	ka := time.NewTicker(s.opts.Keepalive)
 	defer ka.Stop()
 	for {
 		select {
@@ -62,7 +69,7 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-ka.C:
-			if _, err := io.WriteString(w, ": keepalive\n\n"); err != nil || rc.Flush() != nil {
+			if !comment("keepalive") {
 				return
 			}
 		}

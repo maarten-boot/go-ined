@@ -11,7 +11,7 @@ import (
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
 
-// TC-309: the real prober finds a mode and gets replies from loopback.
+// TC-309, TC-312: the real prober finds a mode and gets replies from loopback.
 // Skipped where the machine allows no ICMP socket at all.
 func TestICMPLoopback(t *testing.T) {
 	p, err := NewICMPProber()
@@ -28,12 +28,20 @@ func TestICMPLoopback(t *testing.T) {
 			if ip.Is6() && !hasIPv6Loopback() {
 				t.Skip("no IPv6 loopback")
 			}
+			if ip.Is6() && p.Status().IPv6Error != "" {
+				t.Skipf("IPv6 ICMP unavailable: %s", p.Status().IPv6Error)
+			}
+			start := time.Now()
 			res, err := p.Ping(context.Background(), ip, 3, time.Second)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.Sent != 3 || res.Received != 3 || len(res.RTTs) != 3 {
+			if res.Sent != 3 || res.Received != 3 || len(res.RTTs) != 3 || res.LastReply.Before(start) {
 				t.Fatalf("result = %+v", res)
+			}
+			// TC-312: requests at least MinGap apart.
+			if d := time.Since(start); d < 2*MinGap {
+				t.Fatalf("3 requests took only %v", d)
 			}
 		})
 	}

@@ -4,9 +4,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -195,7 +199,7 @@ func TestEventsClosedAtShutdown(t *testing.T) {
 // TC-507: a client that falls behind gets resync and the stream ends.
 func TestEventsLagged(t *testing.T) {
 	bus := events.New("r", 10)
-	srv := &server{opts: Options{Events: bus}}
+	srv := &server{opts: Options{Events: bus, Keepalive: time.Minute, WriteTimeout: time.Minute}}
 	rec := &blockingWriter{header: http.Header{}, unblock: make(chan struct{}), wrote: make(chan struct{}, 1)}
 	done := make(chan struct{})
 	go func() {
@@ -215,6 +219,52 @@ func TestEventsLagged(t *testing.T) {
 	if !strings.Contains(rec.body.String(), "event: resync\n") || !strings.Contains(rec.body.String(), "fell behind") {
 		t.Fatalf("no resync in %q", rec.body.String())
 	}
+}
+
+// TC-509: a client that stops reading is cut off after the write timeout,
+// so it can't hold up the shutdown.
+func TestEventsStalledClient(t *testing.T) {
+	bus := events.New("r", 10)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var returned atomic.Bool
+	h := New(nil, Options{Events: bus, WriteTimeout: 300 * time.Millisecond})
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r)
+		returned.Store(true)
+	})}
+	go srv.Serve(ln)
+	c, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	c.(*net.TCPConn).SetReadBuffer(4096)
+	if _, err := c.Write([]byte("GET /api/v1/events HTTP/1.1\r\nHost: x\r\n\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	// Publish steadily until the socket buffers are full; never read.
+	big := strings.Repeat("x", 4000)
+	deadline := time.Now().Add(10 * time.Second)
+	for !returned.Load() && time.Now().Before(deadline) {
+		for range 50 {
+			bus.Publish("x", big)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !returned.Load() {
+		t.Fatal("handler still blocked on a client that doesn't read")
+	}
+	bus.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	runtime.KeepAlive(c)
 }
 
 // blockingWriter blocks the first Write until unblock is closed.
@@ -238,12 +288,13 @@ func (w *blockingWriter) Write(p []byte) (int, error) {
 	return w.body.Write(p)
 }
 
-// The keepalive comment is sent on schedule.
+// TC-502: the keepalive comment is sent on schedule.
 func TestEventsKeepalive(t *testing.T) {
-	old := Keepalive
-	Keepalive = 20 * time.Millisecond
-	defer func() { Keepalive = old }()
-	e := newEnv(t, "")
+	bus := events.New("r", 10)
+	ts := httptest.NewServer(New(nil, Options{Events: bus, Keepalive: 20 * time.Millisecond}))
+	defer ts.Close()
+	defer bus.Close()
+	e := &env{t: t, srv: ts}
 	s := e.stream("")
 	for range 2 { // ": connected", then at least one keepalive
 		select {

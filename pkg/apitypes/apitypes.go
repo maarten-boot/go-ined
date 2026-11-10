@@ -198,12 +198,13 @@ type GroupPatch struct {
 // Health is the response of GET /health. Without a valid token only Status
 // and Version are filled in (SPEC-501, SPEC-802).
 type Health struct {
-	Status    string `json:"status"`
-	Version   string `json:"version"`
-	ICMPMode  string `json:"icmp_mode,omitempty"`
-	ICMPError string `json:"icmp_error,omitempty"`
-	DB        string `json:"db,omitempty"`
-	RunID     string `json:"run_id,omitempty"`
+	Status     string `json:"status"`
+	Version    string `json:"version"`
+	ICMPMode   string `json:"icmp_mode,omitempty"`
+	ICMPError  string `json:"icmp_error,omitempty"`
+	ICMP6Error string `json:"icmp6_error,omitempty"`
+	DB         string `json:"db,omitempty"`
+	RunID      string `json:"run_id,omitempty"`
 }
 
 // ErrorBody is the body of every error response (SPEC-504).

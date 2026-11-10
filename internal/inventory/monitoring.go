@@ -36,8 +36,9 @@ type Observation struct {
 	Status  string     // the new status; "" keeps the current one
 	RTTms   *float64   // average round-trip time; nil when no reply
 	LossPct float64
-	Replied bool // at least one reply: last_seen = At
-	At      time.Time
+	Replied bool      // at least one reply
+	SeenAt  time.Time // arrival of the last reply: last_seen (SPEC-303); zero = At
+	At      time.Time // end of the round: last_change
 }
 
 // ApplyObservations records a batch of ping results in one database
@@ -69,7 +70,11 @@ func (s *Service) ApplyObservations(ctx context.Context, obs []Observation) erro
 		loss := o.LossPct
 		h.LossPct = &loss
 		if o.Replied {
-			h.LastSeen = at
+			seen := o.SeenAt
+			if seen.IsZero() {
+				seen = o.At
+			}
+			h.LastSeen = seen.UTC().Truncate(time.Millisecond)
 		}
 		if o.Status != "" && o.Status != h.Status {
 			h.Status = o.Status

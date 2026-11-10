@@ -27,6 +27,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 
 ### Fixed
+- Discovery jobs report probes that fail with an error (`errors`, and the first message in `error`).
+- Monitoring and reverse DNS no longer keep a waiting goroutine per due host; memory stays flat after a large discovery.
+- `discovery.rate` is limited to 1–100,000 (a larger value crashed the server at start); ranges above ~5,000 addresses log a warning.
 - An event-stream client that stops reading is disconnected after 10 s instead of blocking the server's shutdown.
 - Raw-socket ping mode uses one shared socket per address family, so each reply is received once (scales to thousands of hosts).
 - The echo requests of a round are at least 200 ms apart; `last_seen` is the arrival time of the last reply.

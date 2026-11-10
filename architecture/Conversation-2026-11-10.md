@@ -115,3 +115,5 @@
     Smoke test: discovery of 127.0.0.0/29 found 6 of 6, DNS names were filled in, overlap → 409, a too-large range → 400, clean exit. Spec v0.11, TC-201..212 and TC-402..407 passing. `make all` passes.
 27. **User**: continue please.
     **Claude** took this as the suggested next step and ran crosscheck `Crosscheck-2026-11-10-04.md` on M3. 107/107 tests pass, the examples are reproducible, and Tests.md and the Spec are fully traced. Findings: 0 H, 0 M, 7 L (silent probe errors, goroutines waiting for a slot, a WaitGroup race at close, no upper bound on the rate, no A1 warning on a /16, failed-save behaviour not in SPEC-205, push pending). Two decisions are for the user: keep `dns.enabled`, and check the SVG on GitHub. Fixes are waiting for the user's OK.
+28. **User**: pushed; OK, all.
+    **Claude** verified: `main` (`f661a72`) is on GitHub, but `docs/architecture` and `feature/m3-discovery-dns` aren't, and the old branches are still there. Applied the crosscheck 04 fixes on `fix/crosscheck-04`: Spec v0.12, C1–C4, S1, S2, and TC-213, 214, 408 passing. `dns.enabled` is kept. `make all` passes.

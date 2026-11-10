@@ -18,8 +18,13 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - Live event stream `GET /api/v1/events` (Server-Sent Events) with replay after reconnect (`Last-Event-ID`), `resync`, and keepalive comments.
 - `/health` reports the ICMP mode and, if ping is unavailable, the reason (`icmp_error`, status `degraded`).
 - New error code `unavailable` (503) while the server shuts down.
+- Config key `monitor.enabled` (default `true`) to turn pinging off.
+- Live-events example in `architecture/API-examples.md`.
+- Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 
 ### Fixed
+- Hosts with monitoring off no longer stay `stale` forever after a restart.
+- Changing a host's IP address resets its status to `unknown` instead of keeping the old address's status.
 - Database paths containing `?`, `#` or `%` opened the wrong file.
 - Rows whose parent group is missing are moved to the root at startup (with a warning).
 - `ined-server -version` prints to stdout.

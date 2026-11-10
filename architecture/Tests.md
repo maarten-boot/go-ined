@@ -40,6 +40,8 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-210 | SPEC-204 | U | A found host is monitored, `up`, with round-trip time, loss and `last_seen` from the probe; a host that answered only the second request has 50 % loss | discovery: TestAddsResponders; inventory: TestAddDiscovered | passing |
 | TC-211 | SPEC-205 | I | A job whose range overlaps a running job → 409; finished jobs are kept up to the limit; job ids have the form `<run>-<n>` | discovery: TestOverlapAndKeep | passing |
 | TC-212 | SPEC-201 | I | Without IPv4 ICMP, `POST /discovery` → 503 `unavailable`; with `monitor.enabled = false` discovery still works | discovery: TestUnavailable; api: TestDiscoveryAPI; ined-server: TestMonitorDisabled | passing |
+| TC-213 | SPEC-205 | U | Probe errors are counted in `errors`, and the first message is in `error`, while the job still ends `done` | — | planned |
+| TC-214 | SPEC-203 | U | A range with more than 5,000 addresses logs a warning; `discovery.rate` outside 1–100,000 is rejected by the config check | — | planned |
 | TC-301 | SPEC-302 | U | Status rules: 1 reply of 3 → up; down only after 2 failed rounds in a row; unknown before the first round | monitor: TestNextStatus, TestObservations; monitor: TestProberError | passing |
 | TC-302 | SPEC-301 | U | Ping start times are spread across the interval | monitor: TestSpread | passing |
 | TC-303 | SPEC-303 | U | Average round-trip time, loss, `last_seen` and `last_change` are computed correctly | monitor: TestSummarize; inventory: TestApplyObservations; ined-server: TestMonitoringPersistsAndStale | passing |
@@ -61,6 +63,7 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-405 | SPEC-401 | U | An IP change clears the PTR name at once and triggers a new lookup; a changed name emits `host.updated` | dnsname: TestIPChange; inventory: TestPTRName | passing |
 | TC-406 | SPEC-401, 403 | U | At startup the refreshes are spread across `dns.refresh`; of several PTR names the first is used | dnsname: TestScheduling, TestName | passing |
 | TC-407 | SPEC-401, 805 | I | `dns.enabled = false` makes no lookups; by default a new host is looked up | ined-server: TestDNSEnabled | passing |
+| TC-408 | SPEC-401, 301 | U | Hosts waiting for a lookup or ping slot don't each hold a goroutine: with concurrency 4 and 50 due hosts, only about 4 workers exist | — | planned |
 | TC-501 | SPEC-501, 504 | I | CRUD round trip for hosts and groups (with and without `cidr`). Every error case returns the HTTP status and `code` from the SPEC-504 table | api: TestCRUD, TestRequestErrors; apitypes: TestOpt; inventory: TestRepoFailureKeepsModel | passing |
 | TC-502 | SPEC-502, 503 | I | SSE: events arrive in order. Reconnecting with Last-Event-ID replays missed events; an id that has dropped out of the buffer gets `resync` | events: TestReplay, TestResync; api: TestEventsStream, TestEventsReplayAndResync; api: TestEventsKeepalive | passing |
 | TC-503 | SPEC-506 | I | `pkg/client` works against a test server for all endpoints and the event stream | — | planned |

@@ -52,7 +52,7 @@ const (
 
 	EventDiscoveryProgress = "discovery.progress"
 	EventDiscoveryFinished = "discovery.finished"
-	EventResync       = "resync"
+	EventResync            = "resync"
 )
 
 // Event payloads (SPEC-502). host.created/updated/status carry a Host and

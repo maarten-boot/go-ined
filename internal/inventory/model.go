@@ -1,7 +1,10 @@
 // Package inventory holds the domain model of go-ined: hosts and groups in a
-// tree, network groups (groups with a CIDR), and the rules that keep the tree
-// consistent (SPEC-101..115). The rules are pure functions on Model; Service
-// adds locking and persistence.
+// tree, network groups (groups with a CIDR), views, and the rules that keep
+// the trees consistent (SPEC-101..124). The rules are pure functions on
+// Model; Service adds locking and persistence.
+//
+// Every view is its own tree (SPEC-117..121). Model.In(view) projects the
+// model onto one view, and the tree rules then work on that projection.
 package inventory
 
 import (
@@ -16,6 +19,29 @@ import (
 
 // Root is the ParentID of items at the root of the tree.
 const Root int64 = 0
+
+// NetworkView is the id of the network view (SPEC-117).
+const NetworkView = apitypes.NetworkViewID
+
+// View is one map (SPEC-117).
+type View struct {
+	ID        int64
+	Name      string
+	Kind      string // apitypes.ViewNetwork or apitypes.ViewCustom
+	Order     int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// Placement puts a host in a custom view (SPEC-119). A host's placement in
+// the network view is its own ParentID, X and Y.
+type Placement struct {
+	ViewID, HostID, ParentID int64
+	X, Y                     float64
+}
+
+// PlacementKey identifies a placement.
+type PlacementKey struct{ ViewID, HostID int64 }
 
 // Limits.
 const (
@@ -53,6 +79,7 @@ type Group struct {
 	Description string
 	Note        string
 	CIDR        netip.Prefix // invalid (zero) for ordinary groups
+	ViewID      int64        // SPEC-118; fixed at creation
 	ParentID    int64
 	Collapsed   bool
 	X, Y        float64
@@ -88,15 +115,61 @@ func (h *Host) DisplayName() string {
 	}
 }
 
-// Model is an in-memory snapshot of the inventory.
+// Model is an in-memory snapshot of the inventory. Placements maps view →
+// host → placement, for custom views only.
 type Model struct {
-	Hosts  map[int64]*Host
-	Groups map[int64]*Group
+	Hosts      map[int64]*Host
+	Groups     map[int64]*Group
+	Views      map[int64]*View
+	Placements map[int64]map[int64]*Placement
 }
 
 // NewModel returns an empty model.
 func NewModel() *Model {
-	return &Model{Hosts: map[int64]*Host{}, Groups: map[int64]*Group{}}
+	return &Model{Hosts: map[int64]*Host{}, Groups: map[int64]*Group{},
+		Views: map[int64]*View{}, Placements: map[int64]map[int64]*Placement{}}
+}
+
+// In returns the tree of one view: its groups, and the hosts placed in it
+// with that view's parent and position. For the network view the hosts and
+// groups are the model's own; for a custom view the hosts are copies, so
+// changes to them don't reach the model. The projection has no views or
+// placements.
+func (m *Model) In(view int64) *Model {
+	p := &Model{Groups: map[int64]*Group{}}
+	for id, g := range m.Groups {
+		if g.ViewID == view {
+			p.Groups[id] = g
+		}
+	}
+	if view == NetworkView {
+		p.Hosts = m.Hosts
+		return p
+	}
+	p.Hosts = make(map[int64]*Host, len(m.Placements[view]))
+	for hid, pl := range m.Placements[view] {
+		if h := m.Hosts[hid]; h != nil {
+			c := *h
+			c.ParentID, c.X, c.Y = pl.ParentID, pl.X, pl.Y
+			p.Hosts[hid] = &c
+		}
+	}
+	return p
+}
+
+// AggregateAll returns the counts of every group in every view (SPEC-121).
+func (m *Model) AggregateAll() map[int64]Counts {
+	out := make(map[int64]Counts, len(m.Groups))
+	views := map[int64]bool{NetworkView: true}
+	for _, g := range m.Groups {
+		views[g.ViewID] = true
+	}
+	for v := range views {
+		for id, c := range m.In(v).Aggregate() {
+			out[id] = c
+		}
+	}
+	return out
 }
 
 // ParseIP parses and canonicalises a host IP: IPv4-mapped IPv6 addresses are

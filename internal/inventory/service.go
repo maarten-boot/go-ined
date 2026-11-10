@@ -19,24 +19,33 @@ type Repository interface {
 	Apply(ctx context.Context, c Changes) error
 }
 
-// State is everything Load returns. NextHostID and NextGroupID are the
-// persisted id sequences (SPEC-116); 0 means unknown.
+// State is everything Load returns. NextHostID, NextGroupID and NextViewID
+// are the persisted id sequences (SPEC-116); 0 means unknown.
 type State struct {
+	Views       []View
 	Groups      []Group
 	Hosts       []Host
+	Placements  []Placement
 	NextHostID  int64
 	NextGroupID int64
+	NextViewID  int64
 }
 
-// Changes is one atomic set of writes. Upserts insert or replace by ID.
-// NextHostID / NextGroupID, when not 0, update the persisted sequences.
+// Changes is one atomic set of writes. Upserts insert or replace by ID (by
+// view and host for placements). Deletes are applied first. The Next*
+// fields, when not 0, update the persisted sequences.
 type Changes struct {
-	Groups       []Group
-	Hosts        []Host
-	DeleteGroups []int64
-	DeleteHosts  []int64
-	NextHostID   int64
-	NextGroupID  int64
+	Views            []View
+	Groups           []Group
+	Hosts            []Host
+	Placements       []Placement
+	DeleteViews      []int64
+	DeleteGroups     []int64
+	DeleteHosts      []int64
+	DeletePlacements []PlacementKey
+	NextHostID       int64
+	NextGroupID      int64
+	NextViewID       int64
 }
 
 // Notifier receives the events of every change (SPEC-502, SPEC-305). It is
@@ -58,6 +67,7 @@ type Service struct {
 	m         *Model
 	nextHost  int64
 	nextGroup int64
+	nextView  int64
 	now       func() time.Time
 	warnings  []string
 	notify    Notifier
@@ -78,7 +88,7 @@ func (s *Service) SetNotifier(n Notifier) {
 // before and whose computed status differs now (SPEC-305). Groups that are
 // new (their created event carries the status) or deleted are skipped.
 func (s *Service) emitGroupStatus(before map[int64]Counts) {
-	after := s.m.Aggregate()
+	after := s.m.AggregateAll()
 	for _, id := range sortedKeys(after) {
 		if b, ok := before[id]; ok && b.Status() != after[id].Status() {
 			s.notify.Publish(apitypes.EventGroupStatus, apitypes.GroupStatusEvent{ID: id, Status: after[id].Status()})
@@ -95,11 +105,27 @@ func NewService(ctx context.Context, repo Repository) (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("inventory: load: %w", err)
 	}
-	s := &Service{repo: repo, m: NewModel(), nextHost: max(1, st.NextHostID), nextGroup: max(1, st.NextGroupID), now: time.Now, notify: nopNotifier{}}
+	s := &Service{repo: repo, m: NewModel(), nextHost: max(1, st.NextHostID), nextGroup: max(1, st.NextGroupID),
+		nextView: max(NetworkView+1, st.NextViewID), now: time.Now, notify: nopNotifier{}}
+	for i := range st.Views {
+		v := st.Views[i]
+		s.m.Views[v.ID] = &v
+		s.nextView = max(s.nextView, v.ID+1)
+	}
 	for i := range st.Groups {
 		g := st.Groups[i]
+		if g.ViewID == 0 {
+			g.ViewID = NetworkView
+		}
 		s.m.Groups[g.ID] = &g
 		s.nextGroup = max(s.nextGroup, g.ID+1)
+	}
+	for i := range st.Placements {
+		p := st.Placements[i]
+		if s.m.Placements[p.ViewID] == nil {
+			s.m.Placements[p.ViewID] = map[int64]*Placement{}
+		}
+		s.m.Placements[p.ViewID][p.HostID] = &p
 	}
 	for i := range st.Hosts {
 		h := st.Hosts[i]
@@ -116,23 +142,82 @@ func NewService(ctx context.Context, repo Repository) (*Service, error) {
 // LoadWarnings returns the repairs made while loading (SPEC-605).
 func (s *Service) LoadWarnings() []string { return slices.Clone(s.warnings) }
 
-// repairOnLoad moves orphans to the root (persisted) and rejects cycles.
+// repairOnLoad moves orphans to the root of their view (persisted) and
+// rejects cycles (SPEC-605, SPEC-123).
 func (s *Service) repairOnLoad(ctx context.Context) error {
 	var ch Changes
+	if s.m.Views[NetworkView] == nil {
+		// A repository without views (only in tests: migration 3 seeds it).
+		now := s.stamp()
+		v := View{ID: NetworkView, Name: "Networks", Kind: apitypes.ViewNetwork, CreatedAt: now, UpdatedAt: now}
+		s.m.Views[v.ID] = &v
+		ch.Views = append(ch.Views, v)
+	}
+	warn := func(format string, a ...any) { s.warnings = append(s.warnings, fmt.Sprintf(format, a...)) }
 	for _, id := range sortedKeys(s.m.Groups) {
 		g := s.m.Groups[id]
-		if g.ParentID != Root && s.m.Groups[g.ParentID] == nil {
-			s.warnings = append(s.warnings, fmt.Sprintf("group %d: parent group %d does not exist; moved to the root", id, g.ParentID))
-			g.ParentID = Root
+		changed := false
+		if s.m.Views[g.ViewID] == nil {
+			warn("group %d: view %d does not exist; moved to the root of view %d", id, g.ViewID, NetworkView)
+			g.ViewID, g.ParentID, changed = NetworkView, Root, true
+		}
+		if g.IsNetwork() && g.ViewID != NetworkView {
+			warn("group %d: a network group in a custom view; moved to the root of view %d", id, NetworkView)
+			g.ViewID, g.ParentID, changed = NetworkView, Root, true
+		}
+		if changed {
 			ch.Groups = append(ch.Groups, *g)
 		}
 	}
+	// Parents are checked after every group's view is final.
+	for _, id := range sortedKeys(s.m.Groups) {
+		g := s.m.Groups[id]
+		if g.ParentID == Root {
+			continue
+		}
+		switch p := s.m.Groups[g.ParentID]; {
+		case p == nil:
+			warn("group %d: parent group %d does not exist; moved to the root", id, g.ParentID)
+		case p.ViewID != g.ViewID:
+			warn("group %d: parent group %d is in another view; moved to the root", id, g.ParentID)
+		default:
+			continue
+		}
+		g.ParentID = Root
+		ch.Groups = append(ch.Groups, *g)
+	}
 	for _, id := range sortedKeys(s.m.Hosts) {
 		h := s.m.Hosts[id]
-		if h.ParentID != Root && s.m.Groups[h.ParentID] == nil {
-			s.warnings = append(s.warnings, fmt.Sprintf("host %d: parent group %d does not exist; moved to the root", id, h.ParentID))
-			h.ParentID = Root
-			ch.Hosts = append(ch.Hosts, *h)
+		if h.ParentID == Root {
+			continue
+		}
+		switch p := s.m.Groups[h.ParentID]; {
+		case p == nil:
+			warn("host %d: parent group %d does not exist; moved to the root", id, h.ParentID)
+		case p.ViewID != NetworkView:
+			warn("host %d: parent group %d is not in the network view; moved to the root", id, h.ParentID)
+		default:
+			continue
+		}
+		h.ParentID = Root
+		ch.Hosts = append(ch.Hosts, *h)
+	}
+	for _, vid := range sortedKeys(s.m.Placements) {
+		for _, hid := range sortedKeys(s.m.Placements[vid]) {
+			p := s.m.Placements[vid][hid]
+			switch {
+			case vid == NetworkView || s.m.Views[vid] == nil || s.m.Hosts[hid] == nil:
+				warn("placement of host %d in view %d: no such host or custom view; removed", hid, vid)
+				delete(s.m.Placements[vid], hid)
+				ch.DeletePlacements = append(ch.DeletePlacements, PlacementKey{vid, hid})
+			case p.ParentID != Root && (s.m.Groups[p.ParentID] == nil || s.m.Groups[p.ParentID].ViewID != vid):
+				warn("placement of host %d in view %d: parent group %d is missing or in another view; moved to the root", hid, vid, p.ParentID)
+				p.ParentID = Root
+				ch.Placements = append(ch.Placements, *p)
+			}
+		}
+		if len(s.m.Placements[vid]) == 0 {
+			delete(s.m.Placements, vid)
 		}
 	}
 	for _, id := range sortedKeys(s.m.Groups) {
@@ -140,7 +225,7 @@ func (s *Service) repairOnLoad(ctx context.Context) error {
 			return fmt.Errorf("inventory: the database is inconsistent: group %d is part of a parent cycle; fix it by hand", id)
 		}
 	}
-	if len(ch.Groups)+len(ch.Hosts) > 0 {
+	if len(ch.Views)+len(ch.Groups)+len(ch.Hosts)+len(ch.Placements)+len(ch.DeletePlacements) > 0 {
 		if err := s.repo.Apply(ctx, ch); err != nil {
 			return fmt.Errorf("inventory: save repairs: %w", err)
 		}
@@ -178,12 +263,28 @@ func (s *Service) Host(id int64) (apitypes.Host, error) {
 func (s *Service) Groups() []apitypes.Group {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	agg := s.m.Aggregate()
+	agg := s.m.AggregateAll()
 	out := make([]apitypes.Group, 0, len(s.m.Groups))
 	for _, id := range sortedKeys(s.m.Groups) {
 		out = append(out, groupView(s.m.Groups[id], agg[id]))
 	}
 	return out
+}
+
+// GroupsIn returns the groups of one view ordered by ID (SPEC-122).
+func (s *Service) GroupsIn(view int64) ([]apitypes.Group, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.m.Views[view] == nil {
+		return nil, notFoundf("view %d not found", view)
+	}
+	vm := s.m.In(view)
+	agg := vm.Aggregate()
+	out := make([]apitypes.Group, 0, len(vm.Groups))
+	for _, id := range sortedKeys(vm.Groups) {
+		out = append(out, groupView(vm.Groups[id], agg[id]))
+	}
+	return out, nil
 }
 
 // Group returns one group.
@@ -194,18 +295,28 @@ func (s *Service) Group(id int64) (apitypes.Group, error) {
 	if g == nil {
 		return apitypes.Group{}, notFoundf("group %d not found", id)
 	}
-	return groupView(g, s.m.Aggregate()[id]), nil
+	return groupView(g, s.m.In(g.ViewID).Aggregate()[id]), nil
 }
 
-// Map returns every item for GET /map (SPEC-501): groups first, then hosts,
-// each ordered by ID.
+// Map returns every item of the network view for GET /map (SPEC-501).
 func (s *Service) Map() apitypes.Map {
+	m, _ := s.MapOf(NetworkView)
+	return m
+}
+
+// MapOf returns the items of one view (SPEC-122): groups first, then
+// hosts, each ordered by ID. Hosts have their placement in that view.
+func (s *Service) MapOf(view int64) (apitypes.Map, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	agg := s.m.Aggregate()
-	items := make([]apitypes.MapItem, 0, len(s.m.Groups)+len(s.m.Hosts))
-	for _, id := range sortedKeys(s.m.Groups) {
-		g := s.m.Groups[id]
+	if s.m.Views[view] == nil {
+		return apitypes.Map{}, notFoundf("view %d not found", view)
+	}
+	vm := s.m.In(view)
+	agg := vm.Aggregate()
+	items := make([]apitypes.MapItem, 0, len(vm.Groups)+len(vm.Hosts))
+	for _, id := range sortedKeys(vm.Groups) {
+		g := vm.Groups[id]
 		it := apitypes.MapItem{
 			Type: apitypes.TypeGroup, ID: g.ID, ParentID: parentPtr(g.ParentID),
 			X: g.X, Y: g.Y, Name: g.Name, Status: agg[id].Status(),
@@ -216,15 +327,15 @@ func (s *Service) Map() apitypes.Map {
 		}
 		items = append(items, it)
 	}
-	for _, id := range sortedKeys(s.m.Hosts) {
-		h := s.m.Hosts[id]
+	for _, id := range sortedKeys(vm.Hosts) {
+		h := vm.Hosts[id]
 		items = append(items, apitypes.MapItem{
 			Type: apitypes.TypeHost, ID: h.ID, ParentID: parentPtr(h.ParentID),
 			X: h.X, Y: h.Y, Name: h.DisplayName(), Status: h.Status, Stale: h.Stale,
-			HasNote: h.Note != "", IP: h.IP.String(), OutsideCIDR: s.m.OutsideCIDR(h),
+			HasNote: h.Note != "", IP: h.IP.String(), OutsideCIDR: view == NetworkView && s.m.OutsideCIDR(h),
 		})
 	}
-	return apitypes.Map{Items: items}
+	return apitypes.Map{ViewID: view, Items: items}, nil
 }
 
 // Snapshot returns a deep copy of the model, e.g. for computing visibility
@@ -240,6 +351,17 @@ func (s *Service) Snapshot() *Model {
 	for id, g := range s.m.Groups {
 		gc := *g
 		c.Groups[id] = &gc
+	}
+	for id, v := range s.m.Views {
+		vc := *v
+		c.Views[id] = &vc
+	}
+	for vid, ps := range s.m.Placements {
+		c.Placements[vid] = map[int64]*Placement{}
+		for hid, p := range ps {
+			pc := *p
+			c.Placements[vid][hid] = &pc
+		}
 	}
 	return c
 }
@@ -269,14 +391,14 @@ func (s *Service) CreateHost(ctx context.Context, in apitypes.HostCreate) (apity
 		return apitypes.Host{}, err
 	}
 	if in.ParentID != nil {
-		if err := s.checkParent(*in.ParentID); err != nil {
+		if err := s.checkParent(*in.ParentID, NetworkView); err != nil {
 			return apitypes.Host{}, err
 		}
 		h.ParentID = *in.ParentID
 	} else if g := s.m.BestNetworkFor(ip); g != nil {
 		h.ParentID = g.ID
 	}
-	if err := s.placeNew(&h.X, &h.Y, in.X, in.Y, h.ParentID); err != nil {
+	if err := s.placeNew(&h.X, &h.Y, in.X, in.Y, NetworkView, h.ParentID); err != nil {
 		return apitypes.Host{}, err
 	}
 	h.ID = s.nextHost
@@ -285,7 +407,7 @@ func (s *Service) CreateHost(ctx context.Context, in apitypes.HostCreate) (apity
 	if err := s.repo.Apply(ctx, Changes{Hosts: []Host{h}, NextHostID: h.ID + 1}); err != nil {
 		return apitypes.Host{}, err
 	}
-	before := s.m.Aggregate()
+	before := s.m.AggregateAll()
 	s.nextHost++
 	s.m.Hosts[h.ID] = &h
 	v := s.hostView(&h)
@@ -339,7 +461,7 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 		parent := Root
 		if p.ParentID.Value != nil {
 			parent = *p.ParentID.Value
-			if err := s.checkParent(parent); err != nil {
+			if err := s.checkParent(parent, NetworkView); err != nil {
 				return apitypes.Host{}, err
 			}
 		}
@@ -361,7 +483,7 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 	if err := s.repo.Apply(ctx, Changes{Hosts: []Host{h}}); err != nil {
 		return apitypes.Host{}, err
 	}
-	before := s.m.Aggregate()
+	before := s.m.AggregateAll()
 	*cur = h
 	v := s.hostView(cur)
 	s.notify.Publish(apitypes.EventHostUpdated, v)
@@ -379,11 +501,11 @@ func (s *Service) DeleteHost(ctx context.Context, id int64) error {
 	if s.m.Hosts[id] == nil {
 		return notFoundf("host %d not found", id)
 	}
-	if err := s.repo.Apply(ctx, Changes{DeleteHosts: []int64{id}}); err != nil {
+	if err := s.repo.Apply(ctx, Changes{DeleteHosts: []int64{id}, DeletePlacements: s.placementsOf([]int64{id})}); err != nil {
 		return err
 	}
-	before := s.m.Aggregate()
-	delete(s.m.Hosts, id)
+	before := s.m.AggregateAll()
+	s.dropHost(id)
 	s.notify.Publish(apitypes.EventHostDeleted, apitypes.DeletedEvent{ID: id})
 	s.emitGroupStatus(before)
 	return nil
@@ -411,18 +533,29 @@ func (s *Service) CreateGroup(ctx context.Context, in apitypes.GroupCreate) (api
 		return apitypes.Group{}, err
 	}
 
+	g.ViewID = NetworkView
+	if in.ViewID != nil {
+		g.ViewID = *in.ViewID
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.m.Views[g.ViewID] == nil {
+		return apitypes.Group{}, invalidf("view %d does not exist", g.ViewID)
+	}
+	if cidr.IsValid() && g.ViewID != NetworkView {
+		return apitypes.Group{}, invalidf("network groups (with a CIDR) exist only in the network view")
+	}
 	if err := s.checkCIDRFree(cidr, 0); err != nil {
 		return apitypes.Group{}, err
 	}
 	if in.ParentID != nil {
-		if err := s.checkParent(*in.ParentID); err != nil {
+		if err := s.checkParent(*in.ParentID, g.ViewID); err != nil {
 			return apitypes.Group{}, err
 		}
 		g.ParentID = *in.ParentID
 	}
-	if err := s.placeNew(&g.X, &g.Y, in.X, in.Y, g.ParentID); err != nil {
+	if err := s.placeNew(&g.X, &g.Y, in.X, in.Y, g.ViewID, g.ParentID); err != nil {
 		return apitypes.Group{}, err
 	}
 	g.ID = s.nextGroup
@@ -439,7 +572,7 @@ func (s *Service) CreateGroup(ctx context.Context, in apitypes.GroupCreate) (api
 		return apitypes.Group{}, err
 	}
 	s.nextGroup++
-	v := groupView(&g, s.m.Aggregate()[g.ID])
+	v := groupView(&g, Counts{})
 	s.notify.Publish(apitypes.EventGroupCreated, v)
 	return v, nil
 }
@@ -461,6 +594,9 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 		if err != nil {
 			return apitypes.Group{}, err
 		}
+		if cidr.IsValid() && g.ViewID != NetworkView {
+			return apitypes.Group{}, invalidf("network groups (with a CIDR) exist only in the network view")
+		}
 		if err := s.checkCIDRFree(cidr, id); err != nil {
 			return apitypes.Group{}, err
 		}
@@ -473,7 +609,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 		parent := Root
 		if p.ParentID.Value != nil {
 			parent = *p.ParentID.Value
-			if err := s.checkParent(parent); err != nil {
+			if err := s.checkParent(parent, g.ViewID); err != nil {
 				return apitypes.Group{}, err
 			}
 		}
@@ -497,7 +633,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	if err := checkPos(g.X, g.Y); err != nil {
 		return apitypes.Group{}, err
 	}
-	before := s.m.Aggregate()
+	before := s.m.AggregateAll()
 	old := *cur
 	*cur = g
 	if err := s.m.CheckNesting(id); err != nil {
@@ -509,14 +645,15 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 		*cur = old
 		return apitypes.Group{}, err
 	}
-	v := groupView(cur, s.m.Aggregate()[id])
+	v := groupView(cur, s.m.In(cur.ViewID).Aggregate()[id])
 	s.notify.Publish(apitypes.EventGroupUpdated, v)
 	s.emitGroupStatus(before)
 	return v, nil
 }
 
-// DeleteGroup removes a group (SPEC-104). mode is "", "reparent" or
-// "cascade"; a non-empty group needs a mode.
+// DeleteGroup removes a group (SPEC-104, SPEC-120). mode is "",
+// "reparent" or "cascade"; a non-empty group needs a mode. In a custom
+// view, cascade removes placements, never hosts.
 func (s *Service) DeleteGroup(ctx context.Context, id int64, mode string) error {
 	switch mode {
 	case "", apitypes.ChildrenReparent, apitypes.ChildrenCascade:
@@ -529,8 +666,11 @@ func (s *Service) DeleteGroup(ctx context.Context, id int64, mode string) error 
 	if g == nil {
 		return notFoundf("group %d not found", id)
 	}
+	view := g.ViewID
+	custom := view != NetworkView
+	vm := s.m.In(view)
 	ch := Changes{DeleteGroups: []int64{id}}
-	if s.m.HasChildren(id) {
+	if vm.HasChildren(id) {
 		switch mode {
 		case "":
 			return conflictf("group %d is not empty; use children=%s or children=%s",
@@ -538,15 +678,22 @@ func (s *Service) DeleteGroup(ctx context.Context, id int64, mode string) error 
 		case apitypes.ChildrenReparent:
 			// Nesting stays valid: CIDR containment is transitive.
 			now := s.stamp()
-			for _, hid := range sortedKeys(s.m.Hosts) {
-				if h := s.m.Hosts[hid]; h.ParentID == id {
-					c := *h
+			for _, hid := range sortedKeys(vm.Hosts) {
+				if vm.Hosts[hid].ParentID != id {
+					continue
+				}
+				if custom {
+					p := *s.m.Placements[view][hid]
+					p.ParentID = g.ParentID
+					ch.Placements = append(ch.Placements, p)
+				} else {
+					c := *s.m.Hosts[hid]
 					c.ParentID, c.UpdatedAt = g.ParentID, now
 					ch.Hosts = append(ch.Hosts, c)
 				}
 			}
-			for _, cid := range sortedKeys(s.m.Groups) {
-				if c := s.m.Groups[cid]; c.ParentID == id {
+			for _, cid := range sortedKeys(vm.Groups) {
+				if c := vm.Groups[cid]; c.ParentID == id {
 					cc := *c
 					cc.ParentID, cc.UpdatedAt = g.ParentID, now
 					ch.Groups = append(ch.Groups, cc)
@@ -554,44 +701,67 @@ func (s *Service) DeleteGroup(ctx context.Context, id int64, mode string) error 
 			}
 		case apitypes.ChildrenCascade:
 			ch.DeleteGroups = nil
-			for _, cid := range sortedKeys(s.m.Groups) {
-				if s.m.IsInSubtree(cid, id) {
+			for _, cid := range sortedKeys(vm.Groups) {
+				if vm.IsInSubtree(cid, id) {
 					ch.DeleteGroups = append(ch.DeleteGroups, cid)
 				}
 			}
-			for _, hid := range sortedKeys(s.m.Hosts) {
-				if h := s.m.Hosts[hid]; h.ParentID != Root && s.m.IsInSubtree(h.ParentID, id) {
+			for _, hid := range sortedKeys(vm.Hosts) {
+				if h := vm.Hosts[hid]; h.ParentID == Root || !vm.IsInSubtree(h.ParentID, id) {
+					continue
+				}
+				if custom {
+					ch.DeletePlacements = append(ch.DeletePlacements, PlacementKey{view, hid})
+				} else {
 					ch.DeleteHosts = append(ch.DeleteHosts, hid)
 				}
+			}
+			if !custom {
+				ch.DeletePlacements = s.placementsOf(ch.DeleteHosts)
 			}
 		}
 	}
 	if err := s.repo.Apply(ctx, ch); err != nil {
 		return err
 	}
-	before := s.m.Aggregate()
+	before := s.m.AggregateAll()
 	for _, h := range ch.Hosts {
 		*s.m.Hosts[h.ID] = h
 	}
 	for _, c := range ch.Groups {
 		*s.m.Groups[c.ID] = c
 	}
+	for _, p := range ch.Placements {
+		*s.m.Placements[p.ViewID][p.HostID] = p
+	}
 	for _, hid := range ch.DeleteHosts {
-		delete(s.m.Hosts, hid)
+		s.dropHost(hid)
+	}
+	for _, k := range ch.DeletePlacements {
+		s.unplace(k)
 	}
 	for _, gid := range ch.DeleteGroups {
 		delete(s.m.Groups, gid)
 	}
 	// Events: moved children first, then one deleted event per item.
-	after := s.m.Aggregate()
+	// Placements of deleted hosts go with host.deleted (no own event).
+	after := s.m.In(view).Aggregate()
 	for _, h := range ch.Hosts {
 		s.notify.Publish(apitypes.EventHostUpdated, s.hostView(s.m.Hosts[h.ID]))
+	}
+	for _, p := range ch.Placements {
+		s.notify.Publish(apitypes.EventPlacementUpdated, placementView(&p))
 	}
 	for _, c := range ch.Groups {
 		s.notify.Publish(apitypes.EventGroupUpdated, groupView(s.m.Groups[c.ID], after[c.ID]))
 	}
 	for _, hid := range ch.DeleteHosts {
 		s.notify.Publish(apitypes.EventHostDeleted, apitypes.DeletedEvent{ID: hid})
+	}
+	if custom {
+		for _, k := range ch.DeletePlacements {
+			s.notify.Publish(apitypes.EventPlacementDeleted, apitypes.PlacementDeletedEvent{ViewID: k.ViewID, HostID: k.HostID})
+		}
 	}
 	for _, gid := range ch.DeleteGroups {
 		s.notify.Publish(apitypes.EventGroupDeleted, apitypes.DeletedEvent{ID: gid})
@@ -623,14 +793,43 @@ func (s *Service) checkCIDRFree(cidr netip.Prefix, self int64) error {
 	return nil
 }
 
-func (s *Service) checkParent(id int64) error {
-	if s.m.Groups[id] == nil {
+// checkParent verifies that group id exists in view (SPEC-118, SPEC-119).
+func (s *Service) checkParent(id, view int64) error {
+	g := s.m.Groups[id]
+	switch {
+	case g == nil:
 		return invalidf("parent group %d does not exist", id)
+	case g.ViewID != view:
+		return invalidf("parent group %d is in view %d, not in view %d", id, g.ViewID, view)
 	}
 	return nil
 }
 
-func (s *Service) placeNew(x, y *float64, inX, inY *float64, parent int64) error {
+// placementsOf returns the custom-view placements of the hosts.
+func (s *Service) placementsOf(hosts []int64) []PlacementKey {
+	var out []PlacementKey
+	for _, vid := range sortedKeys(s.m.Placements) {
+		for _, hid := range hosts {
+			if s.m.Placements[vid][hid] != nil {
+				out = append(out, PlacementKey{vid, hid})
+			}
+		}
+	}
+	return out
+}
+
+// dropHost removes a host and its placements from the model.
+func (s *Service) dropHost(id int64) {
+	delete(s.m.Hosts, id)
+	for vid, ps := range s.m.Placements {
+		delete(ps, id)
+		if len(ps) == 0 {
+			delete(s.m.Placements, vid)
+		}
+	}
+}
+
+func (s *Service) placeNew(x, y *float64, inX, inY *float64, view, parent int64) error {
 	if inX != nil && inY != nil {
 		*x, *y = *inX, *inY
 		return checkPos(*x, *y)
@@ -638,7 +837,7 @@ func (s *Service) placeNew(x, y *float64, inX, inY *float64, parent int64) error
 	if (inX == nil) != (inY == nil) {
 		return invalidf("give both x and y, or neither")
 	}
-	*x, *y = s.m.FreePosition(parent)
+	*x, *y = s.m.In(view).FreePosition(parent)
 	return nil
 }
 
@@ -664,7 +863,7 @@ func (s *Service) hostView(h *Host) apitypes.Host {
 func groupView(g *Group, c Counts) apitypes.Group {
 	v := apitypes.Group{
 		ID: g.ID, Name: g.Name, Description: g.Description, Note: g.Note,
-		ParentID: parentPtr(g.ParentID), Collapsed: g.Collapsed, Status: c.Status(),
+		ViewID: g.ViewID, ParentID: parentPtr(g.ParentID), Collapsed: g.Collapsed, Status: c.Status(),
 		X: g.X, Y: g.Y, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt,
 	}
 	if g.IsNetwork() {

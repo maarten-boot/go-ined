@@ -14,7 +14,7 @@ func (s *Service) NetworkGroupByCIDR(p netip.Prefix) (apitypes.Group, bool) {
 	defer s.mu.RUnlock()
 	for _, id := range sortedKeys(s.m.Groups) {
 		if g := s.m.Groups[id]; g.CIDR == p {
-			return groupView(g, s.m.Aggregate()[id]), true
+			return groupView(g, s.m.In(NetworkView).Aggregate()[id]), true
 		}
 	}
 	return apitypes.Group{}, false
@@ -45,7 +45,7 @@ func (s *Service) AddDiscovered(ctx context.Context, group int64, found []Found)
 			delete(s.m.Hosts, id)
 		}
 	}
-	before := s.m.Aggregate()
+	before := s.m.AggregateAll()
 	next := s.nextHost
 	now := s.stamp()
 	for _, f := range found {
@@ -60,7 +60,7 @@ func (s *Service) AddDiscovered(ctx context.Context, group int64, found []Found)
 			Status: apitypes.StatusUp, RTTms: &rtt, LossPct: &loss, LastSeen: at, LastChange: at,
 			CreatedAt: now, UpdatedAt: now,
 		}
-		h.X, h.Y = s.m.FreePosition(h.ParentID)
+		h.X, h.Y = s.m.In(NetworkView).FreePosition(h.ParentID)
 		next++
 		// Insert at once, so the next free position and the IP check see it.
 		s.m.Hosts[h.ID] = &h

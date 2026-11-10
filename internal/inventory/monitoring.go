@@ -96,7 +96,7 @@ func (s *Service) ApplyObservations(ctx context.Context, obs []Observation) erro
 	if err := s.repo.Apply(ctx, ch); err != nil {
 		return err
 	}
-	before := s.m.Aggregate()
+	before := s.m.AggregateAll()
 	for i, h := range ch.Hosts {
 		cur := s.m.Hosts[h.ID]
 		*cur = h

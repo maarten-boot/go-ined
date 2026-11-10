@@ -76,6 +76,32 @@ var migrations = []string{
 	INSERT INTO meta (key, value) VALUES
 		('next_host_id',  (SELECT COALESCE(MAX(id), 0) + 1 FROM hosts)),
 		('next_group_id', (SELECT COALESCE(MAX(id), 0) + 1 FROM groups));`,
+
+	// 3: views and custom-view placements (SPEC-117..123). Hosts keep their
+	// network-view placement in hosts.parent_id/x/y; all existing groups
+	// go into the network view.
+	`CREATE TABLE views (
+		id         INTEGER PRIMARY KEY,
+		name       TEXT    NOT NULL UNIQUE,
+		kind       TEXT    NOT NULL,
+		ord        INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT    NOT NULL,
+		updated_at TEXT    NOT NULL
+	);
+	INSERT INTO views (id, name, kind, ord, created_at, updated_at) VALUES
+		(1, 'Networks', 'network', 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+	ALTER TABLE groups ADD COLUMN view_id INTEGER NOT NULL DEFAULT 1;
+	CREATE INDEX groups_view ON groups(view_id);
+	CREATE TABLE placements (
+		view_id   INTEGER NOT NULL,
+		host_id   INTEGER NOT NULL,
+		parent_id INTEGER NOT NULL DEFAULT 0,
+		x         REAL    NOT NULL DEFAULT 0,
+		y         REAL    NOT NULL DEFAULT 0,
+		PRIMARY KEY (view_id, host_id)
+	);
+	CREATE INDEX placements_host ON placements(host_id);
+	INSERT INTO meta (key, value) VALUES ('next_view_id', 2);`,
 }
 
 // Store is a SQLite-backed inventory.Repository.
@@ -199,7 +225,13 @@ func parseTime(s sql.NullString) (time.Time, error) {
 func (s *Store) Load(ctx context.Context) (inventory.State, error) {
 	var st inventory.State
 	var err error
+	if st.Views, err = s.loadViews(ctx); err != nil {
+		return st, err
+	}
 	if st.Groups, err = s.loadGroups(ctx); err != nil {
+		return st, err
+	}
+	if st.Placements, err = s.loadPlacements(ctx); err != nil {
 		return st, err
 	}
 	if st.Hosts, err = s.loadHosts(ctx); err != nil {
@@ -221,13 +253,56 @@ func (s *Store) Load(ctx context.Context) (inventory.State, error) {
 			st.NextHostID = v
 		case "next_group_id":
 			st.NextGroupID = v
+		case "next_view_id":
+			st.NextViewID = v
 		}
 	}
 	return st, rows.Err()
 }
 
+func (s *Store) loadViews(ctx context.Context) ([]inventory.View, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, kind, ord, created_at, updated_at FROM views ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("store: load views: %w", err)
+	}
+	defer rows.Close()
+	var out []inventory.View
+	for rows.Next() {
+		var v inventory.View
+		var created, updated sql.NullString
+		if err := rows.Scan(&v.ID, &v.Name, &v.Kind, &v.Order, &created, &updated); err != nil {
+			return nil, fmt.Errorf("store: scan view: %w", err)
+		}
+		if v.CreatedAt, err = parseTime(created); err != nil {
+			return nil, fmt.Errorf("store: view %d: %w", v.ID, err)
+		}
+		if v.UpdatedAt, err = parseTime(updated); err != nil {
+			return nil, fmt.Errorf("store: view %d: %w", v.ID, err)
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) loadPlacements(ctx context.Context) ([]inventory.Placement, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT view_id, host_id, parent_id, x, y FROM placements ORDER BY view_id, host_id`)
+	if err != nil {
+		return nil, fmt.Errorf("store: load placements: %w", err)
+	}
+	defer rows.Close()
+	var out []inventory.Placement
+	for rows.Next() {
+		var p inventory.Placement
+		if err := rows.Scan(&p.ViewID, &p.HostID, &p.ParentID, &p.X, &p.Y); err != nil {
+			return nil, fmt.Errorf("store: scan placement: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, note, cidr, parent_id, collapsed, x, y, created_at, updated_at FROM groups ORDER BY id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, note, cidr, view_id, parent_id, collapsed, x, y, created_at, updated_at FROM groups ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("store: load groups: %w", err)
 	}
@@ -236,7 +311,7 @@ func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
 	for rows.Next() {
 		var g inventory.Group
 		var cidr, created, updated sql.NullString
-		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.Note, &cidr, &g.ParentID, &g.Collapsed, &g.X, &g.Y, &created, &updated); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.Note, &cidr, &g.ViewID, &g.ParentID, &g.Collapsed, &g.X, &g.Y, &created, &updated); err != nil {
 			return nil, fmt.Errorf("store: scan group: %w", err)
 		}
 		if cidr.Valid && cidr.String != "" {
@@ -315,17 +390,35 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 			return fmt.Errorf("store: delete group %d: %w", id, err)
 		}
 	}
+	for _, k := range c.DeletePlacements {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM placements WHERE view_id = ? AND host_id = ?`, k.ViewID, k.HostID); err != nil {
+			return fmt.Errorf("store: delete placement %d/%d: %w", k.ViewID, k.HostID, err)
+		}
+	}
+	for _, id := range c.DeleteViews {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM views WHERE id = ?`, id); err != nil {
+			return fmt.Errorf("store: delete view %d: %w", id, err)
+		}
+	}
+	for _, v := range c.Views {
+		_, err = tx.ExecContext(ctx, `INSERT INTO views (id, name, kind, ord, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, ord=excluded.ord, updated_at=excluded.updated_at`,
+			v.ID, v.Name, v.Kind, v.Order, fmtTime(v.CreatedAt), fmtTime(v.UpdatedAt))
+		if err != nil {
+			return fmt.Errorf("store: upsert view %d: %w", v.ID, err)
+		}
+	}
 	for _, g := range c.Groups {
 		var cidr any
 		if g.IsNetwork() {
 			cidr = g.CIDR.String()
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO groups (id, name, description, note, cidr, parent_id, collapsed, x, y, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		_, err = tx.ExecContext(ctx, `INSERT INTO groups (id, name, description, note, cidr, view_id, parent_id, collapsed, x, y, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description, note=excluded.note,
-				cidr=excluded.cidr, parent_id=excluded.parent_id, collapsed=excluded.collapsed, x=excluded.x, y=excluded.y,
+				cidr=excluded.cidr, view_id=excluded.view_id, parent_id=excluded.parent_id, collapsed=excluded.collapsed, x=excluded.x, y=excluded.y,
 				updated_at=excluded.updated_at`,
-			g.ID, g.Name, g.Description, g.Note, cidr, g.ParentID, g.Collapsed, g.X, g.Y, fmtTime(g.CreatedAt), fmtTime(g.UpdatedAt))
+			g.ID, g.Name, g.Description, g.Note, cidr, max(g.ViewID, 1), g.ParentID, g.Collapsed, g.X, g.Y, fmtTime(g.CreatedAt), fmtTime(g.UpdatedAt))
 		if err != nil {
 			return fmt.Errorf("store: upsert group %d: %w", g.ID, err)
 		}
@@ -344,10 +437,18 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 			return fmt.Errorf("store: upsert host %d: %w", h.ID, err)
 		}
 	}
+	for _, p := range c.Placements {
+		_, err = tx.ExecContext(ctx, `INSERT INTO placements (view_id, host_id, parent_id, x, y) VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(view_id, host_id) DO UPDATE SET parent_id=excluded.parent_id, x=excluded.x, y=excluded.y`,
+			p.ViewID, p.HostID, p.ParentID, p.X, p.Y)
+		if err != nil {
+			return fmt.Errorf("store: upsert placement %d/%d: %w", p.ViewID, p.HostID, err)
+		}
+	}
 	for _, kv := range []struct {
 		key string
 		val int64
-	}{{"next_host_id", c.NextHostID}, {"next_group_id", c.NextGroupID}} {
+	}{{"next_host_id", c.NextHostID}, {"next_group_id", c.NextGroupID}, {"next_view_id", c.NextViewID}} {
 		if kv.val == 0 {
 			continue
 		}

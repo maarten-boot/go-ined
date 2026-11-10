@@ -50,6 +50,12 @@ const (
 	EventGroupDeleted = "group.deleted"
 	EventGroupStatus  = "group.status"
 
+	EventViewCreated      = "view.created"
+	EventViewUpdated      = "view.updated"
+	EventViewDeleted      = "view.deleted"
+	EventPlacementUpdated = "placement.updated"
+	EventPlacementDeleted = "placement.deleted"
+
 	EventDiscoveryProgress = "discovery.progress"
 	EventDiscoveryFinished = "discovery.finished"
 	EventResync            = "resync"
@@ -67,6 +73,11 @@ type (
 		ID     int64  `json:"id"`
 		Status string `json:"status"`
 	}
+	// PlacementDeletedEvent is the payload of placement.deleted.
+	PlacementDeletedEvent struct {
+		ViewID int64 `json:"view_id"`
+		HostID int64 `json:"host_id"`
+	}
 	// ResyncEvent is the payload of resync: reload the full state.
 	ResyncEvent struct {
 		Reason string `json:"reason"`
@@ -82,7 +93,56 @@ const (
 	ICMPDisabled     = "disabled" // monitor.enabled = false
 )
 
-// Host is a host as returned by the API (SPEC-101).
+// View kinds (SPEC-117). The network view always has id NetworkViewID.
+const (
+	ViewNetwork   = "network"
+	ViewCustom    = "custom"
+	NetworkViewID = int64(1)
+)
+
+// View is one map: one tab in the GUI (SPEC-117).
+type View struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Kind      string    `json:"kind"`
+	Order     int64     `json:"order"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ViewCreate is the body of POST /views. Without order the view goes last.
+type ViewCreate struct {
+	Name  string `json:"name"`
+	Order *int64 `json:"order,omitempty"`
+}
+
+// ViewPatch is the body of PATCH /views/{id}.
+type ViewPatch struct {
+	Name  Opt[string] `json:"name,omitzero"`
+	Order Opt[int64]  `json:"order,omitzero"`
+}
+
+// Placement puts a host in a custom view (SPEC-119). It is the response of
+// PUT /views/{id}/hosts/{host_id} and the payload of placement.updated.
+type Placement struct {
+	ViewID   int64   `json:"view_id"`
+	HostID   int64   `json:"host_id"`
+	ParentID *int64  `json:"parent_id"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+}
+
+// PlacementSet is the body of PUT /views/{id}/hosts/{host_id}. Without x
+// and y, a new placement or one that changes parent gets a free position;
+// otherwise the position is kept.
+type PlacementSet struct {
+	ParentID *int64   `json:"parent_id,omitempty"`
+	X        *float64 `json:"x,omitempty"`
+	Y        *float64 `json:"y,omitempty"`
+}
+
+// Host is a host as returned by the API (SPEC-101). ParentID, X and Y are
+// its placement in the network view.
 type Host struct {
 	ID          int64      `json:"id"`
 	IP          string     `json:"ip"`
@@ -114,6 +174,7 @@ type Group struct {
 	Description string    `json:"description"`
 	Note        string    `json:"note"`
 	CIDR        string    `json:"cidr"`
+	ViewID      int64     `json:"view_id"`
 	ParentID    *int64    `json:"parent_id"`
 	Collapsed   bool      `json:"collapsed"`
 	Status      string    `json:"status"`
@@ -140,9 +201,10 @@ type MapItem struct {
 	CIDR        string  `json:"cidr,omitempty"` // network groups only
 }
 
-// Map is the response of GET /map.
+// Map is the response of GET /map: the items of one view (SPEC-122).
 type Map struct {
-	Items []MapItem `json:"items"`
+	ViewID int64     `json:"view_id"`
+	Items  []MapItem `json:"items"`
 }
 
 // HostCreate is the body of POST /hosts. Without parent_id the host is
@@ -179,6 +241,7 @@ type GroupCreate struct {
 	Description string   `json:"description,omitempty"`
 	Note        string   `json:"note,omitempty"`
 	CIDR        string   `json:"cidr,omitempty"`
+	ViewID      *int64   `json:"view_id,omitempty"` // default: the network view
 	ParentID    *int64   `json:"parent_id,omitempty"`
 	Collapsed   *bool    `json:"collapsed,omitempty"`
 	X           *float64 `json:"x,omitempty"`

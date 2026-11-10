@@ -17,7 +17,7 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-103 | SPEC-103 | U | Moving a group into itself or into one of its subgroups is rejected | planned |
 | TC-104 | SPEC-104 | I | Deleting a non-empty group without `children=` → 409. `reparent` and `cascade` behave as specified | planned |
 | TC-105 | SPEC-105, 306 | U | Group status aggregation: table of mixes of down/unknown/up/unmonitored hosts, nested groups, empty group. Networks don't affect group status | planned |
-| TC-106 | SPEC-106 | I | A new item gets a free position near its parent or network. PATCH x/y saves the position | planned |
+| TC-106 | SPEC-106 | I | A new item gets a free position near its parent. PATCH x/y saves the position | planned |
 | TC-107 | SPEC-113 | I | Group `cidr`: a duplicate fails with 409. An invalid or non-canonical value (such as 10.0.0.5/24) fails with 400. Clearing it works | planned |
 | TC-108 | SPEC-107 | U | Placing a manually added host with no parent: goes to the most specific network group containing its IP (10.1.2.3 with /8 and /16 groups → /16), or to the root if none matches. IPv4 and IPv6 | planned |
 | TC-109 | SPEC-114 | U | Nested network groups: a /24 inside a /16 that contains it → OK; outside it → rejected on create, move and CIDR change; an ordinary group in between is skipped when checking; hosts can move anywhere | planned |

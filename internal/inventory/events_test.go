@@ -297,4 +297,27 @@ func TestStaleOnlyMonitored(t *testing.T) {
 	if err != nil || h.Stale {
 		t.Fatalf("turning monitoring off: %v %+v", err, h)
 	}
+	// Turning it back on: stale until the next round (v0.10).
+	h, err = s2.UpdateHost(context.Background(), 2, apitypes.HostPatch{Monitored: apitypes.Some(true)})
+	if err != nil || !h.Stale {
+		t.Fatalf("turning monitoring on: %v %+v", err, h)
+	}
+	// Another change leaves the flag alone.
+	h, _ = s2.UpdateHost(context.Background(), 2, apitypes.HostPatch{Name: apitypes.Some("x")})
+	if !h.Stale {
+		t.Fatal("unrelated change cleared stale")
+	}
+}
+
+// TC-315 (inventory part): last_seen comes from SeenAt.
+func TestSeenAt(t *testing.T) {
+	s, _ := newSvc(t)
+	h := mustHost(t, s, apitypes.HostCreate{IP: "10.0.0.1"})
+	o := up(h.ID, "10.0.0.1")
+	o.SeenAt = time.Unix(90, 0)
+	observe(t, s, o)
+	got, _ := s.Host(h.ID)
+	if !got.LastSeen.Equal(time.Unix(90, 0)) || !got.LastChange.Equal(time.Unix(100, 0)) {
+		t.Fatalf("last_seen %v, last_change %v", got.LastSeen, got.LastChange)
+	}
 }

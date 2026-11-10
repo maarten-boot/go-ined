@@ -31,7 +31,9 @@ import (
 // TestMain keeps the server tests off the real network: every test uses a
 // fake prober unless it sets its own.
 func TestMain(m *testing.M) {
-	newProber = func() (monitor.Prober, string, error) { return fakeProber{}, apitypes.ICMPUnprivileged, nil }
+	newProber = func() (monitor.Prober, monitor.Status, error) {
+		return fakeProber{}, monitor.Status{Mode: apitypes.ICMPUnprivileged}, nil
+	}
 	os.Exit(m.Run())
 }
 
@@ -158,7 +160,9 @@ func (p fakeProber) Ping(ctx context.Context, _ netip.Addr, count int, _ time.Du
 
 func useProber(t *testing.T, p monitor.Prober, err error) {
 	old := newProber
-	newProber = func() (monitor.Prober, string, error) { return p, apitypes.ICMPUnprivileged, err }
+	newProber = func() (monitor.Prober, monitor.Status, error) {
+		return p, monitor.Status{Mode: apitypes.ICMPUnprivileged}, err
+	}
 	t.Cleanup(func() { newProber = old })
 }
 
@@ -259,9 +263,9 @@ func TestMonitorDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := newProber
-	newProber = func() (monitor.Prober, string, error) {
+	newProber = func() (monitor.Prober, monitor.Status, error) {
 		t.Error("prober created although monitoring is disabled")
-		return fakeProber{}, apitypes.ICMPUnprivileged, nil
+		return fakeProber{}, monitor.Status{Mode: apitypes.ICMPUnprivileged}, nil
 	}
 	t.Cleanup(func() { newProber = old })
 	addr, _, _ := startServer(t, "-config", cfg, "-listen", "127.0.0.1:0", "-db", filepath.Join(dir, "x.db"))

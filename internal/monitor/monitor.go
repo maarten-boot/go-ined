@@ -4,6 +4,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/netip"
 	"sync"
@@ -21,9 +22,10 @@ type Prober interface {
 
 // Result is the outcome of one ping round.
 type Result struct {
-	Sent     int
-	Received int
-	RTTs     []time.Duration // one per reply
+	Sent      int
+	Received  int
+	RTTs      []time.Duration // one per reply
+	LastReply time.Time       // arrival of the last reply; zero if none
 }
 
 // Inventory is the part of inventory.Service the monitor uses.
@@ -169,6 +171,9 @@ func (m *Monitor) Run(ctx context.Context) {
 		if d.err != nil && ctx.Err() != nil {
 			return // cancelled at shutdown: not a real result
 		}
+		if errors.Is(d.err, ErrFamilyUnavailable) {
+			return // not pinged at all: the status stays as it is (SPEC-304)
+		}
 		if st == nil || st.ip != d.ip {
 			return // removed, unmonitored or re-addressed meanwhile
 		}
@@ -179,9 +184,13 @@ func (m *Monitor) Run(ctx context.Context) {
 		status, streak := NextStatus(d.res.Received > 0, st.streak, m.cfg.DownAfter)
 		st.streak = streak
 		rtt, loss := Summarize(d.res)
+		seen := d.res.LastReply
+		if seen.IsZero() {
+			seen = d.at
+		}
 		pending = append(pending, inventory.Observation{
 			HostID: d.id, IP: d.ip, Status: status, RTTms: rtt, LossPct: loss,
-			Replied: d.res.Received > 0, At: d.at,
+			Replied: d.res.Received > 0, SeenAt: seen, At: d.at,
 		})
 	}
 	refresh := func(now time.Time) {

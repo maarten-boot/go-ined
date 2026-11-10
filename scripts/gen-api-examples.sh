@@ -5,8 +5,10 @@
 set -euo pipefail
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
-WORK=$(mktemp -d)
-trap 'kill "${PID:-}" 2>/dev/null || true; rm -rf "$WORK"' EXIT
+# Temporary files go under one per-project folder, never loose in /tmp.
+mkdir -p /tmp/go-ined
+WORK=$(mktemp -d /tmp/go-ined/gen-examples.XXXXXX)
+trap 'kill "${PID:-}" 2>/dev/null || true; rm -rf "$WORK"; rmdir /tmp/go-ined 2>/dev/null || true' EXIT
 
 go build -C "$REPO" -o "$WORK/ined-server" ./cmd/ined-server
 # Monitoring off: the output must not depend on which example addresses

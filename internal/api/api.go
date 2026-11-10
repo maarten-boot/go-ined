@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/maarten-boot/go-ined/internal/events"
 	"github.com/maarten-boot/go-ined/internal/inventory"
@@ -33,9 +34,22 @@ type Options struct {
 	DBPing  func(ctx context.Context) error // for /health; nil = not checked
 	Logger  *slog.Logger                    // nil = slog.Default()
 	Events  *events.Bus                     // for /events; nil = endpoint answers 404
-	// ICMP reports the monitor's ICMP mode for /health (SPEC-304). errMsg
-	// is set when no mode works. nil = "not started".
-	ICMP func() (mode, errMsg string)
+	// ICMP reports the monitor's ICMP state for /health (SPEC-304).
+	// nil = "not started".
+	ICMP func() ICMPInfo
+	// Keepalive is the SSE keepalive interval; 0 = 30 s (SPEC-502).
+	Keepalive time.Duration
+	// WriteTimeout disconnects an SSE client that accepts no data for this
+	// long; 0 = 10 s (SPEC-502, SPEC-804).
+	WriteTimeout time.Duration
+}
+
+// ICMPInfo is the ICMP state shown by /health. Error set and Mode
+// "unavailable" means no family works: /health then reports "degraded".
+type ICMPInfo struct {
+	Mode      string
+	Error     string // IPv4 problem, or why no mode works at all
+	IPv6Error string
 }
 
 type server struct {
@@ -46,6 +60,12 @@ type server struct {
 
 // New returns the API handler.
 func New(svc *inventory.Service, opts Options) http.Handler {
+	if opts.Keepalive <= 0 {
+		opts.Keepalive = 30 * time.Second
+	}
+	if opts.WriteTimeout <= 0 {
+		opts.WriteTimeout = 10 * time.Second
+	}
 	s := &server{svc: svc, opts: opts, log: opts.Logger}
 	if s.log == nil {
 		s.log = slog.Default()
@@ -118,8 +138,9 @@ func (s *server) health(w http.ResponseWriter, r *http.Request) {
 		h.RunID = s.opts.RunID
 		h.ICMPMode = apitypes.ICMPNotStarted
 		if s.opts.ICMP != nil {
-			h.ICMPMode, h.ICMPError = s.opts.ICMP()
-			if h.ICMPError != "" {
+			i := s.opts.ICMP()
+			h.ICMPMode, h.ICMPError, h.ICMP6Error = i.Mode, i.Error, i.IPv6Error
+			if i.Mode == apitypes.ICMPUnavailable {
 				h.Status = "degraded"
 			}
 		}

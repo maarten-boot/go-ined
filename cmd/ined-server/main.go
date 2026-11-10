@@ -49,13 +49,14 @@ func main() {
 // shutdownTimeout bounds the graceful shutdown (SPEC-804).
 const shutdownTimeout = 10 * time.Second
 
-// newProber finds the ICMP prober; tests replace it with a fake.
-var newProber = func() (monitor.Prober, string, error) {
+// newProber finds the ICMP prober; tests replace it with a fake. If the
+// prober is an io.Closer it is closed at shutdown, after the monitor.
+var newProber = func() (monitor.Prober, monitor.Status, error) {
 	p, err := monitor.NewICMPProber()
 	if err != nil {
-		return nil, "", err
+		return nil, monitor.Status{}, err
 	}
-	return p, p.Mode(), nil
+	return p, p.Status(), nil
 }
 
 // run starts the server and blocks until ctx is cancelled. ready, if not
@@ -122,30 +123,42 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 
 	// Monitoring (SPEC-304): without a working ICMP mode the server keeps
 	// running, hosts stay unknown and /health reports the error.
-	icmpMode, icmpErr := apitypes.ICMPUnavailable, ""
+	icmp := api.ICMPInfo{Mode: apitypes.ICMPUnavailable}
 	monCtx, monStop := context.WithCancel(context.Background())
 	defer monStop()
 	var monWG sync.WaitGroup
 	if !cfg.Monitor.Enabled {
-		icmpMode = apitypes.ICMPDisabled
+		icmp.Mode = apitypes.ICMPDisabled
 		log.Info("monitoring disabled by config (monitor.enabled = false)")
-	} else if prober, mode, err := newProber(); err != nil {
-		icmpErr = err.Error()
+	} else if prober, ps, err := newProber(); err != nil {
+		icmp.Error = err.Error()
 		log.Error("monitoring disabled", "err", err)
 	} else {
-		icmpMode = mode
-		log.Info("monitoring started", "icmp_mode", mode, "interval", cfg.Monitor.Interval)
+		icmp = api.ICMPInfo{Mode: ps.Mode, Error: ps.IPv4Error, IPv6Error: ps.IPv6Error}
+		log.Info("monitoring started", "icmp_mode", ps.Mode, "interval", cfg.Monitor.Interval)
+		if ps.IPv4Error != "" {
+			log.Warn("IPv4 hosts are not pinged", "err", ps.IPv4Error)
+		}
+		if ps.IPv6Error != "" {
+			log.Warn("IPv6 hosts are not pinged", "err", ps.IPv6Error)
+		}
 		mon := monitor.New(prober, svc, monitor.Config{
 			Interval: cfg.Monitor.Interval, Count: cfg.Monitor.Count,
 			Timeout: cfg.Monitor.Timeout, DownAfter: cfg.Monitor.DownAfter,
 		}, log)
 		monWG.Add(1)
-		go func() { defer monWG.Done(); mon.Run(monCtx) }()
+		go func() {
+			defer monWG.Done()
+			mon.Run(monCtx)
+			if c, ok := prober.(io.Closer); ok {
+				c.Close()
+			}
+		}()
 	}
 
 	handler := api.New(svc, api.Options{
 		Token: cfg.Server.Token, Version: version.Version, RunID: runID, DBPing: st.Ping, Logger: log,
-		Events: bus, ICMP: func() (string, string) { return icmpMode, icmpErr },
+		Events: bus, ICMP: func() api.ICMPInfo { return icmp },
 	})
 	srv := &http.Server{
 		Handler:           handler,

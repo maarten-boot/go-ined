@@ -357,7 +357,8 @@ func TestHealthDegraded(t *testing.T) {
 	}
 }
 
-// TC-304: /health reports the ICMP mode, and a missing mode as degraded.
+// TC-304, TC-313: /health reports the ICMP mode; no mode at all is
+// degraded, a missing IPv6 mode only adds icmp6_error.
 func TestHealthICMP(t *testing.T) {
 	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "x.db"))
 	if err != nil {
@@ -365,17 +366,22 @@ func TestHealthICMP(t *testing.T) {
 	}
 	defer st.Close()
 	svc, _ := inventory.NewService(context.Background(), st)
-	for _, tc := range []struct{ mode, err, status string }{
-		{apitypes.ICMPUnprivileged, "", "ok"},
-		{apitypes.ICMPUnavailable, "no ICMP mode available", "degraded"},
+	for _, tc := range []struct {
+		info   ICMPInfo
+		status string
+	}{
+		{ICMPInfo{Mode: apitypes.ICMPUnprivileged}, "ok"},
+		{ICMPInfo{Mode: apitypes.ICMPUnprivileged, IPv6Error: "udp6: no IPv6"}, "ok"},
+		{ICMPInfo{Mode: apitypes.ICMPDisabled}, "ok"},
+		{ICMPInfo{Mode: apitypes.ICMPUnavailable, Error: "no ICMP mode available"}, "degraded"},
 	} {
-		h := New(svc, Options{ICMP: func() (string, string) { return tc.mode, tc.err }})
+		h := New(svc, Options{ICMP: func() ICMPInfo { return tc.info }})
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", Prefix+"/health", nil))
 		var hv apitypes.Health
 		_ = json.Unmarshal(rec.Body.Bytes(), &hv)
-		if hv.Status != tc.status || hv.ICMPMode != tc.mode || hv.ICMPError != tc.err {
-			t.Errorf("%s: got %+v", tc.mode, hv)
+		if hv.Status != tc.status || hv.ICMPMode != tc.info.Mode || hv.ICMPError != tc.info.Error || hv.ICMP6Error != tc.info.IPv6Error {
+			t.Errorf("%+v: got %+v", tc.info, hv)
 		}
 	}
 }

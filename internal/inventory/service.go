@@ -328,8 +328,10 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 	setIf(&h.Note, p.Note, nil)
 	if p.Monitored.Set {
 		h.Monitored = p.Monitored.Value
-		if !h.Monitored {
-			h.Stale = false // SPEC-603: unmonitored hosts are never stale
+		if h.Monitored != cur.Monitored {
+			// SPEC-603: unmonitored hosts are never stale; a host whose
+			// monitoring is turned back on is stale until its next round.
+			h.Stale = h.Monitored
 		}
 	}
 	if p.ParentID.Set {

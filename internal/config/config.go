@@ -83,6 +83,8 @@ type Client struct {
 type ClientServer struct {
 	URL   string `toml:"url"`
 	Token string `toml:"token"`
+	// CACert is a PEM file with extra trusted certificates (v0.13).
+	CACert string `toml:"ca_cert"`
 }
 
 // GUI is the configuration of ined-gui.

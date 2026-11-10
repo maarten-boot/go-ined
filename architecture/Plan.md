@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.14** (2026-11-10)
+Status: **draft v0.15** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -31,6 +31,7 @@ internal/monitor/     ping scheduler and ICMP prober (behind an interface, so te
 internal/discovery/   CIDR expansion, discovery jobs, rate limiting
 internal/dnsname/     reverse-DNS resolver and refresh
 internal/events/      event bus and replay buffer
+internal/testserver/  real API server (fake prober) for client and CLI tests
 internal/api/         REST handlers and SSE
 internal/config/      TOML config and command-line flags
 internal/theme/       contrast math, presets, palettes (shared by any UI)
@@ -79,6 +80,9 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] `pkg/client` (SPEC-506), with Go `Example*` functions
 - [x] `inedctl`: subcommands, table or `--json` output, exit codes, `-version` (SPEC-901..903, 806)
 - [x] `server.ca_cert` / `--ca-cert` (SPEC-805); `internal/testserver` for client and CLI tests
+
+### Crosscheck 05 fixes ✅ (branch `fix/crosscheck-05`)
+- [x] Exit 130 on interrupt, relative `ca_cert`, empty flags override, raw JSON with `--wait`, RTT format, token-over-HTTP warning, `inedctl` examples (SPEC-506, 802, 805, 903)
 
 ### M4b: Views (design in `Design-views.md`, approved 2026-11-10)
 - [ ] Spec items and test cases for views and placements (V1–V6 as recommended); D1 becomes "at most one parent per view"

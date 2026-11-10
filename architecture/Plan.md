@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.13** (2026-11-10)
+Status: **draft v0.14** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -17,6 +17,7 @@ Status: **draft v0.13** (2026-11-10)
 | D10 | Networks are groups with an optional `cidr` (network groups). No link lines. Hosts can be moved out of their network group by hand. Nested network groups are checked to fit their parent's range | 2026-11-10 |
 | D11 | Go module path: `github.com/maarten-boot/go-ined` | 2026-11-10 |
 | D12 | ICMP: own small prober on `golang.org/x/net/icmp` (BSD-3), not `pro-bing` (Apache-2.0, would need a licence notice in binaries) | 2026-11-10 |
+| D13 | Views (one tab per view, per-view host placements, network view fixed as view 1) as milestone M4b before the GUI; integer ids. See `Design-views.md` | 2026-11-10 |
 
 ## Package layout
 ```
@@ -78,6 +79,13 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] `pkg/client` (SPEC-506), with Go `Example*` functions
 - [ ] `inedctl`: subcommands, table or `--json` output, exit codes, `-version` (SPEC-901..903, 806)
 
+### M4b: Views (design in `Design-views.md`, approved 2026-11-10)
+- [ ] Spec items and test cases for views and placements (V1–V6 as recommended); D1 becomes "at most one parent per view"
+- [ ] Migration 3 (`views`, `placements`, `groups.view_id`) with a tested upgrade from schema 2
+- [ ] `inventory` per view: aggregation, visibility, free positions, move/cycle checks; network rules only in view 1
+- [ ] API: `/views`, `GET /map?view=`, `PUT|DELETE /views/{id}/hosts/{host_id}`, `view.*` and `placement.*` events
+- [ ] `pkg/client` and `inedctl view …` additions
+
 ### M5: GUI, read-only
 - [ ] `internal/theme` contrast math and presets (SPEC-001..005)
 - [ ] `ined-gui -version` (SPEC-806)
@@ -93,6 +101,5 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] Update `Changes.md`, tag `v0.1.0`
 
 ## Open questions
-- **Views** (user idea, 2026-11-10): design proposal in `Design-views.md`; scope decision pending (recommended: M4 now, views as M4b before the GUI). Ids stay integers (decided).
 - Not yet decided: configurable `log/slog` level and format, OpenAPI-first or generated from the handlers (before M7), `inedctl backup`.
 - `staticcheck` / `govulncheck`: run in CI (M7), or locally once allowed.

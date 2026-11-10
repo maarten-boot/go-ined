@@ -1,6 +1,6 @@
 # Design note: views
 
-Status: **proposal**, 2026-11-10. Waiting for the user's decision on scope (§8) and on the open points (§3).
+Status: **approved**, 2026-11-10 (log item 30): scope option A (views are milestone M4b, after M4 and before the GUI); V1–V6 as recommended. The SPEC items and test cases are written at the start of M4b.
 Origin: the user's idea (log item 29): "a notebook where the default view is the CIDR view, but where the user can add new views and rearrange hosts into functional groups (for example, servers used by the same users in the company)".
 
 ## 1. Goal

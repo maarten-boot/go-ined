@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.13** (2026-11-10)
+Status: **draft v0.14** (2026-11-10)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -174,7 +174,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - Importing Tkined `.tki` map files.
 - Free-floating text labels on the map, like Tkined's text objects.
 - A drill-down view that opens a single group on its own.
-- Host references, so one host can appear in several groups (for example its subnet and a functional group, or a router on several networks). **Proposed to be covered by views**, see `Design-views.md` (v0.13).
+- Host references, so one host can appear in several groups (for example its subnet and a functional group, or a router on several networks). **Covered by views** (milestone M4b, `Design-views.md`, approved in v0.14); SPEC items follow at the start of M4b.
 - A topology view with link lines.
 - Notes as a log with dates and authors.
 - mTLS, multiple users, read-only roles.

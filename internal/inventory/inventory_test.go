@@ -21,8 +21,8 @@ type memRepo struct {
 	nextHost   int64
 	nextGroup  int64
 	nextView   int64
-	fail      error
-	applies   int // successful Apply calls
+	fail       error
+	applies    int // successful Apply calls
 }
 
 func newMemRepo() *memRepo {

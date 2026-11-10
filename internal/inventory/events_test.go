@@ -25,6 +25,12 @@ func (r *recorder) Publish(typ string, data any) {
 		r.log = append(r.log, fmt.Sprintf("%s %d", typ, d.ID))
 	case apitypes.GroupStatusEvent:
 		r.log = append(r.log, fmt.Sprintf("%s %d %s", typ, d.ID, d.Status))
+	case apitypes.View:
+		r.log = append(r.log, fmt.Sprintf("%s %d %s", typ, d.ID, d.Name))
+	case apitypes.Placement:
+		r.log = append(r.log, fmt.Sprintf("%s %d/%d", typ, d.ViewID, d.HostID))
+	case apitypes.PlacementDeletedEvent:
+		r.log = append(r.log, fmt.Sprintf("%s %d/%d", typ, d.ViewID, d.HostID))
 	default:
 		r.log = append(r.log, fmt.Sprintf("%s %T", typ, data))
 	}

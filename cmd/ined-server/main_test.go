@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -413,4 +414,43 @@ func selfSigned(t *testing.T) (certPEM, keyPEM []byte) {
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
 		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: kb})
+}
+
+// countingResolver counts lookups and knows no names.
+type countingResolver struct{ n atomic.Int64 }
+
+func (r *countingResolver) LookupAddr(context.Context, string) ([]string, error) {
+	r.n.Add(1)
+	return nil, &net.DNSError{Err: "no such host", IsNotFound: true}
+}
+
+func useResolver(t *testing.T, r dnsname.Resolver) {
+	old := newResolver
+	newResolver = func() dnsname.Resolver { return r }
+	t.Cleanup(func() { newResolver = old })
+}
+
+// TC-407: dns.enabled = false makes no lookups; by default a new host is
+// looked up.
+func TestDNSEnabled(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "s.toml")
+		if err := os.WriteFile(cfg, []byte(fmt.Sprintf("[dns]\nenabled = %v\n", enabled)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		r := &countingResolver{}
+		useResolver(t, r)
+		addr, stop, _ := startServer(t, "-config", cfg, "-listen", "127.0.0.1:0", "-db", filepath.Join(dir, "x.db"))
+		resp, err := http.Post("http://"+addr+"/api/v1/hosts", "application/json", strings.NewReader(`{"ip":"192.0.2.7"}`))
+		if err != nil || resp.StatusCode != 201 {
+			t.Fatalf("create: %v %v", err, resp)
+		}
+		resp.Body.Close()
+		time.Sleep(1500 * time.Millisecond) // past the refresher's host-list sync
+		stop()
+		if got := r.n.Load() > 0; got != enabled {
+			t.Errorf("dns.enabled = %v: %d lookups", enabled, r.n.Load())
+		}
+	}
 }

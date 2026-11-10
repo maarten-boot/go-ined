@@ -1,13 +1,41 @@
 # Test cases — go-ined
 
 Each test traces to one or more Spec IDs. Status: `planned` / `implemented` / `passing` / `failing`.
+Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fake ICMP), **M** = manual.
 
-| ID | Spec | Description | Go test | Status |
-|----|------|-------------|---------|--------|
-| TC-001 | SPEC-001 | Default theme is white background (#FFFFFF) / black text (#000000) | _TBD_ | planned |
-| TC-002 | SPEC-002 | Every colour pair in every theme has contrast ≥ 4.5:1 (table-driven over all pairs) | _TBD_ | planned |
-| TC-003 | SPEC-003 | Each preset enforces its minimum: AA 4.5, AAA 7, Max = 21 exactly | _TBD_ | planned |
-| TC-004 | SPEC-003 | `custom` ratio < 4.5 or > 21 is rejected with an error | _TBD_ | planned |
-| TC-005 | SPEC-004 | Interactive preset change updates all rendered colour pairs | _TBD_ | planned |
-| TC-006 | SPEC-005 | Config file preset is loaded at startup; invalid value falls back to AA with a warning | _TBD_ | planned |
-| TC-007 | SPEC-006 | Lint: every `uses:` in `.github/workflows/*.yml` references a 40-hex-char SHA with a version comment | _TBD_ | planned |
+| ID | Spec | Lvl | Description | Status |
+|----|------|-----|-------------|--------|
+| TC-001 | SPEC-001 | U | The default theme is #FFFFFF background with #000000 text | planned |
+| TC-002 | SPEC-002, 709 | U | Every colour pair in every palette and preset has contrast ≥ 4.5:1 (table-driven) | planned |
+| TC-003 | SPEC-003 | U | Each preset meets its minimum: AA 4.5, AAA 7, Max = 21 | planned |
+| TC-004 | SPEC-003 | U | A custom ratio below 4.5 or above 21 is rejected | planned |
+| TC-005 | SPEC-004, 709 | M | Changing the preset in the GUI recolours every visible element | planned |
+| TC-006 | SPEC-005 | U | The preset is loaded from the config file. An invalid value falls back to AA with a warning | planned |
+| TC-007 | SPEC-006 | U | Every `uses:` in the workflows points to a 40-character hex SHA and has a version comment | planned |
+| TC-101 | SPEC-101, 107 | I | Adding a host with a duplicate IP address fails with 409 | planned |
+| TC-102 | SPEC-102 | U | An item has at most one parent. Moving it changes the parent | planned |
+| TC-103 | SPEC-103 | U | Moving a group into itself or into one of its subgroups is rejected | planned |
+| TC-104 | SPEC-104 | I | Deleting a non-empty group without `children=` → 409. `reparent` and `cascade` behave as specified | planned |
+| TC-105 | SPEC-105, 306 | U | Group status aggregation: table of mixes of down/unknown/up/unmonitored hosts, nested groups, empty group | planned |
+| TC-106 | SPEC-106 | I | A new item gets a free position. PATCH x/y saves the position | planned |
+| TC-201 | SPEC-201, 202 | U | CIDR expansion: /24 gives 254 addresses, /31 gives 2, /32 gives 1 | planned |
+| TC-202 | SPEC-203 | U | A range larger than the maximum is rejected. The rate limiter respects the probes-per-second setting | planned |
+| TC-203 | SPEC-204 | I | Discovery with a fake prober adds the responders. An existing IP is neither duplicated nor moved | planned |
+| TC-204 | SPEC-205 | I | A discovery job reports progress events and can be cancelled (state ends as `cancelled`) | planned |
+| TC-301 | SPEC-302 | U | Status rules: 1 reply of 3 → up; down only after 2 failed rounds in a row; unknown before the first round | planned |
+| TC-302 | SPEC-301 | U | Ping start times are spread across the interval | planned |
+| TC-303 | SPEC-303 | U | Average round-trip time, loss, `last_seen` and `last_change` are computed correctly | planned |
+| TC-304 | SPEC-304 | I | If neither ICMP mode is available, `/health` reports the error and hosts stay `unknown` | planned |
+| TC-305 | SPEC-305 | I | A host status change emits `host.status`, plus `group.status` for each ancestor group whose status changed | planned |
+| TC-401 | SPEC-402 | U | Display name priority: manual name, then PTR name (trailing dot stripped), then IP address | planned |
+| TC-402 | SPEC-403 | U | A temporary DNS error keeps the old name. NXDOMAIN clears it | planned |
+| TC-501 | SPEC-501, 504 | I | CRUD round trip for hosts and groups. Errors have the specified JSON shape | planned |
+| TC-502 | SPEC-502, 503 | I | SSE: events arrive in order. Reconnecting with Last-Event-ID replays missed events; an ID that is too old gets `resync` | planned |
+| TC-503 | SPEC-506 | I | `pkg/client` works against a test server for all endpoints and the event stream | planned |
+| TC-601 | SPEC-602 | I | Migrations run on a fresh database and on a database at an older schema version | planned |
+| TC-602 | SPEC-603 | I | After a restart, the last known status is served and marked stale | planned |
+| TC-801 | SPEC-801, 802 | I | A non-loopback listener without a token refuses to start. A wrong or missing token gets 401 | planned |
+| TC-802 | SPEC-804 | I | SIGTERM closes SSE streams and the database cleanly | planned |
+| TC-701 | SPEC-702 | U | Every status has a distinct shape and text label (not only a colour) | planned |
+| TC-702 | SPEC-703, 704, 706, 707 | M | GUI manual script: navigate, drag, drop into a group, manage groups and hosts, run discovery | planned |
+| TC-703 | SPEC-705 | I | After the server restarts, the GUI client reconnects and resyncs | planned |

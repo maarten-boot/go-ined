@@ -25,3 +25,5 @@
    - Split the current single app into two parts. The inventory/monitor is a database service with a network API (ideas: 9P, ZMQ for alerts, maybe REST). The GUI is a separate client that shows host and group status.
    - User asked to discuss options before building.
    **Claude** proposed spelling fixes and laid out options: API (9P / REST+SSE / gRPC / ZMQ), storage, ICMP privileges, group model, GUI toolkit, layout storage, security. Waiting for the user's choices.
+6. **User** chose: groups as a tree, REST + SSE first, SQLite, Fyne GUI.
+   **Claude** wrote Spec v0.2 (SPEC-001..804), Plan v0.2 (decisions D1–D6, package layout, milestones M1–M7) and Tests.md (TC-001..802). Assumed defaults to confirm: A1 ≤ 5k hosts, A2 discovery sweeps IPv4 only, A3 loopback by default + token otherwise, A4 TOML config, A5 no status history in v0.1, D5 positions stored on the server, D6 no .tki import. Module path still open.

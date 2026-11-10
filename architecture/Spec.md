@@ -1,13 +1,13 @@
 # Spec — go-ined
 
-Status: **draft v0.2** (2026-11-10)
+Status: **draft v0.3** (2026-11-10)
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
 
 ## 1. Purpose
 go-ined is a network monitor loosely modelled on Tkined (Scotty). It splits Tkined's single app into:
 - **`ined-server`**: a daemon that holds the inventory (SQLite), discovers hosts in CIDR ranges, pings them in the background, does reverse DNS lookups, and serves a REST + SSE API.
-- **`ined-gui`**: a Fyne desktop client that shows hosts and groups as icons with live status.
+- **`ined-gui`**: a Fyne desktop client that shows hosts, networks and groups on one shared map with live status. Groups can be collapsed and expanded, as in Tkined.
 - **`inedctl`**: a command-line client for scripting and testing.
 
 ## 2. Assumptions (confirm or correct)
@@ -30,16 +30,22 @@ go-ined is a network monitor loosely modelled on Tkined (Scotty). It splits Tkin
 - **SPEC-006** MUST: Every CI action (GitHub Actions or similar) is pinned to a full 40-character commit SHA, with the version in a trailing comment, using the latest workable release. Any exception has its reason documented inline.
 
 ## 4. Inventory and data model
-- **SPEC-101** MUST: A **host** has an id, a unique IP address, a PTR name, an optional manual name, a description, an optional parent group, a monitored flag (default on), a status, and created/updated timestamps.
-- **SPEC-102** MUST: A **group** has an id, a name, a description, and an optional parent group. Hosts and groups form a **tree**: each item has at most one parent, and an item with no parent sits at the root.
+There are three kinds of **items**: host, network and group. Items form a tree, and all items share one map.
+
+- **SPEC-101** MUST: A **host** has an id, a unique IP address, a PTR name, an optional manual name, a description, a note, an optional parent group, a monitored flag (default on), a status, and created/updated timestamps.
+- **SPEC-102** MUST: A **group** has an id, a name, a description, a note, an optional parent group, and a `collapsed` flag. Hosts, networks and groups form a **tree**: each item has at most one parent, and an item with no parent sits at the root.
 - **SPEC-103** MUST: Moving a group into itself or into one of its own subgroups is rejected (no cycles).
 - **SPEC-104** MUST: Deleting a non-empty group is rejected unless the request says what to do with its children: `reparent` (move them to the group's parent) or `cascade` (delete them as well).
-- **SPEC-105** MUST: A host's status is one of `up`, `down` or `unknown`. A group's status is the worst status among all monitored hosts below it, in the order `down` > `unknown` > `up`. A group with no monitored hosts below it is `unknown`.
-- **SPEC-106** MUST: Every host and group stores an (x, y) position in the view of its parent group, or of the root view if it has none. A new item gets a free position automatically.
+- **SPEC-105** MUST: A host's status is one of `up`, `down` or `unknown`. A group's status is the worst status among all monitored hosts in its subtree, in the order `down` > `unknown` > `up`. A group with no monitored hosts in its subtree is `unknown`. Networks don't count towards group status, so no host is counted twice.
+- **SPEC-106** MUST: Every item has (x, y) coordinates on the single shared map. A new item gets a free position near its parent, or near its network if it was found by a discovery scan.
 - **SPEC-107** MUST: A host can be added by hand by giving its IP address (IPv4 or IPv6).
-
+- **SPEC-108** MUST: A **network** has an id, a name, a unique CIDR (IPv4 or IPv6), a description, a note, an optional parent group, an (x, y) position and a bar `length`.
+- **SPEC-109** MUST: A host is **linked** to the most specific network whose CIDR contains the host's IP address (longest-prefix match). Links are computed, not stored, so they update automatically when hosts or networks are added, changed or removed. A host can be linked to at most one network.
+- **SPEC-110** MUST: A network's status is the worst status among its linked monitored hosts, following the same rules as SPEC-105.
+- **SPEC-111** MUST: Every host, group and network has one plain-text **note**. It is optional, empty by default, and at most 64 KiB.
+- **SPEC-112** MUST: A group's `collapsed` flag is stored on the server and shared by all clients. New groups start collapsed. An item is **visible** on the map only if none of the groups above it is collapsed.
 ## 5. Discovery
-- **SPEC-201** MUST: A discovery job takes an IPv4 CIDR range and an optional target group, and probes every address in the range with ICMP echo.
+- **SPEC-201** MUST: A discovery job takes either an IPv4 CIDR range or the id of an IPv4 network, plus an optional target group, and probes every address in the range with ICMP echo. When a network is given, its parent group is the default target group. When a CIDR range is given and no network with that range exists yet, one is created.
 - **SPEC-202** MUST: For prefixes /30 and shorter, the network and broadcast addresses are skipped. For /31 and /32, every address is probed.
 - **SPEC-203** MUST: The largest allowed range (default /16), the probe rate (default 200 probes/s) and the concurrency are configurable. A range larger than the maximum is rejected.
 - **SPEC-204** MUST: A host that responds is added to the inventory, in the target group if one was given. An IP address that is already in the inventory is not added twice, and that host is not moved.
@@ -62,11 +68,12 @@ go-ined is a network monitor loosely modelled on Tkined (Scotty). It splits Tkin
 - **SPEC-501** MUST: The JSON REST API lives under `/api/v1`:
   - `GET/POST /hosts`, `GET/PATCH/DELETE /hosts/{id}`
   - `GET/POST /groups`, `GET/PATCH/DELETE /groups/{id}?children=reparent|cascade`
-  - `GET /groups/{id}/children`, `GET /root/children`: the items in a view, with status and position
+  - `GET/POST /networks`, `GET/PATCH/DELETE /networks/{id}`
+  - `GET /map`: every item with its type, parent, position, `collapsed` flag, status, display name, `has_note` flag and network link. A client builds the map from this one response.
   - `POST /discovery`, `GET /discovery/{id}`, `DELETE /discovery/{id}` (cancel)
   - `GET /health`: version, ICMP mode, database status
-  - Moving or repositioning an item is done with `PATCH` on `parent_id` and `x` / `y`.
-- **SPEC-502** MUST: `GET /api/v1/events` is a Server-Sent Events (SSE) stream. Event types: `host.created|updated|deleted|status`, `group.created|updated|deleted|status`, `discovery.progress|done`. Every event has an increasing `id`.
+  - Moving, repositioning, collapsing, expanding and editing notes are all done with `PATCH` on `parent_id`, `x` / `y`, `collapsed` or `note`.
+- **SPEC-502** MUST: `GET /api/v1/events` is a Server-Sent Events (SSE) stream. Event types: `host.created|updated|deleted|status`, `group.created|updated|deleted|status`, `network.created|updated|deleted|status`, `discovery.progress|done`. Every event has an increasing `id`.
 - **SPEC-503** MUST: The server keeps a buffer of the most recent events (default 1,000). A client that reconnects with `Last-Event-ID` gets the events it missed. If those events are no longer in the buffer, it gets a `resync` event, which tells it to reload the full state.
 - **SPEC-504** MUST: Errors use the right HTTP status code with the body `{"error":{"code":"…","message":"…"}}`.
 - **SPEC-505** SHOULD: The server serves an OpenAPI document at `/api/v1/openapi.json`.
@@ -79,14 +86,17 @@ go-ined is a network monitor loosely modelled on Tkined (Scotty). It splits Tkin
 
 ## 10. GUI (Fyne)
 - **SPEC-701** MUST: `ined-gui` connects to a server URL (and token) given in its config file or by command-line flags.
-- **SPEC-702** MUST: The GUI shows one view at a time: the root, or a single group. Each item in the view is an icon at its stored position, labelled with its display name. Status is shown by **colour plus shape plus text** (for example: up = ● "up", down = ✕ "down", unknown = ? "unknown"), never by colour alone.
-- **SPEC-703** MUST: Double-clicking a group icon opens that group. A breadcrumb and an "up" action go back to the parent.
-- **SPEC-704** MUST: The user can drag an icon to reposition it, and the new position is saved on the server. Dropping an icon onto a group icon moves the item into that group.
+- **SPEC-702** MUST: The GUI shows **one shared map** with every visible item at its stored position (SPEC-112). Hosts and collapsed groups are icons labelled with their display name. Networks are horizontal bars labelled with their name and CIDR. Status is shown by **colour plus shape plus text** (for example: up = ● "up", down = ✕ "down", unknown = ? "unknown"), never by colour alone.
+- **SPEC-703** MUST: A **collapsed** group is one icon showing the group's status. An **expanded** group is a labelled frame around its visible members, with the group's name and status. Double-clicking a collapsed group icon expands it. Double-clicking an expanded group's frame label collapses it. Both actions are also in the context menu, and the change is saved on the server.
+- **SPEC-704** MUST: The user can drag hosts, networks, collapsed groups and expanded group frames. Dragging an expanded frame moves all its members with it. New positions are saved on the server. Dropping an item onto a collapsed group icon or an expanded frame label moves it into that group. A context menu action "Move to group…" does the same.
 - **SPEC-705** MUST: The GUI updates live from SSE events. It reconnects automatically and shows the connection state.
-- **SPEC-706** MUST: From the GUI, the user can create, rename and delete groups, and add, edit and delete hosts.
-- **SPEC-707** MUST: A discovery dialog takes a CIDR range and a target group, then shows the job's progress and lets the user cancel it.
-- **SPEC-708** MUST: A host details panel shows the host's IP address, PTR name, manual name, status, round-trip time, packet loss, `last_seen` and `last_change`.
+- **SPEC-706** MUST: From the GUI, the user can create, rename and delete groups, networks and hosts.
+- **SPEC-707** MUST: A discovery dialog takes a CIDR range or a network, plus a target group. It shows the job's progress and lets the user cancel it. "Scan this network" is available from a network's context menu.
+- **SPEC-708** MUST: A details panel shows every field of the selected host, group or network: for a host, its IP address, PTR name, manual name, status, round-trip time, packet loss, `last_seen` and `last_change`. The panel includes an editable **note**.
 - **SPEC-709** MUST: SPEC-001 to SPEC-005 apply to the GUI. A contrast preset selector is available in the GUI.
+- **SPEC-710** MUST: A line links each visible host to its network bar, when the bar is visible. A host inside a collapsed group is linked through the group icon instead, with one line per network.
+- **SPEC-711** SHOULD: An item that has a note shows a small note marker. The marker is a shape, not a colour.
+- **SPEC-712** SHOULD: A collapsed group's icon shows its host counts, for example `3 down · 1 ? · 40 up`.
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.
@@ -100,4 +110,8 @@ go-ined is a network monitor loosely modelled on Tkined (Scotty). It splits Tkin
 - TCP-port probes for hosts that block ICMP, and ARP discovery.
 - Status history and graphs.
 - Importing Tkined `.tki` map files.
+- Free-floating text labels on the map, like Tkined's text objects.
+- A drill-down view that opens a single group on its own.
+- Manual host-to-network links and multiple networks per host.
+- Notes as a log with dates and authors.
 - mTLS, multiple users, read-only roles.

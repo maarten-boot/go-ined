@@ -29,3 +29,6 @@
    **Claude** wrote Spec v0.2 (SPEC-001..804), Plan v0.2 (decisions D1–D6, package layout, milestones M1–M7) and Tests.md (TC-001..802). Assumed defaults to confirm: A1 ≤ 5k hosts, A2 discovery sweeps IPv4 only, A3 loopback by default + token otherwise, A4 TOML config, A5 no status history in v0.1, D5 positions stored on the server, D6 no .tki import. Module path still open.
 7. **User** asked for notes on hosts, groups and probably networks (like Tkined), and for groups that collapse (members hidden) and expand (members shown), like Tkined.
    **Claude** proposed spelling fixes. Raised three things: what a "network" object is, what form notes take, and that in-place expand/collapse conflicts with the drill-down navigation in SPEC-106/703. Waiting for the user's confirmation.
+8. **User**: "OK, defaults".
+   **Decisions:** D7 network objects (CIDR, bar, links to hosts by longest prefix), D8 one plain-text note per item, D9 one shared map where groups collapse into an icon or expand into a frame, no drill-down view; the collapsed/expanded state is stored on the server.
+   **Claude** updated Spec to v0.3 (changed SPEC-101/102/105/106/201/501/502/702–708; added SPEC-108–112 and 710–712), Plan to v0.3, and Tests (TC-107–112, 205, 504, 704–706).

@@ -64,7 +64,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-305** MUST: When a host's status changes, the server emits a `host.status` event. Whenever a group's computed status changes, for any cause (a host status change, a move, an add, a delete, or a change to `monitored`), the server emits `group.status` for that group.
 - **SPEC-306** MUST: A host with monitoring turned off (`monitored = false`) is not pinged and is left out of group status.
 - **SPEC-307** MUST (v0.8): `host.status` is emitted only when a host's status changes or its `stale` flag clears. Changes to round-trip time or loss alone are saved but emit no event. Ping results are written to the database in batches, one transaction about every second.
-- **SPEC-308** MUST (v0.9): When a host's IP address changes, its status is reset to `unknown`, its round-trip time and loss are cleared, `last_change` is set, and `host.status` is emitted after `host.updated`. The ping streak starts over.
+- **SPEC-308** MUST (v0.9): When a host's IP address changes, its status is reset to `unknown`, its round-trip time and loss are cleared, `last_change` is set if the status changed, and `host.status` is emitted after `host.updated`. The ping streak starts over.
 
 ## 7. Reverse DNS
 - **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20).

@@ -26,7 +26,7 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-109 | SPEC-114 | U | Nested network groups: a /24 inside a /16 that contains it → OK; outside it → rejected on create, move and CIDR change; an ordinary group in between is skipped when checking; hosts can move anywhere | inventory: TestNesting, TestNestingMessage; api: TestTreeRulesAPI | passing |
 | TC-110 | SPEC-111 | I | Notes on a host and a group: set, read and clear through PATCH. A note over 64 KiB fails with 413 `too_large` | inventory: TestNotes; api: TestPersistence | passing |
 | TC-111 | SPEC-112 | U | Visibility: an item under any collapsed group is hidden; nested expand/collapse combinations (table-driven). New groups start collapsed | inventory: TestVisibility | passing |
-| TC-112 | SPEC-112, 502 | I | PATCH `collapsed` is saved, emits `group.updated`, and a second client sees the change | api: TestPersistence | partial: saving passes; event part in M2 |
+| TC-112 | SPEC-112, 502 | I | PATCH `collapsed` is saved, emits `group.updated`, and a second client sees the change | inventory: TestCollapsedEvent; api: TestPersistence, TestEventsStream | passing |
 | TC-113 | SPEC-116 | U | Ids are never reused: delete the highest host and group id, restart, create new ones | inventory: TestIDsNeverReused; store: TestSequences, TestMigration2Seeds | passing |
 | TC-201 | SPEC-201, 202 | U | CIDR expansion: /24 gives 254 addresses, /31 gives 2, /32 gives 1 | — | planned |
 | TC-202 | SPEC-203 | U | A range larger than the maximum is rejected. The rate limiter respects the probes-per-second setting | — | planned |
@@ -36,27 +36,27 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-206 | SPEC-115 | U | `outside_cidr` is set for a host moved into a network group whose range doesn't contain its IP, and cleared when it moves back | inventory: TestOutsideCIDR | passing |
 | TC-207 | SPEC-201 | I | Discovery with an IPv6 range or an IPv6 network group id → 400 `invalid_argument` | — | planned |
 | TC-208 | SPEC-201, 114 | I | Discovery of 192.168.1.0/24 with target group 10.0.0.0/8 → 409 before the job starts; no group or host is created | — | planned |
-| TC-301 | SPEC-302 | U | Status rules: 1 reply of 3 → up; down only after 2 failed rounds in a row; unknown before the first round | — | planned |
-| TC-302 | SPEC-301 | U | Ping start times are spread across the interval | — | planned |
-| TC-303 | SPEC-303 | U | Average round-trip time, loss, `last_seen` and `last_change` are computed correctly | — | planned |
-| TC-304 | SPEC-304 | I | If neither ICMP mode is available, `/health` reports the error and hosts stay `unknown` | — | planned |
-| TC-305 | SPEC-305 | I | `host.status` on a host status change. `group.status` for every group whose computed status changes, caused by a host status change, a move, an add, a delete, or a change to `monitored` | — | planned |
-| TC-307 | SPEC-306 | U | A host with `monitored = false` is never handed to the prober; turning it back on schedules it | — | planned |
-| TC-308 | SPEC-307 | U | `host.status` only on a status change or when `stale` clears; a round-trip-time change alone emits nothing but is saved; results are saved in batches | — | planned |
-| TC-309 | SPEC-304 | I | The real prober finds a working mode (unprivileged or raw) and gets a reply from 127.0.0.1 and ::1 (skipped when no ICMP mode is available) | — | planned |
+| TC-301 | SPEC-302 | U | Status rules: 1 reply of 3 → up; down only after 2 failed rounds in a row; unknown before the first round | monitor: TestNextStatus, TestObservations | passing |
+| TC-302 | SPEC-301 | U | Ping start times are spread across the interval | monitor: TestSpread | passing |
+| TC-303 | SPEC-303 | U | Average round-trip time, loss, `last_seen` and `last_change` are computed correctly | monitor: TestSummarize; inventory: TestApplyObservations; ined-server: TestMonitoringPersistsAndStale | passing |
+| TC-304 | SPEC-304 | I | If neither ICMP mode is available, `/health` reports the error and hosts stay `unknown` | api: TestHealthICMP; ined-server: TestNoICMP | passing |
+| TC-305 | SPEC-305 | I | `host.status` on a host status change. `group.status` for every group whose computed status changes, caused by a host status change, a move, an add, a delete, or a change to `monitored` | inventory: TestStatusEvents | passing |
+| TC-307 | SPEC-306 | U | A host with `monitored = false` is never handed to the prober; turning it back on schedules it | monitor: TestUnmonitoredNotPinged; inventory: TestMonitorTargets | passing |
+| TC-308 | SPEC-307 | U | `host.status` only on a status change or when `stale` clears; a round-trip-time change alone emits nothing but is saved; results are saved in batches | inventory: TestApplyObservations; monitor: TestObservations | passing |
+| TC-309 | SPEC-304 | I | The real prober finds a working mode (unprivileged or raw) and gets a reply from 127.0.0.1 and ::1 (skipped when no ICMP mode is available) | monitor: TestICMPLoopback, TestICMPCancel | passing (unprivileged mode; raw mode not exercised on this machine) |
 | TC-401 | SPEC-402 | U | Display name priority: manual name, then PTR name (trailing dot stripped), then IP address | inventory: TestDisplayName | passing |
 | TC-402 | SPEC-403 | U | A temporary DNS error keeps the old name. NXDOMAIN clears it | — | planned |
 | TC-403 | SPEC-401 | U | With a fake resolver and clock: a lookup when a host is added, and a refresh after `dns.refresh` | — | planned |
 | TC-404 | SPEC-401 | U | No more than `dns.concurrency` lookups run at the same time | — | planned |
 | TC-501 | SPEC-501, 504 | I | CRUD round trip for hosts and groups (with and without `cidr`). Every error case returns the HTTP status and `code` from the SPEC-504 table | api: TestCRUD, TestRequestErrors | passing |
-| TC-502 | SPEC-502, 503 | I | SSE: events arrive in order. Reconnecting with Last-Event-ID replays missed events; an id that has dropped out of the buffer gets `resync` | — | planned |
+| TC-502 | SPEC-502, 503 | I | SSE: events arrive in order. Reconnecting with Last-Event-ID replays missed events; an id that has dropped out of the buffer gets `resync` | events: TestReplay, TestResync; api: TestEventsStream, TestEventsReplayAndResync | passing |
 | TC-503 | SPEC-506 | I | `pkg/client` works against a test server for all endpoints and the event stream | — | planned |
 | TC-504 | SPEC-501 | I | `GET /map` returns every item with its type, parent, position, collapsed flag, `cidr`, status, `stale`, `has_note` and `outside_cidr` | api: TestMap | passing |
 | TC-505 | SPEC-505 | I | `/api/v1/openapi.json` is valid OpenAPI 3 and lists every route the server registers | — | planned |
-| TC-506 | SPEC-503 | I | Event ids have the form `<run>-<seq>`. After a restart, a `Last-Event-ID` from the previous run gets `resync` | — | planned |
-| TC-507 | SPEC-502 | I | Event payloads: full object on created/updated/host.status, `{id}` on deleted (one per item on cascade), `{id,status}` on group.status. A client that falls behind gets `resync` and the stream ends | — | planned |
+| TC-506 | SPEC-503 | I | Event ids have the form `<run>-<seq>`. After a restart, a `Last-Event-ID` from the previous run gets `resync` | events: TestEventIDs, TestResync; api: TestEventsReplayAndResync | passing |
+| TC-507 | SPEC-502 | I | Event payloads: full object on created/updated/host.status, `{id}` on deleted (one per item on cascade), `{id,status}` on group.status. A client that falls behind gets `resync` and the stream ends | events: TestLaggedSubscriber; inventory: TestDeleteEvents; api: TestEventsStream, TestEventsLagged | passing |
 | TC-601 | SPEC-602 | I | Migrations run on a fresh database and on a database at an older schema version | store: TestMigrateFresh, TestMigrateFromOlder, TestMigrateFailureRollsBack, TestMigration2Seeds | passing |
-| TC-602 | SPEC-603 | I | After a restart, the last known status is served with `stale = true`. The flag clears after the first ping round, and the status value doesn't change because of the flag | inventory: TestStaleOnLoad; api: TestPersistence | partial: stale after restart passes; clearing after a ping round in M2 |
+| TC-602 | SPEC-603 | I | After a restart, the last known status is served with `stale = true`. The flag clears after the first ping round, and the status value doesn't change because of the flag | inventory: TestStaleOnLoad, TestStaleClears; api: TestPersistence; ined-server: TestMonitoringPersistsAndStale | passing |
 | TC-603 | SPEC-601, 805 | I | The database is created at `storage.db_path` (also with `?`, `#`, `%`, spaces or a relative path), or at the XDG default when the path is empty | store: TestMigrateFresh, TestSpecialCharacterPaths; config: TestXDGPaths; ined-server: TestDefaultDBPath | passing |
 | TC-604 | SPEC-604 | I | A second store or server on the same database is refused at once; the first keeps working; the lock is released on close | store: TestExclusiveLock; ined-server: TestSecondServerRefused | passing |
 | TC-605 | SPEC-605 | U | Orphans move to the root (saved, one warning each, not repeated); a cycle refuses to load | inventory: TestRepairOnLoad | passing |
@@ -70,7 +70,7 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-708 | SPEC-713 | U+M | U: converting between screen and map coordinates gives the same result back at 10 %, 100 % and 400 % zoom. M: pan, zoom and "fit all" with 5,000 generated hosts stay responsive | — | planned |
 | TC-709 | SPEC-714 | U | Find host matches display name, PTR name and IP address substrings, and returns the groups that must be expanded | — | planned |
 | TC-801 | SPEC-801, 802 | I | A non-loopback listener without a token refuses to start. A wrong or missing token gets 401 | config: TestListenSecurity; ined-server: TestRefuseNonLoopbackWithoutToken; api: TestAuthAndHealth | passing |
-| TC-802 | SPEC-804 | I | SIGTERM closes SSE streams and the database cleanly | ined-server: TestCleanShutdown | partial: DB and listener pass; closing SSE streams in M2 |
+| TC-802 | SPEC-804 | I | SIGTERM closes SSE streams and the database cleanly | ined-server: TestCleanShutdown; events: TestClose; api: TestEventsClosedAtShutdown; monitor: TestStopSavesPending | passing |
 | TC-803 | SPEC-803 | I | With `tls_cert` and `tls_key` set, the server serves HTTPS and the client connects with the test CA | ined-server: TestTLS | passing |
 | TC-804 | SPEC-805 | U | Config precedence (flag, then environment, then file, then default) and XDG path fallbacks when the variables are unset | config: TestServerFileOverridesDefaults, TestMissingFiles, TestXDGPaths, TestClientEnvOverridesFile | passing |
 | TC-805 | SPEC-805 | U | Each file in `examples/*.toml` parses, has no unknown keys, and every value equals the built-in default (keeps the examples and the code in sync) | config: TestExamplesMatchDefaults, TestUnknownKeysRejected | passing |

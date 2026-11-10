@@ -14,6 +14,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - README, MIT licence, Makefile, `scripts/gen-api-examples.sh`, `architecture/API-examples.md`.
 - Server takes an exclusive database lock; a second server on the same database refuses to start.
 - Host and group ids are never reused (database migration 2).
+- Background ping of every monitored host (ICMP and ICMPv6): unprivileged sockets first, raw sockets as fallback; start times spread across the interval; up/down/unknown status with `down_after`; round-trip time, loss, `last_seen` and `last_change` saved to the database.
+- Live event stream `GET /api/v1/events` (Server-Sent Events) with replay after reconnect (`Last-Event-ID`), `resync`, and keepalive comments.
+- `/health` reports the ICMP mode and, if ping is unavailable, the reason (`icmp_error`, status `degraded`).
+- New error code `unavailable` (503) while the server shuts down.
 
 ### Fixed
 - Database paths containing `?`, `#` or `%` opened the wrong file.

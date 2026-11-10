@@ -43,3 +43,26 @@
     **Claude** ran crosscheck `Crosscheck-2026-11-10-01.md`: there is no code yet, so only the docs were checked against each other. Found 23 items (3 H, 10 M, 8 L, plus 2 informational). The main ones: no pan/zoom or search for 5,000 hosts, event ids across server restarts, `stale` undefined, `inedctl` without Spec items, and missing tests. All fixes are proposed and waiting for the user's OK.
 13. **User**: apply all crosscheck fixes. The repo is public and has been created at github.com/maarten-boot/go-ined. Claude has no write access, so it suggests write commands for the user to run. Merge docs into main. Verify the commits use the GitHub noreply email.
     **Claude** checked all commits: author and committer use `11140490+maarten-boot@users.noreply.github.com`. Pinned it in the repo-local config. Applied all fixes (Spec v0.5, Plan v0.5, Tests: 66 TCs, `examples/*.toml`). Updated `CLAUDE.md` with the branch, email and push rules. Merged `docs/architecture` into `main`, added the `origin` remote, and gave the user the push commands.
+14. **User**: start M1.
+    **Claude** built M1 on `feature/m1-server-core`:
+    - `internal/config`: TOML config, XDG paths, unknown-key check, listen security check.
+    - `internal/inventory`: tree, CIDR and nesting rules, placement, aggregation, visibility, notes.
+    - `internal/store`: SQLite, migrations through `PRAGMA user_version`.
+    - `internal/api`: REST endpoints, JSON errors, bearer token, reduced `/health`.
+    - `pkg/apitypes`: shared JSON types.
+    - `cmd/ined-server`: flags, TLS, clean shutdown.
+
+    Dependencies: `modernc.org/sqlite` v1.62.0 and `github.com/BurntSushi/toml` v1.6.0.
+    `go test -race ./...`: all pass. 22 TCs passing, 4 partial (their remaining parts belong to M2/M5), 40 planned.
+    Smoke test with the real binary and curl passed.
+
+    Spec gaps found while building, proposed as Spec changes and waiting for the user's OK:
+    1. A `405 method_not_allowed` error code that isn't in the SPEC-504 table.
+    2. An `ip` field on host items in `/map`.
+    3. Group name defaults to the CIDR on manual create too, not only for discovery.
+    4. Length limits: name ≤ 255 bytes, description ≤ 4 KiB.
+    5. A `parent_id` that doesn't exist gives 400.
+    6. `POST /hosts` with `parent_id` omitted or null → auto-placement.
+    7. `-version` flag added to the server.
+    8. TLS pulled forward into M1.
+    9. New `pkg/apitypes` package.

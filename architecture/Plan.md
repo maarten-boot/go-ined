@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.5** (2026-11-10)
+Status: **draft v0.6** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -32,6 +32,7 @@ internal/api/         REST handlers and SSE
 internal/config/      TOML config and command-line flags
 internal/theme/       contrast math, presets, palettes (shared by any UI)
 internal/gui/         Fyne views and widgets
+pkg/apitypes/         JSON types of the API, shared by server, client, GUI and CLI
 pkg/client/           public Go API client
 examples/             reference config files (server.toml, gui.toml, ctl.toml)
 ```
@@ -40,11 +41,13 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 ### M0: Project setup ✅
 - [x] git repo, `.gitignore`, `CLAUDE.md`, architecture docs, `Changes.md`
 
-### M1: Server core (inventory + storage + REST)
-- [ ] `go mod init github.com/maarten-boot/go-ined`, skeleton, config loading with XDG paths, matching `examples/*.toml` (SPEC-801, 805, A4)
-- [ ] Domain model: hosts, groups, network groups, tree rules, notes, visibility, CIDR rules (SPEC-101..107, 111..115)
-- [ ] SQLite store and migrations, including the status columns (SPEC-601, 602)
-- [ ] REST CRUD, `/map`, `/health`, error table (SPEC-501, 504), auth (SPEC-802), clean shutdown (SPEC-804)
+### M1: Server core (inventory + storage + REST) ✅ (branch `feature/m1-server-core`)
+- [x] `go mod init github.com/maarten-boot/go-ined`, skeleton, config loading with XDG paths, matching `examples/*.toml` (SPEC-801, 805, A4)
+- [x] Domain model: hosts, groups, network groups, tree rules, notes, visibility, CIDR rules (SPEC-101..107, 111..115)
+- [x] SQLite store and migrations, including the status columns (SPEC-601, 602)
+- [x] REST CRUD, `/map`, `/health`, error table (SPEC-501, 504), auth (SPEC-802), clean shutdown (SPEC-804)
+- [x] TLS (SPEC-803), pulled forward from M7 because it was only a few lines
+- [x] `-version` flag on `ined-server` (crosscheck 01 §5 suggestion, applied to the server only)
 
 ### M2: Monitoring + events
 - [ ] Event bus, SSE, replay buffer, run-id event ids (SPEC-502, 503)
@@ -69,7 +72,7 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 
 ### M7: CI + release 0.1.0
 - [ ] GitHub Actions (pinned to commit SHAs, SPEC-006): `go vet`, `staticcheck`, `go test -race`, builds
-- [ ] OpenAPI document (SPEC-505), TLS (SPEC-803)
+- [ ] OpenAPI document (SPEC-505)
 - [ ] Update `Changes.md`, tag `v0.1.0`
 
 ## Open questions

@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.9** (2026-11-10)
+Status: **draft v0.10** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -62,6 +62,9 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 
 ### M2 follow-ups ✅ (branch `fix/m2-followups`)
 - [x] 503 `unavailable` in SPEC-504; `monitor.enabled` (SPEC-301, 805) and deterministic `make examples`; `stale` only for monitored hosts (SPEC-603); status reset on IP change (SPEC-308)
+
+### Crosscheck 03 fixes ✅ (branch `fix/crosscheck-03`)
+- [x] SSE write deadline; shared raw socket per family; 200 ms gap; `last_seen` from the reply; ICMP mode per family; stale when monitoring is turned on; keepalive option; generator temp dir (SPEC-302..304, 502, 603, 804)
 
 ### M3: Discovery + DNS
 - [ ] CIDR expansion, rate limit, jobs (SPEC-201..205)

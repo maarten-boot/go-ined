@@ -23,6 +23,11 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 
 ### Fixed
+- An event-stream client that stops reading is disconnected after 10 s instead of blocking the server's shutdown.
+- Raw-socket ping mode uses one shared socket per address family, so each reply is received once (scales to thousands of hosts).
+- The echo requests of a round are at least 200 ms apart; `last_seen` is the arrival time of the last reply.
+- ICMP mode is detected per address family. If only IPv6 is unavailable, IPv6 hosts are not pinged (and not marked down), and `/health` shows `icmp6_error`.
+- Turning monitoring back on marks the host `stale` until its next ping round.
 - Hosts with monitoring off no longer stay `stale` forever after a restart.
 - Changing a host's IP address resets its status to `unknown` instead of keeping the old address's status.
 - Database paths containing `?`, `#` or `%` opened the wrong file.

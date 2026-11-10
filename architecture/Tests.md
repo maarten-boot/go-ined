@@ -28,18 +28,18 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-111 | SPEC-112 | U | Visibility: an item under any collapsed group is hidden; nested expand/collapse combinations (table-driven). New groups start collapsed | inventory: TestVisibility | passing |
 | TC-112 | SPEC-112, 502 | I | PATCH `collapsed` is saved, emits `group.updated`, and a second client sees the change | inventory: TestCollapsedEvent; api: TestPersistence, TestEventsStream | passing |
 | TC-113 | SPEC-116 | U | Ids are never reused: delete the highest host and group id, restart, create new ones | inventory: TestIDsNeverReused; store: TestSequences, TestMigration2Seeds | passing |
-| TC-201 | SPEC-201, 202 | U | CIDR expansion: /24 gives 254 addresses, /31 gives 2, /32 gives 1 | — | planned |
-| TC-202 | SPEC-203 | U | A range larger than the maximum is rejected. The rate limiter respects the probes-per-second setting | — | planned |
-| TC-203 | SPEC-204 | I | Discovery with a fake prober adds the responders. An existing IP is neither duplicated nor moved | — | planned |
-| TC-204 | SPEC-205, 502 | I | A discovery job reports `discovery.progress` events, can be cancelled, and ends with `discovery.finished` with `state` = `done` / `cancelled` / `failed` | — | planned |
-| TC-205 | SPEC-201, 204 | I | Discovery by network group id fills that group. Discovery by CIDR reuses an existing network group or creates one under the target group or the root | — | planned |
+| TC-201 | SPEC-201, 202 | U | CIDR expansion: /24 gives 254 addresses, /31 gives 2, /32 gives 1 | discovery: TestAddresses | passing |
+| TC-202 | SPEC-203 | U | A range larger than the maximum is rejected. The rate limiter respects the probes-per-second setting | discovery: TestMaxPrefixAndRate | passing |
+| TC-203 | SPEC-204 | I | Discovery with a fake prober adds the responders. An existing IP is neither duplicated nor moved | discovery: TestAddsResponders; inventory: TestAddDiscovered | passing |
+| TC-204 | SPEC-205, 502 | I | A discovery job reports `discovery.progress` events, can be cancelled, and ends with `discovery.finished` with `state` = `done` / `cancelled` / `failed` | discovery: TestProgressCancelFail, TestCloseSavesFound; api: TestDiscoveryAPI | passing |
+| TC-205 | SPEC-201, 204 | I | Discovery by network group id fills that group. Discovery by CIDR reuses an existing network group or creates one under the target group or the root | discovery: TestTargets | passing |
 | TC-206 | SPEC-115 | U | `outside_cidr` is set for a host moved into a network group whose range doesn't contain its IP, and cleared when it moves back | inventory: TestOutsideCIDR | passing |
-| TC-207 | SPEC-201 | I | Discovery with an IPv6 range or an IPv6 network group id → 400 `invalid_argument` | — | planned |
-| TC-208 | SPEC-201, 114 | I | Discovery of 192.168.1.0/24 with target group 10.0.0.0/8 → 409 before the job starts; no group or host is created | — | planned |
-| TC-209 | SPEC-204 | I | Discovery of a /16 puts a found host into an existing /24 subgroup that contains it | — | planned |
-| TC-210 | SPEC-204 | U | A found host is monitored, `up`, with round-trip time, loss and `last_seen` from the probe; a host that answered only the second request has 50 % loss | — | planned |
-| TC-211 | SPEC-205 | I | A job whose range overlaps a running job → 409; finished jobs are kept up to the limit; job ids have the form `<run>-<n>` | — | planned |
-| TC-212 | SPEC-201 | I | Without IPv4 ICMP, `POST /discovery` → 503 `unavailable`; with `monitor.enabled = false` discovery still works | — | planned |
+| TC-207 | SPEC-201 | I | Discovery with an IPv6 range or an IPv6 network group id → 400 `invalid_argument` | discovery: TestIPv6Rejected | passing |
+| TC-208 | SPEC-201, 114 | I | Discovery of 192.168.1.0/24 with target group 10.0.0.0/8 → 409 before the job starts; no group or host is created | discovery: TestNestingConflict | passing |
+| TC-209 | SPEC-204 | I | Discovery of a /16 puts a found host into an existing /24 subgroup that contains it | discovery: TestTargets; inventory: TestAddDiscovered | passing |
+| TC-210 | SPEC-204 | U | A found host is monitored, `up`, with round-trip time, loss and `last_seen` from the probe; a host that answered only the second request has 50 % loss | discovery: TestAddsResponders; inventory: TestAddDiscovered | passing |
+| TC-211 | SPEC-205 | I | A job whose range overlaps a running job → 409; finished jobs are kept up to the limit; job ids have the form `<run>-<n>` | discovery: TestOverlapAndKeep | passing |
+| TC-212 | SPEC-201 | I | Without IPv4 ICMP, `POST /discovery` → 503 `unavailable`; with `monitor.enabled = false` discovery still works | discovery: TestUnavailable; api: TestDiscoveryAPI; ined-server: TestMonitorDisabled | passing |
 | TC-301 | SPEC-302 | U | Status rules: 1 reply of 3 → up; down only after 2 failed rounds in a row; unknown before the first round | monitor: TestNextStatus, TestObservations; monitor: TestProberError | passing |
 | TC-302 | SPEC-301 | U | Ping start times are spread across the interval | monitor: TestSpread | passing |
 | TC-303 | SPEC-303 | U | Average round-trip time, loss, `last_seen` and `last_change` are computed correctly | monitor: TestSummarize; inventory: TestApplyObservations; ined-server: TestMonitoringPersistsAndStale | passing |
@@ -55,11 +55,12 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-314 | SPEC-304 | U | Raw mode: concurrent rounds on one shared socket each get exactly their own replies (fake socket) | monitor: TestRawMuxConcurrentRounds, TestRawMuxSocketFailure | passing (fake raw socket; a real raw socket is still not exercised) |
 | TC-315 | SPEC-303 | U | `last_seen` is the arrival time of the last reply, not the end of the round | monitor: TestSeenAtAndSkippedFamily; inventory: TestSeenAt | passing |
 | TC-401 | SPEC-402 | U | Display name priority: manual name, then PTR name (trailing dot stripped), then IP address | inventory: TestDisplayName | passing |
-| TC-402 | SPEC-403 | U | A temporary DNS error keeps the old name. NXDOMAIN clears it | — | planned |
-| TC-403 | SPEC-401 | U | With a fake resolver and clock: a lookup when a host is added, and a refresh after `dns.refresh` | — | planned |
-| TC-404 | SPEC-401 | U | No more than `dns.concurrency` lookups run at the same time | — | planned |
-| TC-405 | SPEC-401 | U | An IP change clears the PTR name at once and triggers a new lookup; a changed name emits `host.updated` | — | planned |
-| TC-406 | SPEC-401, 403 | U | At startup the refreshes are spread across `dns.refresh`; of several PTR names the first is used | — | planned |
+| TC-402 | SPEC-403 | U | A temporary DNS error keeps the old name. NXDOMAIN clears it | dnsname: TestName, TestKeepAndClear | passing |
+| TC-403 | SPEC-401 | U | With a fake resolver and clock: a lookup when a host is added, and a refresh after `dns.refresh` | dnsname: TestScheduling | passing |
+| TC-404 | SPEC-401 | U | No more than `dns.concurrency` lookups run at the same time | dnsname: TestConcurrency | passing |
+| TC-405 | SPEC-401 | U | An IP change clears the PTR name at once and triggers a new lookup; a changed name emits `host.updated` | dnsname: TestIPChange; inventory: TestPTRName | passing |
+| TC-406 | SPEC-401, 403 | U | At startup the refreshes are spread across `dns.refresh`; of several PTR names the first is used | dnsname: TestScheduling, TestName | passing |
+| TC-407 | SPEC-401, 805 | I | `dns.enabled = false` makes no lookups; by default a new host is looked up | ined-server: TestDNSEnabled | passing |
 | TC-501 | SPEC-501, 504 | I | CRUD round trip for hosts and groups (with and without `cidr`). Every error case returns the HTTP status and `code` from the SPEC-504 table | api: TestCRUD, TestRequestErrors; apitypes: TestOpt; inventory: TestRepoFailureKeepsModel | passing |
 | TC-502 | SPEC-502, 503 | I | SSE: events arrive in order. Reconnecting with Last-Event-ID replays missed events; an id that has dropped out of the buffer gets `resync` | events: TestReplay, TestResync; api: TestEventsStream, TestEventsReplayAndResync; api: TestEventsKeepalive | passing |
 | TC-503 | SPEC-506 | I | `pkg/client` works against a test server for all endpoints and the event stream | — | planned |

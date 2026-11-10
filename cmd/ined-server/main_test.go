@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -21,9 +22,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/maarten-boot/go-ined/internal/dnsname"
 	"github.com/maarten-boot/go-ined/internal/monitor"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
@@ -31,6 +34,7 @@ import (
 // TestMain keeps the server tests off the real network: every test uses a
 // fake prober unless it sets its own.
 func TestMain(m *testing.M) {
+	newResolver = func() dnsname.Resolver { return fakeResolver{} }
 	newProber = func() (monitor.Prober, monitor.Status, error) {
 		return fakeProber{}, monitor.Status{Mode: apitypes.ICMPUnprivileged}, nil
 	}
@@ -250,30 +254,68 @@ func TestNoICMP(t *testing.T) {
 	if h.Status != apitypes.StatusUnknown {
 		t.Errorf("host: %+v", h)
 	}
-	if !strings.Contains(log.String(), "monitoring disabled") {
+	if !strings.Contains(log.String(), "ICMP unavailable") {
 		t.Errorf("no log line:\n%s", log)
 	}
 }
 
-// TC-311: monitor.enabled = false pings nothing and /health says so.
+// TC-311, TC-212: monitor.enabled = false pings no host in the background
+// and /health says so, but discovery still works.
 func TestMonitorDisabled(t *testing.T) {
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, "s.toml")
 	if err := os.WriteFile(cfg, []byte("[monitor]\nenabled = false\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	old := newProber
-	newProber = func() (monitor.Prober, monitor.Status, error) {
-		t.Error("prober created although monitoring is disabled")
-		return fakeProber{}, monitor.Status{Mode: apitypes.ICMPUnprivileged}, nil
-	}
-	t.Cleanup(func() { newProber = old })
+	p := &countingProber{}
+	useProber(t, p, nil)
 	addr, _, _ := startServer(t, "-config", cfg, "-listen", "127.0.0.1:0", "-db", filepath.Join(dir, "x.db"))
+	base := "http://" + addr + "/api/v1"
 	var hv apitypes.Health
-	getJSON(t, "http://"+addr+"/api/v1/health", &hv)
+	getJSON(t, base+"/health", &hv)
 	if hv.Status != "ok" || hv.ICMPMode != apitypes.ICMPDisabled {
 		t.Errorf("health: %+v", hv)
 	}
+	resp, err := http.Post(base+"/hosts", "application/json", strings.NewReader(`{"ip":"192.0.2.7"}`))
+	if err != nil || resp.StatusCode != 201 {
+		t.Fatalf("create: %v %v", err, resp)
+	}
+	resp.Body.Close()
+	time.Sleep(1500 * time.Millisecond) // past the monitor's target refresh
+	if n := p.n.Load(); n != 0 {
+		t.Fatalf("%d pings with monitoring disabled", n)
+	}
+
+	resp, err = http.Post(base+"/discovery", "application/json", strings.NewReader(`{"cidr":"198.51.100.0/30"}`))
+	if err != nil || resp.StatusCode != 202 {
+		t.Fatalf("discovery: %v %v", err, resp)
+	}
+	var d apitypes.Discovery
+	json.NewDecoder(resp.Body).Decode(&d)
+	resp.Body.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for d.State == apitypes.DiscoveryRunning && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+		getJSON(t, base+"/discovery/"+d.ID, &d)
+	}
+	if d.State != apitypes.DiscoveryDone || d.Total != 2 || d.Found != 2 || d.Added != 2 {
+		t.Fatalf("discovery: %+v", d)
+	}
+}
+
+// countingProber answers every ping and counts them.
+type countingProber struct{ n atomic.Int64 }
+
+func (p *countingProber) Ping(_ context.Context, _ netip.Addr, count int, _ time.Duration) (monitor.Result, error) {
+	p.n.Add(1)
+	return monitor.Result{Sent: count, Received: count, RTTs: []time.Duration{time.Millisecond}}, nil
+}
+
+// fakeResolver knows no names.
+type fakeResolver struct{}
+
+func (fakeResolver) LookupAddr(context.Context, string) ([]string, error) {
+	return nil, &net.DNSError{Err: "no such host", IsNotFound: true}
 }
 
 // TC-803: with tls_cert and tls_key the server speaks HTTPS.
@@ -372,4 +414,43 @@ func selfSigned(t *testing.T) (certPEM, keyPEM []byte) {
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
 		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: kb})
+}
+
+// countingResolver counts lookups and knows no names.
+type countingResolver struct{ n atomic.Int64 }
+
+func (r *countingResolver) LookupAddr(context.Context, string) ([]string, error) {
+	r.n.Add(1)
+	return nil, &net.DNSError{Err: "no such host", IsNotFound: true}
+}
+
+func useResolver(t *testing.T, r dnsname.Resolver) {
+	old := newResolver
+	newResolver = func() dnsname.Resolver { return r }
+	t.Cleanup(func() { newResolver = old })
+}
+
+// TC-407: dns.enabled = false makes no lookups; by default a new host is
+// looked up.
+func TestDNSEnabled(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "s.toml")
+		if err := os.WriteFile(cfg, []byte(fmt.Sprintf("[dns]\nenabled = %v\n", enabled)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		r := &countingResolver{}
+		useResolver(t, r)
+		addr, stop, _ := startServer(t, "-config", cfg, "-listen", "127.0.0.1:0", "-db", filepath.Join(dir, "x.db"))
+		resp, err := http.Post("http://"+addr+"/api/v1/hosts", "application/json", strings.NewReader(`{"ip":"192.0.2.7"}`))
+		if err != nil || resp.StatusCode != 201 {
+			t.Fatalf("create: %v %v", err, resp)
+		}
+		resp.Body.Close()
+		time.Sleep(1500 * time.Millisecond) // past the refresher's host-list sync
+		stop()
+		if got := r.n.Load() > 0; got != enabled {
+			t.Errorf("dns.enabled = %v: %d lookups", enabled, r.n.Load())
+		}
+	}
 }

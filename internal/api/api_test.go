@@ -389,3 +389,49 @@ func TestHealthICMP(t *testing.T) {
 func itoa(i int64) string { return strconv.FormatInt(i, 10) }
 
 func ptr[T any](v T) *T { return &v }
+
+// fakeDiscovery records calls and returns canned errors.
+type fakeDiscovery struct{ err error }
+
+func (f fakeDiscovery) Start(_ context.Context, in apitypes.DiscoveryCreate) (apitypes.Discovery, error) {
+	return apitypes.Discovery{ID: "r-1", CIDR: in.CIDR, State: apitypes.DiscoveryRunning}, f.err
+}
+func (f fakeDiscovery) Get(id string) (apitypes.Discovery, error) {
+	if id != "r-1" {
+		return apitypes.Discovery{}, inventory.Errorf(inventory.NotFound, "discovery %s not found", id)
+	}
+	return apitypes.Discovery{ID: id, State: apitypes.DiscoveryDone}, nil
+}
+func (f fakeDiscovery) Cancel(id string) (apitypes.Discovery, error) { return f.Get(id) }
+
+// TC-204, TC-212 (API part): discovery routes and status codes.
+func TestDiscoveryAPI(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		code int
+		ec   string
+	}{
+		{nil, 202, ""},
+		{inventory.Errorf(inventory.Unavailable, "no ICMP"), 503, apitypes.CodeUnavailable},
+		{inventory.Errorf(inventory.Conflict, "overlap"), 409, apitypes.CodeConflict},
+		{inventory.Errorf(inventory.Invalid, "too large"), 400, apitypes.CodeInvalidArgument},
+	} {
+		srv := httptest.NewServer(New(nil, Options{Discovery: fakeDiscovery{tc.err}}))
+		e := &env{t: t, srv: srv}
+		if tc.code == 202 {
+			var d apitypes.Discovery
+			e.want(202, "POST", "/discovery", apitypes.DiscoveryCreate{CIDR: "10.0.0.0/24"}, &d)
+			if d.ID != "r-1" || d.State != apitypes.DiscoveryRunning {
+				t.Errorf("start: %+v", d)
+			}
+			e.want(200, "GET", "/discovery/r-1", nil, &d)
+			e.want(200, "DELETE", "/discovery/r-1", nil, &d)
+			e.wantErr(404, apitypes.CodeNotFound, "GET", "/discovery/r-9", nil)
+			e.wantErr(405, apitypes.CodeMethodNotAllowed, "GET", "/discovery", nil)
+			e.wantErr(400, apitypes.CodeInvalidArgument, "POST", "/discovery", `{"cidr":"x","bogus":1}`)
+		} else {
+			e.wantErr(tc.code, tc.ec, "POST", "/discovery", apitypes.DiscoveryCreate{CIDR: "10.0.0.0/24"})
+		}
+		srv.Close()
+	}
+}

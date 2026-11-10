@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "a281918b1ab01877"
+  "run_id": "664c3df7bb0a86b3"
 }
 ```
 
@@ -47,8 +47,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T14:27:26.331Z",
-  "updated_at": "2026-11-10T14:27:26.331Z"
+  "created_at": "2026-11-10T15:27:06.515Z",
+  "updated_at": "2026-11-10T15:27:06.515Z"
 }
 ```
 
@@ -72,8 +72,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 180,
-  "created_at": "2026-11-10T14:27:26.342Z",
-  "updated_at": "2026-11-10T14:27:26.342Z"
+  "created_at": "2026-11-10T15:27:06.541Z",
+  "updated_at": "2026-11-10T15:27:06.541Z"
 }
 ```
 
@@ -105,8 +105,8 @@ Response: `201`
   "outside_cidr": false,
   "x": 200,
   "y": 180,
-  "created_at": "2026-11-10T14:27:26.352Z",
-  "updated_at": "2026-11-10T14:27:26.352Z"
+  "created_at": "2026-11-10T15:27:06.58Z",
+  "updated_at": "2026-11-10T15:27:06.58Z"
 }
 ```
 
@@ -138,8 +138,8 @@ Response: `200`
   "outside_cidr": false,
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-10T14:27:26.352Z",
-  "updated_at": "2026-11-10T14:27:26.361Z"
+  "created_at": "2026-11-10T15:27:06.58Z",
+  "updated_at": "2026-11-10T15:27:06.597Z"
 }
 ```
 
@@ -163,8 +163,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T14:27:26.331Z",
-  "updated_at": "2026-11-10T14:27:26.37Z"
+  "created_at": "2026-11-10T15:27:06.515Z",
+  "updated_at": "2026-11-10T15:27:06.611Z"
 }
 ```
 
@@ -321,13 +321,93 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: a281918b1ab01877-10
+id: 664c3df7bb0a86b3-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-10T14:27:26.768Z","updated_at":"2026-11-10T14:27:26.768Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-10T15:27:07.088Z","updated_at":"2026-11-10T15:27:07.088Z"}
 
-id: a281918b1ab01877-11
+id: 664c3df7bb0a86b3-11
 event: host.deleted
 data: {"id":2}
 
+```
+
+### Start a discovery job (a network group 127.0.0.0/30 is created)
+
+```bash
+curl -s -X POST $INED/api/v1/discovery -d '{"cidr":"127.0.0.0/30"}'
+```
+
+Response: `202`
+
+```json
+{
+  "id": "664c3df7bb0a86b3-1",
+  "cidr": "127.0.0.0/30",
+  "group_id": 3,
+  "state": "running",
+  "probed": 0,
+  "total": 2,
+  "found": 0,
+  "added": 0,
+  "started_at": "2026-11-10T15:27:07.413Z",
+  "finished_at": null
+}
+```
+
+### Get the job: done, with 2 hosts found and added
+
+```bash
+curl -s $INED/api/v1/discovery/664c3df7bb0a86b3-1
+```
+
+Response: `200`
+
+```json
+{
+  "id": "664c3df7bb0a86b3-1",
+  "cidr": "127.0.0.0/30",
+  "group_id": 3,
+  "state": "done",
+  "probed": 2,
+  "total": 2,
+  "found": 2,
+  "added": 2,
+  "started_at": "2026-11-10T15:27:07.413Z",
+  "finished_at": "2026-11-10T15:27:07.42Z"
+}
+```
+
+### Error: a range larger than discovery.max_prefix (/16)
+
+```bash
+curl -s -X POST $INED/api/v1/discovery -d '{"cidr":"10.0.0.0/8"}'
+```
+
+Response: `400`
+
+```json
+{
+  "error": {
+    "code": "invalid_argument",
+    "message": "range 10.0.0.0/8 is too large: the largest allowed is /16 (discovery.max_prefix)"
+  }
+}
+```
+
+### Error: discovery is IPv4 only
+
+```bash
+curl -s -X POST $INED/api/v1/discovery -d '{"cidr":"2001:db8::/120"}'
+```
+
+Response: `400`
+
+```json
+{
+  "error": {
+    "code": "invalid_argument",
+    "message": "discovery is IPv4 only; 2001:db8::/120 is IPv6"
+  }
+}
 ```
 

@@ -64,6 +64,7 @@ type DiscoverySection struct {
 
 // DNSSection holds the reverse-DNS settings (SPEC-401).
 type DNSSection struct {
+	Enabled     bool          `toml:"enabled"`
 	Refresh     time.Duration `toml:"refresh"`
 	Concurrency int           `toml:"concurrency"`
 }
@@ -103,7 +104,7 @@ func DefaultServer() Server {
 		Server:    ServerSection{Listen: "127.0.0.1:8470"},
 		Monitor:   MonitorSection{Enabled: true, Interval: 60 * time.Second, Count: 3, Timeout: time.Second, DownAfter: 2},
 		Discovery: DiscoverySection{MaxPrefix: 16, Rate: 200, Concurrency: 64},
-		DNS:       DNSSection{Refresh: time.Hour, Concurrency: 20},
+		DNS:       DNSSection{Enabled: true, Refresh: time.Hour, Concurrency: 20},
 		Events:    EventsSection{Buffer: 1000},
 	}
 }

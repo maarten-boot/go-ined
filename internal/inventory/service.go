@@ -317,6 +317,7 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 			ipChanged = true
 			h.IP = ip
 			h.RTTms, h.LossPct = nil, nil
+			h.PTRName = "" // looked up again for the new address (SPEC-401)
 			if h.Status != apitypes.StatusUnknown {
 				h.Status = apitypes.StatusUnknown
 				h.LastChange = s.stamp()

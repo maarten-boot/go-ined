@@ -26,6 +26,8 @@ import (
 
 	"github.com/maarten-boot/go-ined/internal/api"
 	"github.com/maarten-boot/go-ined/internal/config"
+	"github.com/maarten-boot/go-ined/internal/discovery"
+	"github.com/maarten-boot/go-ined/internal/dnsname"
 	"github.com/maarten-boot/go-ined/internal/events"
 	"github.com/maarten-boot/go-ined/internal/inventory"
 	"github.com/maarten-boot/go-ined/internal/monitor"
@@ -58,6 +60,9 @@ var newProber = func() (monitor.Prober, monitor.Status, error) {
 	}
 	return p, p.Status(), nil
 }
+
+// newResolver returns the reverse-DNS resolver; tests replace it.
+var newResolver = func() dnsname.Resolver { return net.DefaultResolver }
 
 // run starts the server and blocks until ctx is cancelled. ready, if not
 // nil, receives the bound address once the server accepts connections.
@@ -121,44 +126,74 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	bus := events.New(runID, cfg.Events.Buffer)
 	svc.SetNotifier(bus)
 
-	// Monitoring (SPEC-304): without a working ICMP mode the server keeps
-	// running, hosts stay unknown and /health reports the error.
+	// ICMP (SPEC-304): without a working mode the server keeps running,
+	// hosts stay unknown and /health reports the error. The prober is also
+	// used by discovery, even when monitoring is turned off (SPEC-201).
 	icmp := api.ICMPInfo{Mode: apitypes.ICMPUnavailable}
-	monCtx, monStop := context.WithCancel(context.Background())
-	defer monStop()
-	var monWG sync.WaitGroup
-	if !cfg.Monitor.Enabled {
-		icmp.Mode = apitypes.ICMPDisabled
-		log.Info("monitoring disabled by config (monitor.enabled = false)")
-	} else if prober, ps, err := newProber(); err != nil {
-		icmp.Error = err.Error()
-		log.Error("monitoring disabled", "err", err)
-	} else {
+	prober, ps, perr := newProber()
+	discoveryProber, whyNot := prober, ""
+	switch {
+	case perr != nil:
+		icmp.Error, whyNot, discoveryProber = perr.Error(), perr.Error(), nil
+		log.Error("ICMP unavailable: no monitoring, no discovery", "err", perr)
+	default:
 		icmp = api.ICMPInfo{Mode: ps.Mode, Error: ps.IPv4Error, IPv6Error: ps.IPv6Error}
-		log.Info("monitoring started", "icmp_mode", ps.Mode, "interval", cfg.Monitor.Interval)
 		if ps.IPv4Error != "" {
+			whyNot, discoveryProber = "IPv4 ICMP is unavailable: "+ps.IPv4Error, nil
 			log.Warn("IPv4 hosts are not pinged", "err", ps.IPv4Error)
 		}
 		if ps.IPv6Error != "" {
 			log.Warn("IPv6 hosts are not pinged", "err", ps.IPv6Error)
 		}
-		mon := monitor.New(prober, svc, monitor.Config{
+	}
+
+	// Background work: monitoring and reverse DNS.
+	bgCtx, bgStop := context.WithCancel(context.Background())
+	defer bgStop()
+	var bgWG sync.WaitGroup
+	goBG := func(f func(context.Context)) {
+		bgWG.Add(1)
+		go func() { defer bgWG.Done(); f(bgCtx) }()
+	}
+	switch {
+	case !cfg.Monitor.Enabled:
+		icmp.Mode = apitypes.ICMPDisabled
+		log.Info("monitoring disabled by config (monitor.enabled = false)")
+	case perr == nil:
+		log.Info("monitoring started", "icmp_mode", ps.Mode, "interval", cfg.Monitor.Interval)
+		goBG(monitor.New(prober, svc, monitor.Config{
 			Interval: cfg.Monitor.Interval, Count: cfg.Monitor.Count,
 			Timeout: cfg.Monitor.Timeout, DownAfter: cfg.Monitor.DownAfter,
-		}, log)
-		monWG.Add(1)
-		go func() {
-			defer monWG.Done()
-			mon.Run(monCtx)
-			if c, ok := prober.(io.Closer); ok {
-				c.Close()
-			}
-		}()
+		}, log).Run)
+	}
+	if cfg.DNS.Enabled {
+		goBG(dnsname.New(newResolver(), svc, dnsname.Config{
+			Refresh: cfg.DNS.Refresh, Concurrency: cfg.DNS.Concurrency,
+		}, log).Run)
+	} else {
+		log.Info("reverse DNS disabled by config (dns.enabled = false)")
+	}
+	disc := discovery.New(svc, discoveryProber, whyNot, bus, runID, discovery.Config{
+		MaxPrefix: cfg.Discovery.MaxPrefix, Rate: cfg.Discovery.Rate,
+		Concurrency: cfg.Discovery.Concurrency, Timeout: cfg.Monitor.Timeout,
+	}, log)
+
+	// stopBackground follows the shutdown order of SPEC-804 up to the HTTP
+	// server: discovery (saves what it found), DNS and monitor (save
+	// pending results), the prober, then the SSE streams.
+	stopBackground := func() {
+		disc.Close()
+		bgStop()
+		bgWG.Wait()
+		if c, ok := prober.(io.Closer); ok {
+			c.Close()
+		}
+		bus.Close()
 	}
 
 	handler := api.New(svc, api.Options{
 		Token: cfg.Server.Token, Version: version.Version, RunID: runID, DBPing: st.Ping, Logger: log,
-		Events: bus, ICMP: func() api.ICMPInfo { return icmp },
+		Events: bus, ICMP: func() api.ICMPInfo { return icmp }, Discovery: disc,
 	})
 	srv := &http.Server{
 		Handler:           handler,
@@ -189,18 +224,14 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 
 	select {
 	case err := <-errc:
-		monStop()
-		monWG.Wait()
-		bus.Close()
+		stopBackground()
 		return err
 	case <-ctx.Done():
 	}
-	// Shutdown order (SPEC-804): monitor (saves pending results), SSE
-	// streams, HTTP server; the database is closed by the deferred Close.
+	// Shutdown order (SPEC-804): background work and SSE streams, then the
+	// HTTP server; the database is closed by the deferred Close.
 	log.Info("shutting down")
-	monStop()
-	monWG.Wait()
-	bus.Close()
+	stopBackground()
 	sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(sctx); err != nil {

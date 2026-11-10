@@ -141,3 +141,12 @@
     - Spec and Plan v0.15 (SPEC-506, 802, 805, 903). Six new tests; `make all` passes.
 33. **User**: pushed; start M4b.
     **Claude** wrote the draft Spec section 4b (SPEC-117..124: views, groups per view, placements, deletes in custom views, per-view status, API, storage, CLI) and TC-120..129, as Spec/Plan v0.16. It proposed 8 M4b decisions with defaults in Plan.md; decision 1 differs from `Design-views.md` §4: hosts keep their network placement in the `hosts` table, so the risky table rebuild isn't needed. Also fixed a duplicate test id that crosscheck 05 missed: the second TC-603 is now TC-606. The code waits for the decisions.
+34. **User**: pushed; OK, defaults (M4b decisions 1–8). Later, mid-work: "status?"; Claude gave a progress report and continued.
+    **Claude** built M4b on `feature/m4b-views`:
+    - `pkg/apitypes`: View, Placement, `view_id` on groups and the map, 5 event types.
+    - `inventory`: views and custom-view placements; `Model.In(view)` projects one view's tree, so the existing rules (status, visibility, free positions, cycles) work per view; deletes in custom views never delete hosts; the load repair covers views and placements.
+    - `store`: migration 3 (`views`, `placements`, `groups.view_id`, `next_view_id`), with an upgrade test from schema 2.
+    - API: `/views`, `/views/{id}`, `PUT|DELETE /views/{id}/hosts/{host_id}`, `GET /map?view=`, `GET /groups?view=`.
+    - `pkg/client` view calls; `inedctl view list|add|show|rename|order|rm|place|unplace` and `--view`. `view order` was added beyond the draft SPEC-124 (renaming and reordering are separate actions).
+    - Generated examples for views (curl and inedctl); README and Changes.
+    - Spec v0.16 final, Plan D14, `Design-views.md` marked implemented. TC-120..129 passing: 86 of 105. `make all` passes.

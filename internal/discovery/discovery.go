@@ -5,6 +5,7 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/netip"
 	"slices"
@@ -20,6 +21,10 @@ import (
 // SecondTry is the delay before the second request to an address that
 // didn't answer the first (SPEC-201).
 const SecondTry = 200 * time.Millisecond
+
+// DesignHosts is the inventory size the server is designed for (A1). A job
+// with a larger range logs a warning (SPEC-203).
+const DesignHosts = 5000
 
 // Inventory is the part of inventory.Service that discovery uses.
 type Inventory interface {
@@ -149,7 +154,12 @@ func (m *Manager) Start(ctx context.Context, in apitypes.DiscoveryCreate) (apity
 		ID: id, CIDR: prefix.String(), State: apitypes.DiscoveryRunning, Total: n, StartedAt: time.Now().UTC().Truncate(time.Millisecond),
 	}}
 	m.jobs[id] = j
+	m.wg.Add(1) // under the lock, so Close can't miss this job
 	m.mu.Unlock()
+	if n > DesignHosts {
+		m.log.Warn("large discovery range: the server is designed for about 5,000 hosts",
+			"cidr", prefix.String(), "addresses", n)
+	}
 
 	group, err := m.group(ctx, in, prefix)
 	if err != nil {
@@ -157,6 +167,7 @@ func (m *Manager) Start(ctx context.Context, in apitypes.DiscoveryCreate) (apity
 		m.mu.Lock()
 		delete(m.jobs, id)
 		m.mu.Unlock()
+		m.wg.Done()
 		return apitypes.Discovery{}, err
 	}
 	m.mu.Lock()
@@ -164,7 +175,6 @@ func (m *Manager) Start(ctx context.Context, in apitypes.DiscoveryCreate) (apity
 	v := j.view
 	m.mu.Unlock()
 
-	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
 		m.runJob(jctx, j, first, n)
@@ -300,6 +310,7 @@ func (m *Manager) runJob(ctx context.Context, j *job, first netip.Addr, n int) {
 		lastSave  = time.Now()
 		lastEvent time.Time
 		failure   error
+		probeErr  error // first probe error (SPEC-205)
 	)
 	save := func(c context.Context) {
 		if len(pending) == 0 || failure != nil {
@@ -329,6 +340,12 @@ func (m *Manager) runJob(ctx context.Context, j *job, first netip.Addr, n int) {
 			}
 			m.mu.Lock()
 			j.view.Probed++
+			if r.err != nil {
+				j.view.Errors++
+				if probeErr == nil {
+					probeErr = r.err
+				}
+			}
 			if r.replied {
 				j.view.Found++
 			}
@@ -364,6 +381,10 @@ func (m *Manager) runJob(ctx context.Context, j *job, first netip.Addr, n int) {
 	default:
 		j.view.State = apitypes.DiscoveryDone
 	}
+	if failure == nil && probeErr != nil {
+		j.view.Error = fmt.Sprintf("%d probes failed; first error: %v", j.view.Errors, probeErr)
+	}
+	nErr := j.view.Errors
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	j.view.FinishedAt = &now
 	m.finished = append(m.finished, j.view.ID)
@@ -374,6 +395,9 @@ func (m *Manager) runJob(ctx context.Context, j *job, first netip.Addr, n int) {
 	m.mu.Unlock()
 	if failure != nil {
 		m.log.Error("discovery failed", "id", j.view.ID, "cidr", j.view.CIDR, "err", failure)
+	}
+	if probeErr != nil {
+		m.log.Warn("discovery probes failed", "id", j.view.ID, "cidr", j.view.CIDR, "errors", nErr, "first", probeErr)
 	}
 	m.publish(apitypes.EventDiscoveryFinished, j)
 }

@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "664c3df7bb0a86b3"
+  "run_id": "8e7bc5032c26ebf7"
 }
 ```
 
@@ -47,8 +47,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T15:27:06.515Z",
-  "updated_at": "2026-11-10T15:27:06.515Z"
+  "created_at": "2026-11-10T18:10:00.227Z",
+  "updated_at": "2026-11-10T18:10:00.227Z"
 }
 ```
 
@@ -72,8 +72,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 180,
-  "created_at": "2026-11-10T15:27:06.541Z",
-  "updated_at": "2026-11-10T15:27:06.541Z"
+  "created_at": "2026-11-10T18:10:00.236Z",
+  "updated_at": "2026-11-10T18:10:00.236Z"
 }
 ```
 
@@ -105,8 +105,8 @@ Response: `201`
   "outside_cidr": false,
   "x": 200,
   "y": 180,
-  "created_at": "2026-11-10T15:27:06.58Z",
-  "updated_at": "2026-11-10T15:27:06.58Z"
+  "created_at": "2026-11-10T18:10:00.245Z",
+  "updated_at": "2026-11-10T18:10:00.245Z"
 }
 ```
 
@@ -138,8 +138,8 @@ Response: `200`
   "outside_cidr": false,
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-10T15:27:06.58Z",
-  "updated_at": "2026-11-10T15:27:06.597Z"
+  "created_at": "2026-11-10T18:10:00.245Z",
+  "updated_at": "2026-11-10T18:10:00.253Z"
 }
 ```
 
@@ -163,8 +163,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-10T15:27:06.515Z",
-  "updated_at": "2026-11-10T15:27:06.611Z"
+  "created_at": "2026-11-10T18:10:00.227Z",
+  "updated_at": "2026-11-10T18:10:00.262Z"
 }
 ```
 
@@ -321,11 +321,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: 664c3df7bb0a86b3-10
+id: 8e7bc5032c26ebf7-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-10T15:27:07.088Z","updated_at":"2026-11-10T15:27:07.088Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-10T18:10:00.646Z","updated_at":"2026-11-10T18:10:00.646Z"}
 
-id: 664c3df7bb0a86b3-11
+id: 8e7bc5032c26ebf7-11
 event: host.deleted
 data: {"id":2}
 
@@ -341,7 +341,7 @@ Response: `202`
 
 ```json
 {
-  "id": "664c3df7bb0a86b3-1",
+  "id": "8e7bc5032c26ebf7-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -349,7 +349,8 @@ Response: `202`
   "total": 2,
   "found": 0,
   "added": 0,
-  "started_at": "2026-11-10T15:27:07.413Z",
+  "errors": 0,
+  "started_at": "2026-11-10T18:10:00.982Z",
   "finished_at": null
 }
 ```
@@ -357,14 +358,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/664c3df7bb0a86b3-1
+curl -s $INED/api/v1/discovery/8e7bc5032c26ebf7-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "664c3df7bb0a86b3-1",
+  "id": "8e7bc5032c26ebf7-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -372,8 +373,9 @@ Response: `200`
   "total": 2,
   "found": 2,
   "added": 2,
-  "started_at": "2026-11-10T15:27:07.413Z",
-  "finished_at": "2026-11-10T15:27:07.42Z"
+  "errors": 0,
+  "started_at": "2026-11-10T18:10:00.982Z",
+  "finished_at": "2026-11-10T18:10:00.988Z"
 }
 ```
 

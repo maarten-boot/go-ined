@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -236,5 +237,33 @@ func TestConcurrency(t *testing.T) {
 	waitFor(t, "all looked up", func() bool { return g.r.nCalls() >= 30 })
 	if m := g.r.maxSeen.Load(); m > 4 {
 		t.Fatalf("max concurrent lookups %d", m)
+	}
+}
+
+// TC-408: hosts waiting for a lookup slot don't each hold a goroutine.
+func TestNoGoroutinePerWaitingHost(t *testing.T) {
+	var ts []inventory.Target
+	for i := 1; i <= 50; i++ {
+		ts = append(ts, target(int64(i), netip.AddrFrom4([4]byte{10, 0, 2, byte(i)}).String()))
+	}
+	block := make(chan struct{})
+	defer close(block)
+	r := &resolver{answers: map[string]func() ([]string, error){}, block: block}
+	in := &inv{ptr: map[int64]string{}}
+	in.setTargets(ts...)
+	clk := &clock{t: time.Unix(1000, 0)}
+	base := runtime.NumGoroutine()
+	f := New(r, in, Config{Refresh: time.Hour, Concurrency: 4, Now: clk.Now, Tick: time.Millisecond}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { f.Run(ctx); close(done) }()
+	defer func() { cancel(); <-done }()
+	waitFor(t, "first lookup", func() bool { return r.nCalls() == 1 })
+	clk.Advance(2 * time.Hour) // all 50 hosts are due
+	waitFor(t, "4 active", func() bool { return r.active.Load() == 4 })
+	settle()
+	// Run, its ticker and 4 workers; allow a few for the runtime.
+	if n := runtime.NumGoroutine() - base; n > 10 {
+		t.Fatalf("%d extra goroutines for 4 slots and 50 due hosts", n)
 	}
 }

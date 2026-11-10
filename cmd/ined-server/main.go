@@ -33,7 +33,7 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, os.Args[1:], os.Stderr, nil); err != nil {
+	if err := run(ctx, os.Args[1:], os.Stdout, os.Stderr, nil); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(0)
 		}
@@ -47,7 +47,7 @@ const shutdownTimeout = 10 * time.Second
 
 // run starts the server and blocks until ctx is cancelled. ready, if not
 // nil, receives the bound address once the server accepts connections.
-func run(ctx context.Context, args []string, stderr io.Writer, ready func(addr string)) error {
+func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready func(addr string)) error {
 	fs := flag.NewFlagSet("ined-server", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	cfgPath := fs.String("config", "", "config file (default $XDG_CONFIG_HOME/go-ined/server.toml)")
@@ -59,7 +59,7 @@ func run(ctx context.Context, args []string, stderr io.Writer, ready func(addr s
 		return err
 	}
 	if *showVersion {
-		fmt.Fprintln(stderr, "ined-server", version.Version)
+		fmt.Fprintln(stdout, "ined-server", version.Version)
 		return nil
 	}
 	log := slog.New(slog.NewTextHandler(stderr, nil))
@@ -99,6 +99,9 @@ func run(ctx context.Context, args []string, stderr io.Writer, ready func(addr s
 	if err != nil {
 		return err
 	}
+	for _, w := range svc.LoadWarnings() {
+		log.Warn("database repaired at load", "detail", w)
+	}
 
 	runID := newRunID()
 	handler := api.New(svc, api.Options{
@@ -107,7 +110,9 @@ func run(ctx context.Context, args []string, stderr io.Writer, ready func(addr s
 	srv := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
-		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+		IdleTimeout:       120 * time.Second,
+		// No ReadTimeout/WriteTimeout: SSE streams (M2) are long-lived.
+		ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
 	ln, err := net.Listen("tcp", cfg.Server.Listen)
 	if err != nil {

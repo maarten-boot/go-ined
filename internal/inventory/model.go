@@ -60,6 +60,19 @@ type Group struct {
 	UpdatedAt   time.Time
 }
 
+// label names a group in messages: "name (cidr)", or just the CIDR when
+// the name is the CIDR.
+func (g *Group) label() string {
+	switch {
+	case !g.IsNetwork():
+		return fmt.Sprintf("%q", g.Name)
+	case g.Name == g.CIDR.String():
+		return g.Name
+	default:
+		return fmt.Sprintf("%q (%s)", g.Name, g.CIDR)
+	}
+}
+
 // IsNetwork reports whether g is a network group.
 func (g *Group) IsNetwork() bool { return g.CIDR.IsValid() }
 
@@ -149,6 +162,21 @@ func (m *Model) IsInSubtree(id, root int64) bool {
 	return false
 }
 
+// inCycle reports whether walking up from group id never reaches the root.
+func (m *Model) inCycle(id int64) bool {
+	for steps := 0; id != Root; steps++ {
+		if steps > len(m.Groups) {
+			return true
+		}
+		g := m.Groups[id]
+		if g == nil {
+			return false
+		}
+		id = g.ParentID
+	}
+	return false
+}
+
 // NearestNetwork returns the nearest network group at or above group id,
 // skipping ordinary groups, or nil.
 func (m *Model) NearestNetwork(id int64) *Group {
@@ -173,8 +201,7 @@ func (m *Model) CheckNesting(root int64) error {
 			continue
 		}
 		if anc := m.NearestNetwork(g.ParentID); anc != nil && !PrefixContains(anc.CIDR, g.CIDR) {
-			return conflictf("network group %q (%s) is not inside its enclosing network group %q (%s)",
-				g.Name, g.CIDR, anc.Name, anc.CIDR)
+			return conflictf("network group %s is not inside its enclosing network group %s", g.label(), anc.label())
 		}
 	}
 	return nil

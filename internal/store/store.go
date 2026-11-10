@@ -9,16 +9,24 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/maarten-boot/go-ined/internal/inventory"
 
-	_ "modernc.org/sqlite" // registers the "sqlite" driver
+	"modernc.org/sqlite" // also registers the "sqlite" driver
 )
+
+// ErrLocked means another process holds the database (SPEC-604).
+var ErrLocked = errors.New("database is in use by another process")
+
+// sqliteBusy is SQLITE_BUSY.
+const sqliteBusy = 5
 
 // migrations[i] upgrades the schema from version i to i+1. The schema
 // version is kept in PRAGMA user_version. Never edit a released migration;
@@ -59,6 +67,15 @@ var migrations = []string{
 	);
 	CREATE INDEX hosts_parent ON hosts(parent_id);
 	CREATE INDEX groups_parent ON groups(parent_id);`,
+
+	// 2: id sequences, so ids are never reused (SPEC-116).
+	`CREATE TABLE meta (
+		key   TEXT    PRIMARY KEY,
+		value INTEGER NOT NULL
+	);
+	INSERT INTO meta (key, value) VALUES
+		('next_host_id',  (SELECT COALESCE(MAX(id), 0) + 1 FROM hosts)),
+		('next_group_id', (SELECT COALESCE(MAX(id), 0) + 1 FROM groups));`,
 }
 
 // Store is a SQLite-backed inventory.Repository.
@@ -68,23 +85,52 @@ type Store struct {
 
 var _ inventory.Repository = (*Store)(nil)
 
-// Open opens (creating if needed) the database at path and migrates it to
-// the latest schema version.
+// Open opens (creating if needed) the database at path, takes an exclusive
+// lock on it (SPEC-604) and migrates it to the latest schema version. If
+// another process holds the database, the error wraps ErrLocked.
 func Open(ctx context.Context, path string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	abs, err := filepath.Abs(path)
+	if err != nil {
 		return nil, fmt.Errorf("store: %w", err)
 	}
-	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("store: open %s: %w", path, err)
+	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
+		return nil, fmt.Errorf("store: %w", err)
 	}
-	db.SetMaxOpenConns(1) // single writer; avoids SQLITE_BUSY between our own connections
+	db, err := sql.Open("sqlite", dsn(abs))
+	if err != nil {
+		return nil, fmt.Errorf("store: open %s: %w", abs, err)
+	}
+	// One connection that is never closed while the store is open: it holds
+	// the exclusive lock.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxIdleTime(0)
+	db.SetConnMaxLifetime(0)
+
+	// In EXCLUSIVE locking mode the lock taken by this write transaction is
+	// kept until the connection closes. busy_timeout is 0, so a second
+	// process fails at once instead of waiting.
+	if _, err := db.ExecContext(ctx, "BEGIN EXCLUSIVE; COMMIT;"); err != nil {
+		db.Close()
+		var se *sqlite.Error
+		if errors.As(err, &se) && se.Code()&0xff == sqliteBusy {
+			return nil, fmt.Errorf("store: %s: %w", abs, ErrLocked)
+		}
+		return nil, fmt.Errorf("store: open %s: %w", abs, err)
+	}
 	if err := migrate(ctx, db, migrations); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return &Store{db: db}, nil
+}
+
+// dsn builds the driver DSN. The path goes through url.URL so that '?',
+// '#' and '%' in file names are escaped (SQLite decodes the URI).
+func dsn(absPath string) string {
+	u := url.URL{Scheme: "file", Path: absPath}
+	return u.String() + "?_pragma=locking_mode(EXCLUSIVE)&_pragma=journal_mode(WAL)" +
+		"&_pragma=busy_timeout(0)&_pragma=synchronous(NORMAL)"
 }
 
 // Close closes the database.
@@ -150,16 +196,34 @@ func parseTime(s sql.NullString) (time.Time, error) {
 }
 
 // Load implements inventory.Repository.
-func (s *Store) Load(ctx context.Context) ([]inventory.Group, []inventory.Host, error) {
-	groups, err := s.loadGroups(ctx)
-	if err != nil {
-		return nil, nil, err
+func (s *Store) Load(ctx context.Context) (inventory.State, error) {
+	var st inventory.State
+	var err error
+	if st.Groups, err = s.loadGroups(ctx); err != nil {
+		return st, err
 	}
-	hosts, err := s.loadHosts(ctx)
-	if err != nil {
-		return nil, nil, err
+	if st.Hosts, err = s.loadHosts(ctx); err != nil {
+		return st, err
 	}
-	return groups, hosts, nil
+	rows, err := s.db.QueryContext(ctx, `SELECT key, value FROM meta`)
+	if err != nil {
+		return st, fmt.Errorf("store: load meta: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k string
+		var v int64
+		if err := rows.Scan(&k, &v); err != nil {
+			return st, fmt.Errorf("store: scan meta: %w", err)
+		}
+		switch k {
+		case "next_host_id":
+			st.NextHostID = v
+		case "next_group_id":
+			st.NextGroupID = v
+		}
+	}
+	return st, rows.Err()
 }
 
 func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
@@ -278,6 +342,17 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 			h.RTTms, h.LossPct, nullTime(h.LastSeen), nullTime(h.LastChange), h.X, h.Y, fmtTime(h.CreatedAt), fmtTime(h.UpdatedAt))
 		if err != nil {
 			return fmt.Errorf("store: upsert host %d: %w", h.ID, err)
+		}
+	}
+	for _, kv := range []struct {
+		key string
+		val int64
+	}{{"next_host_id", c.NextHostID}, {"next_group_id", c.NextGroupID}} {
+		if kv.val == 0 {
+			continue
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE meta SET value = ? WHERE key = ?`, kv.val, kv.key); err != nil {
+			return fmt.Errorf("store: update %s: %w", kv.key, err)
 		}
 	}
 	if err = tx.Commit(); err != nil {

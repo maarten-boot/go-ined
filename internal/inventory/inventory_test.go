@@ -7,29 +7,31 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
 
 // memRepo is an in-memory Repository for unit tests.
 type memRepo struct {
-	groups map[int64]Group
-	hosts  map[int64]Host
-	fail   error
+	groups    map[int64]Group
+	hosts     map[int64]Host
+	nextHost  int64
+	nextGroup int64
+	fail      error
 }
 
 func newMemRepo() *memRepo { return &memRepo{groups: map[int64]Group{}, hosts: map[int64]Host{}} }
 
-func (r *memRepo) Load(context.Context) ([]Group, []Host, error) {
-	var gs []Group
-	var hs []Host
+func (r *memRepo) Load(context.Context) (State, error) {
+	st := State{NextHostID: r.nextHost, NextGroupID: r.nextGroup}
 	for _, g := range r.groups {
-		gs = append(gs, g)
+		st.Groups = append(st.Groups, g)
 	}
 	for _, h := range r.hosts {
-		hs = append(hs, h)
+		st.Hosts = append(st.Hosts, h)
 	}
-	return gs, hs, nil
+	return st, nil
 }
 
 func (r *memRepo) Apply(_ context.Context, c Changes) error {
@@ -47,6 +49,12 @@ func (r *memRepo) Apply(_ context.Context, c Changes) error {
 	}
 	for _, h := range c.Hosts {
 		r.hosts[h.ID] = h
+	}
+	if c.NextHostID != 0 {
+		r.nextHost = c.NextHostID
+	}
+	if c.NextGroupID != 0 {
+		r.nextGroup = c.NextGroupID
 	}
 	return nil
 }
@@ -452,5 +460,75 @@ func TestStaleOnLoad(t *testing.T) {
 	}
 	if h2, _ := s2.Host(h.ID); !h2.Stale {
 		t.Error("loaded host not stale")
+	}
+}
+
+// TC-113: ids are never reused, not even after deleting the highest id and
+// restarting.
+func TestIDsNeverReused(t *testing.T) {
+	s, r := newSvc(t)
+	mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.1"})
+	h2 := mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.2"})
+	g := mustGroup(t, s, apitypes.GroupCreate{Name: "g"})
+	if err := s.DeleteHost(ctx, h2.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteGroup(ctx, g.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := NewService(ctx, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h3 := mustHost(t, s2, apitypes.HostCreate{IP: "192.0.2.3"}); h3.ID == h2.ID {
+		t.Errorf("host id %d reused", h3.ID)
+	}
+	if g2 := mustGroup(t, s2, apitypes.GroupCreate{Name: "g2"}); g2.ID == g.ID {
+		t.Errorf("group id %d reused", g2.ID)
+	}
+}
+
+// TC-605: orphans are moved to the root (persisted, with warnings); a
+// cycle refuses to load.
+func TestRepairOnLoad(t *testing.T) {
+	r := newMemRepo()
+	now := time.Now()
+	r.groups[1] = Group{ID: 1, Name: "ok", CreatedAt: now}
+	r.groups[2] = Group{ID: 2, Name: "orphan", ParentID: 99, CreatedAt: now}
+	r.hosts[1] = Host{ID: 1, IP: netip.MustParseAddr("192.0.2.1"), ParentID: 98, Status: "unknown"}
+	r.hosts[2] = Host{ID: 2, IP: netip.MustParseAddr("192.0.2.2"), ParentID: 1, Status: "unknown"}
+	s, err := NewService(ctx, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := s.LoadWarnings(); len(w) != 2 || !strings.Contains(w[0], "group 2") || !strings.Contains(w[1], "host 1") {
+		t.Errorf("warnings: %q", w)
+	}
+	if r.groups[2].ParentID != Root || r.hosts[1].ParentID != Root || r.hosts[2].ParentID != 1 {
+		t.Errorf("repairs not persisted correctly: %+v %+v %+v", r.groups[2], r.hosts[1], r.hosts[2])
+	}
+	if s2, _ := NewService(ctx, r); len(s2.LoadWarnings()) != 0 {
+		t.Error("warnings repeated after repair")
+	}
+
+	c := newMemRepo()
+	c.groups[1] = Group{ID: 1, Name: "a", ParentID: 2}
+	c.groups[2] = Group{ID: 2, Name: "b", ParentID: 1}
+	if _, err := NewService(ctx, c); err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("cycle: want error, got %v", err)
+	}
+}
+
+// C7: a network group named after its CIDR is not printed twice.
+func TestNestingMessage(t *testing.T) {
+	s, _ := newSvc(t)
+	n := mustGroup(t, s, apitypes.GroupCreate{CIDR: "10.0.0.0/16"})
+	_, err := s.CreateGroup(ctx, apitypes.GroupCreate{CIDR: "10.9.0.0/24", ParentID: &n.ID})
+	if err == nil || strings.Count(err.Error(), "10.9.0.0/24") != 1 || strings.Count(err.Error(), "10.0.0.0/16") != 1 {
+		t.Errorf("message: %v", err)
+	}
+	_, err = s.CreateGroup(ctx, apitypes.GroupCreate{Name: "lab", CIDR: "10.8.0.0/24", ParentID: &n.ID})
+	if err == nil || !strings.Contains(err.Error(), `"lab" (10.8.0.0/24)`) {
+		t.Errorf("message with name: %v", err)
 	}
 }

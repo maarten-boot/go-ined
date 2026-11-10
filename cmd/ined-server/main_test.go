@@ -42,7 +42,7 @@ func startServer(t *testing.T, args ...string) (addr string, stop func() error, 
 	log = &syncBuf{}
 	readyc := make(chan string, 1)
 	errc := make(chan error, 1)
-	go func() { errc <- run(ctx, args, log, func(a string) { readyc <- a }) }()
+	go func() { errc <- run(ctx, args, log, log, func(a string) { readyc <- a }) }()
 	select {
 	case addr = <-readyc:
 	case err := <-errc:
@@ -66,7 +66,7 @@ func startServer(t *testing.T, args ...string) (addr string, stop func() error, 
 func TestRefuseNonLoopbackWithoutToken(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	db := filepath.Join(t.TempDir(), "x.db")
-	err := run(context.Background(), []string{"-listen", "0.0.0.0:0", "-db", db}, &bytes.Buffer{}, nil)
+	err := run(context.Background(), []string{"-listen", "0.0.0.0:0", "-db", db}, &bytes.Buffer{}, &bytes.Buffer{}, nil)
 	if err == nil || !strings.Contains(err.Error(), "server.token") {
 		t.Fatalf("want refusal, got %v", err)
 	}
@@ -149,10 +149,34 @@ func TestTLS(t *testing.T) {
 	}
 }
 
+// TC-807: -version prints to stdout and exits without error.
 func TestVersionFlag(t *testing.T) {
-	var out bytes.Buffer
-	if err := run(context.Background(), []string{"-version"}, &out, nil); err != nil || !strings.Contains(out.String(), "ined-server") {
-		t.Errorf("version: %v %q", err, out.String())
+	var out, errOut bytes.Buffer
+	if err := run(context.Background(), []string{"-version"}, &out, &errOut, nil); err != nil || !strings.Contains(out.String(), "ined-server") {
+		t.Errorf("version: %v stdout=%q", err, out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr not empty: %q", errOut.String())
+	}
+}
+
+// TC-603: with no db_path the database is created at the XDG default.
+func TestDefaultDBPath(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	startServer(t, "-listen", "127.0.0.1:0")
+	if _, err := os.Stat(filepath.Join(data, "go-ined", "ined.db")); err != nil {
+		t.Errorf("database not at XDG default: %v", err)
+	}
+}
+
+// TC-604: a second server on the same database refuses to start.
+func TestSecondServerRefused(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "x.db")
+	startServer(t, "-listen", "127.0.0.1:0", "-db", db)
+	err := run(context.Background(), []string{"-listen", "127.0.0.1:0", "-db", db}, &bytes.Buffer{}, &bytes.Buffer{}, nil)
+	if err == nil || !strings.Contains(err.Error(), "in use by another process") {
+		t.Fatalf("second server: want refusal, got %v", err)
 	}
 }
 

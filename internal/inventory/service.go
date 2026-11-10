@@ -15,16 +15,28 @@ import (
 // Repository persists the inventory. Apply must be atomic. The Service is
 // the only writer and keeps referential integrity itself.
 type Repository interface {
-	Load(ctx context.Context) ([]Group, []Host, error)
+	Load(ctx context.Context) (State, error)
 	Apply(ctx context.Context, c Changes) error
 }
 
+// State is everything Load returns. NextHostID and NextGroupID are the
+// persisted id sequences (SPEC-116); 0 means unknown.
+type State struct {
+	Groups      []Group
+	Hosts       []Host
+	NextHostID  int64
+	NextGroupID int64
+}
+
 // Changes is one atomic set of writes. Upserts insert or replace by ID.
+// NextHostID / NextGroupID, when not 0, update the persisted sequences.
 type Changes struct {
 	Groups       []Group
 	Hosts        []Host
 	DeleteGroups []int64
 	DeleteHosts  []int64
+	NextHostID   int64
+	NextGroupID  int64
 }
 
 // Service is the inventory with locking and write-through persistence. All
@@ -36,28 +48,69 @@ type Service struct {
 	nextHost  int64
 	nextGroup int64
 	now       func() time.Time
+	warnings  []string
 }
 
 // NewService loads the inventory from repo. Every loaded host is marked
-// stale until it has been pinged again (SPEC-603).
+// stale until it has been pinged again (SPEC-603). The tree is checked
+// (SPEC-605): items whose parent is missing are moved to the root and
+// reported by LoadWarnings; a cycle is an error.
 func NewService(ctx context.Context, repo Repository) (*Service, error) {
-	groups, hosts, err := repo.Load(ctx)
+	st, err := repo.Load(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("inventory: load: %w", err)
 	}
-	s := &Service{repo: repo, m: NewModel(), nextHost: 1, nextGroup: 1, now: time.Now}
-	for i := range groups {
-		g := groups[i]
+	s := &Service{repo: repo, m: NewModel(), nextHost: max(1, st.NextHostID), nextGroup: max(1, st.NextGroupID), now: time.Now}
+	for i := range st.Groups {
+		g := st.Groups[i]
 		s.m.Groups[g.ID] = &g
 		s.nextGroup = max(s.nextGroup, g.ID+1)
 	}
-	for i := range hosts {
-		h := hosts[i]
+	for i := range st.Hosts {
+		h := st.Hosts[i]
 		h.Stale = true
 		s.m.Hosts[h.ID] = &h
 		s.nextHost = max(s.nextHost, h.ID+1)
 	}
+	if err := s.repairOnLoad(ctx); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// LoadWarnings returns the repairs made while loading (SPEC-605).
+func (s *Service) LoadWarnings() []string { return slices.Clone(s.warnings) }
+
+// repairOnLoad moves orphans to the root (persisted) and rejects cycles.
+func (s *Service) repairOnLoad(ctx context.Context) error {
+	var ch Changes
+	for _, id := range sortedKeys(s.m.Groups) {
+		g := s.m.Groups[id]
+		if g.ParentID != Root && s.m.Groups[g.ParentID] == nil {
+			s.warnings = append(s.warnings, fmt.Sprintf("group %d: parent group %d does not exist; moved to the root", id, g.ParentID))
+			g.ParentID = Root
+			ch.Groups = append(ch.Groups, *g)
+		}
+	}
+	for _, id := range sortedKeys(s.m.Hosts) {
+		h := s.m.Hosts[id]
+		if h.ParentID != Root && s.m.Groups[h.ParentID] == nil {
+			s.warnings = append(s.warnings, fmt.Sprintf("host %d: parent group %d does not exist; moved to the root", id, h.ParentID))
+			h.ParentID = Root
+			ch.Hosts = append(ch.Hosts, *h)
+		}
+	}
+	for _, id := range sortedKeys(s.m.Groups) {
+		if s.m.inCycle(id) {
+			return fmt.Errorf("inventory: the database is inconsistent: group %d is part of a parent cycle; fix it by hand", id)
+		}
+	}
+	if len(ch.Groups)+len(ch.Hosts) > 0 {
+		if err := s.repo.Apply(ctx, ch); err != nil {
+			return fmt.Errorf("inventory: save repairs: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Service) stamp() time.Time { return s.now().UTC().Truncate(time.Millisecond) }
@@ -194,7 +247,7 @@ func (s *Service) CreateHost(ctx context.Context, in apitypes.HostCreate) (apity
 	h.ID = s.nextHost
 	h.CreatedAt = s.stamp()
 	h.UpdatedAt = h.CreatedAt
-	if err := s.repo.Apply(ctx, Changes{Hosts: []Host{h}}); err != nil {
+	if err := s.repo.Apply(ctx, Changes{Hosts: []Host{h}, NextHostID: h.ID + 1}); err != nil {
 		return apitypes.Host{}, err
 	}
 	s.nextHost++
@@ -316,7 +369,7 @@ func (s *Service) CreateGroup(ctx context.Context, in apitypes.GroupCreate) (api
 	}
 	g.CreatedAt = s.stamp()
 	g.UpdatedAt = g.CreatedAt
-	if err := s.repo.Apply(ctx, Changes{Groups: []Group{g}}); err != nil {
+	if err := s.repo.Apply(ctx, Changes{Groups: []Group{g}, NextGroupID: g.ID + 1}); err != nil {
 		delete(s.m.Groups, g.ID)
 		return apitypes.Group{}, err
 	}

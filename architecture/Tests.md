@@ -46,10 +46,10 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-309 | SPEC-304 | I | The real prober finds a working mode (unprivileged or raw) and gets a reply from 127.0.0.1 and ::1 (skipped when no ICMP mode is available) | monitor: TestICMPLoopback, TestICMPCancel | passing (unprivileged mode; raw mode not exercised on this machine) |
 | TC-310 | SPEC-308 | U | Changing a host's IP resets status to `unknown`, clears round-trip time and loss, sets `last_change`, emits `host.updated` then `host.status`; the monitor restarts the streak | inventory: TestIPChangeResets; monitor: TestIPChangeResetsStreak | passing |
 | TC-311 | SPEC-301, 805 | I | With `monitor.enabled = false` nothing is pinged and `/health` reports `icmp_mode: disabled` with status `ok` | ined-server: TestMonitorDisabled | passing |
-| TC-312 | SPEC-302 | I | The requests of a round are at least 200 ms apart | — | planned |
-| TC-313 | SPEC-304 | U | IPv6 unavailable while IPv4 works: IPv6 hosts are not pinged, keep their status, and `/health` reports `icmp6_error` with status `ok` | — | planned |
-| TC-314 | SPEC-304 | U | Raw mode: concurrent rounds on one shared socket each get exactly their own replies (fake socket) | — | planned |
-| TC-315 | SPEC-303 | U | `last_seen` is the arrival time of the last reply, not the end of the round | — | planned |
+| TC-312 | SPEC-302 | I | The requests of a round are at least 200 ms apart | monitor: TestRoundGap, TestICMPLoopback | passing |
+| TC-313 | SPEC-304 | U | IPv6 unavailable while IPv4 works: IPv6 hosts are not pinged, keep their status, and `/health` reports `icmp6_error` with status `ok` | monitor: TestFamilyUnavailable, TestSeenAtAndSkippedFamily; api: TestHealthICMP | passing |
+| TC-314 | SPEC-304 | U | Raw mode: concurrent rounds on one shared socket each get exactly their own replies (fake socket) | monitor: TestRawMuxConcurrentRounds, TestRawMuxSocketFailure | passing (fake raw socket; a real raw socket is still not exercised) |
+| TC-315 | SPEC-303 | U | `last_seen` is the arrival time of the last reply, not the end of the round | monitor: TestSeenAtAndSkippedFamily; inventory: TestSeenAt | passing |
 | TC-401 | SPEC-402 | U | Display name priority: manual name, then PTR name (trailing dot stripped), then IP address | inventory: TestDisplayName | passing |
 | TC-402 | SPEC-403 | U | A temporary DNS error keeps the old name. NXDOMAIN clears it | — | planned |
 | TC-403 | SPEC-401 | U | With a fake resolver and clock: a lookup when a host is added, and a refresh after `dns.refresh` | — | planned |
@@ -62,10 +62,10 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-506 | SPEC-503 | I | Event ids have the form `<run>-<seq>`. After a restart, a `Last-Event-ID` from the previous run gets `resync` | events: TestEventIDs, TestResync; api: TestEventsReplayAndResync | passing |
 | TC-507 | SPEC-502 | I | Event payloads: full object on created/updated/host.status, `{id}` on deleted (one per item on cascade), `{id,status}` on group.status. A client that falls behind gets `resync` and the stream ends | events: TestLaggedSubscriber; inventory: TestDeleteEvents; api: TestEventsStream, TestEventsLagged | passing |
 | TC-508 | SPEC-504 | I | `GET /events` during shutdown gets 503 `unavailable` | api: TestEventsClosedAtShutdown | passing |
-| TC-509 | SPEC-502, 804 | I | A client that stops reading is disconnected after the write timeout; shutdown then finishes at once | — | planned |
+| TC-509 | SPEC-502, 804 | I | A client that stops reading is disconnected after the write timeout; shutdown then finishes at once | api: TestEventsStalledClient | passing |
 | TC-601 | SPEC-602 | I | Migrations run on a fresh database and on a database at an older schema version | store: TestMigrateFresh, TestMigrateFromOlder, TestMigrateFailureRollsBack, TestMigration2Seeds | passing |
 | TC-602 | SPEC-603 | I | After a restart, the last known status is served with `stale = true`. The flag clears after the first ping round, and the status value doesn't change because of the flag | inventory: TestStaleOnLoad, TestStaleClears; api: TestPersistence; ined-server: TestMonitoringPersistsAndStale; store: TestRoundTrip | passing |
-| TC-603 | SPEC-603 | U | After a restart, unmonitored hosts are not stale; turning monitoring off clears `stale` | inventory: TestStaleOnlyMonitored | passing |
+| TC-603 | SPEC-603 | U | After a restart, unmonitored hosts are not stale; turning monitoring off clears `stale`, turning it on sets it | inventory: TestStaleOnlyMonitored | passing |
 | TC-603 | SPEC-601, 805 | I | The database is created at `storage.db_path` (also with `?`, `#`, `%`, spaces or a relative path), or at the XDG default when the path is empty | store: TestMigrateFresh, TestSpecialCharacterPaths; config: TestXDGPaths; ined-server: TestDefaultDBPath | passing |
 | TC-604 | SPEC-604 | I | A second store or server on the same database is refused at once; the first keeps working; the lock is released on close | store: TestExclusiveLock; ined-server: TestSecondServerRefused | passing |
 | TC-605 | SPEC-605 | U | Orphans move to the root (saved, one warning each, not repeated); a cycle refuses to load | inventory: TestRepairOnLoad | passing |

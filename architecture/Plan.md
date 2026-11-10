@@ -75,9 +75,10 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 ### Crosscheck 04 fixes ✅ (branch `fix/crosscheck-04`)
 - [x] Probe errors in discovery jobs; one goroutine per free slot in monitor and DNS; WaitGroup at close; `discovery.rate` bounds; A1 warning (SPEC-203, 205)
 
-### M4: Client package + CLI
-- [ ] `pkg/client` (SPEC-506), with Go `Example*` functions
-- [ ] `inedctl`: subcommands, table or `--json` output, exit codes, `-version` (SPEC-901..903, 806)
+### M4: Client package + CLI ✅ (branch `feature/m4-client-cli`)
+- [x] `pkg/client` (SPEC-506), with Go `Example*` functions
+- [x] `inedctl`: subcommands, table or `--json` output, exit codes, `-version` (SPEC-901..903, 806)
+- [x] `server.ca_cert` / `--ca-cert` (SPEC-805); `internal/testserver` for client and CLI tests
 
 ### M4b: Views (design in `Design-views.md`, approved 2026-11-10)
 - [ ] Spec items and test cases for views and placements (V1–V6 as recommended); D1 becomes "at most one parent per view"

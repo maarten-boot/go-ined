@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/maarten-boot/go-ined/internal/events"
 	"github.com/maarten-boot/go-ined/internal/inventory"
 	"github.com/maarten-boot/go-ined/internal/store"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -24,6 +25,9 @@ type env struct {
 	token string
 	db    string
 	st    *store.Store
+	svc   *inventory.Service
+	bus   *events.Bus
+	runs  int // number of starts; the run id is "run<runs>"
 }
 
 // newEnv starts a real server (SQLite store + inventory + HTTP).
@@ -44,13 +48,17 @@ func (e *env) start() {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	e.st = st
-	e.srv = httptest.NewServer(New(svc, Options{Token: e.token, Version: "test", RunID: "run1", DBPing: st.Ping}))
+	e.runs++
+	run := "run" + strconv.Itoa(e.runs)
+	e.st, e.svc, e.bus = st, svc, events.New(run, 1000)
+	svc.SetNotifier(e.bus)
+	e.srv = httptest.NewServer(New(svc, Options{Token: e.token, Version: "test", RunID: run, DBPing: st.Ping, Events: e.bus}))
 	e.t.Cleanup(e.stop)
 }
 
 func (e *env) stop() {
 	if e.srv != nil {
+		e.bus.Close() // ends SSE streams, as the server does at shutdown
 		e.srv.Close()
 		e.st.Close()
 		e.srv = nil
@@ -346,6 +354,29 @@ func TestHealthDegraded(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &hv)
 	if hv.Status != "degraded" || !strings.Contains(hv.DB, "boom") {
 		t.Errorf("got %+v", hv)
+	}
+}
+
+// TC-304: /health reports the ICMP mode, and a missing mode as degraded.
+func TestHealthICMP(t *testing.T) {
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "x.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	svc, _ := inventory.NewService(context.Background(), st)
+	for _, tc := range []struct{ mode, err, status string }{
+		{apitypes.ICMPUnprivileged, "", "ok"},
+		{apitypes.ICMPUnavailable, "no ICMP mode available", "degraded"},
+	} {
+		h := New(svc, Options{ICMP: func() (string, string) { return tc.mode, tc.err }})
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", Prefix+"/health", nil))
+		var hv apitypes.Health
+		_ = json.Unmarshal(rec.Body.Bytes(), &hv)
+		if hv.Status != tc.status || hv.ICMPMode != tc.mode || hv.ICMPError != tc.err {
+			t.Errorf("%s: got %+v", tc.mode, hv)
+		}
 	}
 }
 

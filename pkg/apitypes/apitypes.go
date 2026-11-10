@@ -30,12 +30,52 @@ const (
 	CodeConflict         = "conflict"
 	CodeTooLarge         = "too_large"
 	CodeInternal         = "internal"
+	CodeUnavailable      = "unavailable" // 503, e.g. while shutting down
 )
 
 // Delete modes for a non-empty group (SPEC-104).
 const (
 	ChildrenReparent = "reparent"
 	ChildrenCascade  = "cascade"
+)
+
+// Event types of GET /api/v1/events (SPEC-502).
+const (
+	EventHostCreated  = "host.created"
+	EventHostUpdated  = "host.updated"
+	EventHostDeleted  = "host.deleted"
+	EventHostStatus   = "host.status"
+	EventGroupCreated = "group.created"
+	EventGroupUpdated = "group.updated"
+	EventGroupDeleted = "group.deleted"
+	EventGroupStatus  = "group.status"
+	EventResync       = "resync"
+)
+
+// Event payloads (SPEC-502). host.created/updated/status carry a Host and
+// group.created/updated a Group.
+type (
+	// DeletedEvent is the payload of host.deleted and group.deleted.
+	DeletedEvent struct {
+		ID int64 `json:"id"`
+	}
+	// GroupStatusEvent is the payload of group.status.
+	GroupStatusEvent struct {
+		ID     int64  `json:"id"`
+		Status string `json:"status"`
+	}
+	// ResyncEvent is the payload of resync: reload the full state.
+	ResyncEvent struct {
+		Reason string `json:"reason"`
+	}
+)
+
+// ICMP modes reported by /health (SPEC-304).
+const (
+	ICMPUnprivileged = "unprivileged"
+	ICMPPrivileged   = "privileged"
+	ICMPUnavailable  = "unavailable"
+	ICMPNotStarted   = "not started"
 )
 
 // Host is a host as returned by the API (SPEC-101).
@@ -157,11 +197,12 @@ type GroupPatch struct {
 // Health is the response of GET /health. Without a valid token only Status
 // and Version are filled in (SPEC-501, SPEC-802).
 type Health struct {
-	Status   string `json:"status"`
-	Version  string `json:"version"`
-	ICMPMode string `json:"icmp_mode,omitempty"`
-	DB       string `json:"db,omitempty"`
-	RunID    string `json:"run_id,omitempty"`
+	Status    string `json:"status"`
+	Version   string `json:"version"`
+	ICMPMode  string `json:"icmp_mode,omitempty"`
+	ICMPError string `json:"icmp_error,omitempty"`
+	DB        string `json:"db,omitempty"`
+	RunID     string `json:"run_id,omitempty"`
 }
 
 // ErrorBody is the body of every error response (SPEC-504).

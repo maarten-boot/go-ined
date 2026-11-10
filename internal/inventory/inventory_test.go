@@ -19,6 +19,7 @@ type memRepo struct {
 	nextHost  int64
 	nextGroup int64
 	fail      error
+	applies   int // successful Apply calls
 }
 
 func newMemRepo() *memRepo { return &memRepo{groups: map[int64]Group{}, hosts: map[int64]Host{}} }
@@ -38,6 +39,7 @@ func (r *memRepo) Apply(_ context.Context, c Changes) error {
 	if r.fail != nil {
 		return r.fail
 	}
+	r.applies++
 	for _, id := range c.DeleteHosts {
 		delete(r.hosts, id)
 	}

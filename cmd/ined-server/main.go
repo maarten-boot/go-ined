@@ -20,14 +20,18 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/maarten-boot/go-ined/internal/api"
 	"github.com/maarten-boot/go-ined/internal/config"
+	"github.com/maarten-boot/go-ined/internal/events"
 	"github.com/maarten-boot/go-ined/internal/inventory"
+	"github.com/maarten-boot/go-ined/internal/monitor"
 	"github.com/maarten-boot/go-ined/internal/store"
 	"github.com/maarten-boot/go-ined/internal/version"
+	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
 
 func main() {
@@ -44,6 +48,15 @@ func main() {
 
 // shutdownTimeout bounds the graceful shutdown (SPEC-804).
 const shutdownTimeout = 10 * time.Second
+
+// newProber finds the ICMP prober; tests replace it with a fake.
+var newProber = func() (monitor.Prober, string, error) {
+	p, err := monitor.NewICMPProber()
+	if err != nil {
+		return nil, "", err
+	}
+	return p, p.Mode(), nil
+}
 
 // run starts the server and blocks until ctx is cancelled. ready, if not
 // nil, receives the bound address once the server accepts connections.
@@ -104,14 +117,38 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	}
 
 	runID := newRunID()
+	bus := events.New(runID, cfg.Events.Buffer)
+	svc.SetNotifier(bus)
+
+	// Monitoring (SPEC-304): without a working ICMP mode the server keeps
+	// running, hosts stay unknown and /health reports the error.
+	icmpMode, icmpErr := apitypes.ICMPUnavailable, ""
+	monCtx, monStop := context.WithCancel(context.Background())
+	defer monStop()
+	var monWG sync.WaitGroup
+	if prober, mode, err := newProber(); err != nil {
+		icmpErr = err.Error()
+		log.Error("monitoring disabled", "err", err)
+	} else {
+		icmpMode = mode
+		log.Info("monitoring started", "icmp_mode", mode, "interval", cfg.Monitor.Interval)
+		mon := monitor.New(prober, svc, monitor.Config{
+			Interval: cfg.Monitor.Interval, Count: cfg.Monitor.Count,
+			Timeout: cfg.Monitor.Timeout, DownAfter: cfg.Monitor.DownAfter,
+		}, log)
+		monWG.Add(1)
+		go func() { defer monWG.Done(); mon.Run(monCtx) }()
+	}
+
 	handler := api.New(svc, api.Options{
 		Token: cfg.Server.Token, Version: version.Version, RunID: runID, DBPing: st.Ping, Logger: log,
+		Events: bus, ICMP: func() (string, string) { return icmpMode, icmpErr },
 	})
 	srv := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
-		// No ReadTimeout/WriteTimeout: SSE streams (M2) are long-lived.
+		// No ReadTimeout/WriteTimeout: SSE streams are long-lived.
 		ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
 	ln, err := net.Listen("tcp", cfg.Server.Listen)
@@ -136,10 +173,18 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 
 	select {
 	case err := <-errc:
+		monStop()
+		monWG.Wait()
+		bus.Close()
 		return err
 	case <-ctx.Done():
 	}
+	// Shutdown order (SPEC-804): monitor (saves pending results), SSE
+	// streams, HTTP server; the database is closed by the deferred Close.
 	log.Info("shutting down")
+	monStop()
+	monWG.Wait()
+	bus.Close()
 	sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(sctx); err != nil {

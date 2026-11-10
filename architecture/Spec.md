@@ -67,7 +67,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - **SPEC-308** MUST (v0.9): When a host's IP address changes, its status is reset to `unknown`, its round-trip time and loss are cleared, `last_change` is set if the status changed, and `host.status` is emitted after `host.updated`. The ping streak starts over.
 
 ## 7. Reverse DNS
-- **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20). It uses Go's resolver (the system's DNS settings), with 5 s per lookup. At startup, the refreshes of the existing hosts are spread across `dns.refresh`. A changed name is saved and emits `host.updated`. When a host's IP changes, its PTR name is cleared at once and looked up again (v0.11).
+- **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20). It uses Go's resolver (the system's DNS settings), with 5 s per lookup. At startup, the refreshes of the existing hosts are spread across `dns.refresh`. A changed name is saved and emits `host.updated`. When a host's IP changes, its PTR name is cleared at once and looked up again (v0.11). `dns.enabled = false` turns reverse DNS off; PTR names then stay as stored (v0.11).
 - **SPEC-402** MUST: The name shown for a host is its manual name if set, otherwise the first PTR name (without the trailing dot), otherwise its IP address.
 - **SPEC-403** MUST: A temporary DNS error keeps the last known PTR name. An NXDOMAIN answer (the name doesn't exist) clears it. Of several PTR names, the first is used. DNS results never affect a host's status.
 
@@ -76,7 +76,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   - `GET/POST /hosts`, `GET/PATCH/DELETE /hosts/{id}`
   - `GET/POST /groups`, `GET/PATCH/DELETE /groups/{id}?children=reparent|cascade`
   - `GET /map`: every item with its type, parent, position, `collapsed` flag, `cidr`, status, `stale` flag, display name, `has_note` flag, `outside_cidr` flag and, for hosts, `ip`. Flags that don't apply to an item type (`collapsed` on hosts, `outside_cidr` on groups) are `false`. A client builds the map from this one response.
-  - `POST /discovery`, `GET /discovery/{id}`, `DELETE /discovery/{id}` (cancel)
+  - `POST /discovery` (202 with the new job), `GET /discovery/{id}`, `DELETE /discovery/{id}` (cancel; 200 with the job's state at that moment, `discovery.finished` follows)
   - `GET /health`: without a token, returns only `{status, version}`. With a valid token, it also returns the ICMP mode (`unprivileged`, `privileged`, `unavailable` or `disabled`), `icmp_error` and `icmp6_error` when set, the database status and the run id. `status` is `degraded` when the database fails or no ICMP mode works (v0.10).
   - Moving, repositioning, collapsing, expanding and editing notes are all done with `PATCH` on `parent_id`, `x` / `y`, `collapsed` or `note`.
 - **SPEC-502** MUST: `GET /api/v1/events` is a Server-Sent Events (SSE) stream. Event types: `host.created|updated|deleted|status`, `group.created|updated|deleted|status`, `discovery.progress|finished` (`finished` includes the final `state`: `done`, `cancelled` or `failed`), and `resync`.
@@ -139,6 +139,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
   | server | `monitor.enabled` | `true` (v0.9) |
   | server | `monitor.interval` / `count` / `timeout` / `down_after` | `60s` / `3` / `1s` / `2` |
   | server | `discovery.max_prefix` / `rate` / `concurrency` | `16` / `200` / `64` |
+  | server | `dns.enabled` | `true` (v0.11) |
   | server | `dns.refresh` / `concurrency` | `1h` / `20` |
   | server | `events.buffer` | `1000` |
   | gui, ctl | `server.url` | `http://127.0.0.1:8470` |
@@ -164,6 +165,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 - A 9P front end that exposes the inventory as a file tree.
 - A ZMQ publisher for alerts.
 - TCP-port probes for hosts that block ICMP, and ARP discovery.
+- A **Hosts** notebook tab in the GUI (v0.11, user request): the inventory as a list with IP address and DNS name, sortable by column, with a find box to jump to an item.
 - MAC address collection (v0.9, user request). MAC addresses are only visible (ARP/NDP) from inside the host's own layer-2 segment, so remote networks need a vantage point there: either ping and ARP/neighbour-table reads over SSH on a host in that network, or a small go-ined agent that runs there and reports to the server.
 - Status history and graphs.
 - Importing Tkined `.tki` map files.

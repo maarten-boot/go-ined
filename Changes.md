@@ -20,6 +20,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - New error code `unavailable` (503) while the server shuts down.
 - Config key `monitor.enabled` (default `true`) to turn pinging off.
 - Live-events example in `architecture/API-examples.md`.
+- Discovery: `POST /discovery` probes an IPv4 range (up to /16) at a configurable rate and adds the hosts that answer, into the most specific matching network group; jobs can be followed (`GET`, events) and cancelled (`DELETE`).
+- Reverse DNS: PTR names are looked up when a host is added or re-addressed, and refreshed every `dns.refresh`; config key `dns.enabled`.
+- Architecture overview diagram (`architecture/overview.svg`) in the README.
+- Spec: a Hosts tab for the GUI (sortable list by IP and DNS name, with find) listed as a future enhancement.
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 
 ### Fixed

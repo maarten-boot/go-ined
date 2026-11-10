@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.10** (2026-11-10)
+Status: **draft v0.11** (2026-11-10)
 
 ## Decisions
 | # | Decision | Date |
@@ -66,9 +66,10 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 ### Crosscheck 03 fixes ✅ (branch `fix/crosscheck-03`)
 - [x] SSE write deadline; shared raw socket per family; 200 ms gap; `last_seen` from the reply; ICMP mode per family; stale when monitoring is turned on; keepalive option; generator temp dir (SPEC-302..304, 502, 603, 804)
 
-### M3: Discovery + DNS
-- [ ] CIDR expansion, rate limit, jobs (SPEC-201..205)
-- [ ] Reverse DNS with a concurrency limit (SPEC-401..403)
+### M3: Discovery + DNS ✅ (branch `feature/m3-discovery-dns`)
+- [x] CIDR expansion, rate limit, jobs (SPEC-201..205)
+- [x] Reverse DNS with a concurrency limit (SPEC-401..403), `dns.enabled`
+- [x] README: SVG architecture overview (`architecture/overview.svg`)
 
 ### M4: Client package + CLI
 - [ ] `pkg/client` (SPEC-506), with Go `Example*` functions

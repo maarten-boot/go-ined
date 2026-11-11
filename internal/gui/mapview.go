@@ -37,21 +37,45 @@ type MapView struct {
 	// Callbacks, set by the GUI.
 	OnSelect func(k *mapmodel.Key)          // nil: nothing selected
 	OnToggle func(group int64, expand bool) // expand or collapse a group
-	OnMenu   func(n *mapmodel.Node, at fyne.Position)
+	// OnMenu opens the context menu of a node (nil: empty space) at a
+	// screen position; (mx, my) is the map point clicked.
+	OnMenu func(n *mapmodel.Node, at fyne.Position, mx, my float64)
 	// OnViewport is called when the viewport changes (zoom display).
 	OnViewport func(mapmodel.Viewport)
+	// OnMoved: an item was dragged by (dx, dy) map units onto empty space.
+	OnMoved func(k mapmodel.Key, dx, dy float64)
+	// OnDropInto: an item was dropped onto a group (SPEC-704).
+	OnDropInto func(k mapmodel.Key, group int64, dx, dy float64)
+	// Subtree returns the keys that move with a dragged item: the item,
+	// and for a group everything below it.
+	Subtree func(k mapmodel.Key) map[mapmodel.Key]bool
 
 	drag dragMode
+	// A press that may become an item drag or a pan (M6-9: 4 pixels).
+	pendingKey   *mapmodel.Key
+	pendingTotal fyne.Delta
+	// An item drag in progress.
+	dragKey    mapmodel.Key
+	dragSet    map[mapmodel.Key]bool
+	dragDX     float64 // map units
+	dragDY     float64
+	dropTarget *mapmodel.Node
 }
 
 type dragMode int
 
 const (
 	dragNone dragMode = iota
+	dragPending
 	dragPan
 	dragHBar
 	dragVBar
+	dragItem
 )
+
+// dragThreshold is how far the pointer moves before a press becomes a
+// drag, so a click stays a click (M6-9).
+const dragThreshold = 4.0
 
 // NewMapView returns an empty map for a view.
 func NewMapView(view int64, palette func() theme.Palette) *MapView {
@@ -173,7 +197,8 @@ func (mv *MapView) TappedSecondary(ev *fyne.PointEvent) {
 		}
 	}
 	if mv.OnMenu != nil {
-		mv.OnMenu(n, ev.AbsolutePosition)
+		x, y := mv.toMap(ev.Position)
+		mv.OnMenu(n, ev.AbsolutePosition, x, y)
 	}
 }
 
@@ -189,13 +214,42 @@ func (mv *MapView) Scrolled(ev *fyne.ScrollEvent) {
 	mv.SetViewport(mv.vp.ZoomAt(mv.vp.Zoom*f, float64(ev.Position.X), float64(ev.Position.Y)))
 }
 
-// Dragged pans the map, or moves it by a scroll bar (SPEC-713).
+// Dragged pans the map (on empty space or inside a frame), moves it by a
+// scroll bar (SPEC-713), or drags an item: a host, a collapsed group, or a
+// frame by its label (SPEC-704).
 func (mv *MapView) Dragged(ev *fyne.DragEvent) {
 	if mv.drag == dragNone {
 		start := fyne.NewPos(ev.Position.X-ev.Dragged.DX, ev.Position.Y-ev.Dragged.DY)
 		mv.drag = mv.barAt(start)
+		if mv.drag == dragPan {
+			mv.drag, mv.pendingKey, mv.pendingTotal = dragPending, mv.draggable(start), fyne.Delta{}
+		}
 	}
 	dx, dy := float64(ev.Dragged.DX), float64(ev.Dragged.DY)
+	if mv.drag == dragPending {
+		mv.pendingTotal.DX += ev.Dragged.DX
+		mv.pendingTotal.DY += ev.Dragged.DY
+		if math.Hypot(float64(mv.pendingTotal.DX), float64(mv.pendingTotal.DY)) < dragThreshold {
+			return
+		}
+		dx, dy = float64(mv.pendingTotal.DX), float64(mv.pendingTotal.DY)
+		mv.drag = dragPan
+		if k := mv.pendingKey; k != nil {
+			mv.drag, mv.dragKey, mv.dragDX, mv.dragDY = dragItem, *k, 0, 0
+			mv.dragSet = map[mapmodel.Key]bool{*k: true}
+			if mv.Subtree != nil {
+				mv.dragSet = mv.Subtree(*k)
+			}
+		}
+	}
+	if mv.drag == dragItem {
+		mv.dragDX += dx / mv.vp.Zoom
+		mv.dragDY += dy / mv.vp.Zoom
+		x, y := mv.toMap(ev.Position)
+		mv.dropTarget = dropTarget(mv.nodes, x, y, mv.dragSet)
+		mv.Refresh()
+		return
+	}
 	v := mv.vp
 	switch mv.drag {
 	case dragHBar, dragVBar:
@@ -213,8 +267,67 @@ func (mv *MapView) Dragged(ev *fyne.DragEvent) {
 	mv.SetViewport(v)
 }
 
-// DragEnd ends a pan or scroll-bar drag.
-func (mv *MapView) DragEnd() { mv.drag = dragNone }
+// DragEnd ends a drag. An item drag ends with a drop into a group or a
+// move (SPEC-704).
+func (mv *MapView) DragEnd() {
+	if mv.drag == dragItem {
+		k, dx, dy, target := mv.dragKey, mv.dragDX, mv.dragDY, mv.dropTarget
+		mv.endItemDrag()
+		switch {
+		case target != nil && mv.OnDropInto != nil:
+			mv.OnDropInto(k, target.Item.ID, dx, dy)
+		case (dx != 0 || dy != 0) && mv.OnMoved != nil:
+			mv.OnMoved(k, dx, dy)
+		}
+	}
+	mv.drag, mv.pendingKey = dragNone, nil
+}
+
+// CancelDrag stops an item drag without a change (Esc, SPEC-704).
+func (mv *MapView) CancelDrag() {
+	if mv.drag == dragItem || mv.drag == dragPending {
+		mv.endItemDrag()
+		mv.drag = dragPan // the rest of this pointer drag pans
+	}
+}
+
+// Dragging reports whether an item is being dragged.
+func (mv *MapView) Dragging() bool { return mv.drag == dragItem }
+
+func (mv *MapView) endItemDrag() {
+	mv.dragSet, mv.dropTarget, mv.dragDX, mv.dragDY, mv.pendingKey = nil, nil, 0, 0, nil
+	mv.Refresh()
+}
+
+// draggable returns the item a drag starting at p would move: a host or
+// collapsed group icon, or a frame by its label strip. Inside a frame's
+// body a drag pans.
+func (mv *MapView) draggable(p fyne.Position) *mapmodel.Key {
+	n := mv.hit(p)
+	if n == nil {
+		return nil
+	}
+	x, y := mv.toMap(p)
+	if n.Kind == mapmodel.KindFrame && !n.Icon.Contains(x, y) {
+		return nil
+	}
+	return &mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}
+}
+
+// dropTarget is the group a dragged item would go into at (x, y): a
+// collapsed group icon or a frame's label strip, not one being dragged.
+func dropTarget(nodes []mapmodel.Node, x, y float64, exclude map[mapmodel.Key]bool) *mapmodel.Node {
+	for i := len(nodes) - 1; i >= 0; i-- {
+		n := &nodes[i]
+		if n.Item.Type != apitypes.TypeGroup || exclude[mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}] {
+			continue
+		}
+		if (n.Kind == mapmodel.KindGroup && n.Bounds.Contains(x, y)) || (n.Kind == mapmodel.KindFrame && n.Icon.Contains(x, y)) {
+			return n
+		}
+	}
+	return nil
+}
 
 func (mv *MapView) barAt(p fyne.Position) dragMode {
 	s := mv.Size()
@@ -276,8 +389,18 @@ func (r *mapRenderer) build() {
 
 	vis := mv.vp.Visible(float64(s.Width), float64(s.Height))
 	vis = mapmodel.Rect{X: vis.X - cullMargin, Y: vis.Y - cullMargin, W: vis.W + 2*cullMargin, H: vis.H + 2*cullMargin}
+	// Dragged items are drawn last, on top of everything else.
+	order := make([]*mapmodel.Node, 0, len(mv.nodes))
+	var dragged []*mapmodel.Node
 	for i := range mv.nodes {
 		n := &mv.nodes[i]
+		if mv.dragSet[mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}] {
+			dragged = append(dragged, shifted(n, mv.dragDX, mv.dragDY))
+			continue
+		}
+		order = append(order, n)
+	}
+	for _, n := range append(order, dragged...) {
 		if !n.Bounds.Intersects(vis) {
 			continue
 		}
@@ -289,8 +412,27 @@ func (r *mapRenderer) build() {
 			d.icon(n, selected)
 		}
 	}
+	if t := mv.dropTarget; t != nil { // SPEC-704: mark the drop target
+		r := t.Icon
+		if t.Kind == mapmodel.KindGroup {
+			r = t.Bounds
+		}
+		d.rect(mapmodel.Rect{X: r.X - 6, Y: r.Y - 6, W: r.W + 12, H: r.H + 12}, color.Transparent, nrgba(p.Primary), 4)
+		d.text("into", r.X+r.W+10, r.Y-6, nrgba(p.Primary), false, true)
+	}
 	d.scrollBars(mv, s)
 	r.objs = d.objs
+}
+
+// shifted returns a copy of a node moved by (dx, dy), for drawing a drag.
+func shifted(n *mapmodel.Node, dx, dy float64) *mapmodel.Node {
+	c := *n
+	it := *n.Item
+	it.X, it.Y = it.X+dx, it.Y+dy
+	c.Item = &it
+	c.Icon.X, c.Icon.Y = c.Icon.X+dx, c.Icon.Y+dy
+	c.Bounds.X, c.Bounds.Y = c.Bounds.X+dx, c.Bounds.Y+dy
+	return &c
 }
 
 // drawer turns nodes into canvas objects in screen coordinates. Objects

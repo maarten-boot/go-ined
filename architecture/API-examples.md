@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "50fc118fb99dfde1"
+  "run_id": "40188f3589b1d610"
 }
 ```
 
@@ -48,8 +48,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-11T13:01:23.176Z",
-  "updated_at": "2026-11-11T13:01:23.176Z"
+  "created_at": "2026-11-11T14:02:57.664Z",
+  "updated_at": "2026-11-11T14:02:57.664Z"
 }
 ```
 
@@ -74,8 +74,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-11T13:01:23.185Z",
-  "updated_at": "2026-11-11T13:01:23.185Z"
+  "created_at": "2026-11-11T14:02:57.673Z",
+  "updated_at": "2026-11-11T14:02:57.673Z"
 }
 ```
 
@@ -105,10 +105,13 @@ Response: `201`
   "last_change": null,
   "stale": false,
   "outside_cidr": false,
+  "views": [
+    1
+  ],
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-11T13:01:23.194Z",
-  "updated_at": "2026-11-11T13:01:23.194Z"
+  "created_at": "2026-11-11T14:02:57.684Z",
+  "updated_at": "2026-11-11T14:02:57.684Z"
 }
 ```
 
@@ -138,10 +141,13 @@ Response: `200`
   "last_change": null,
   "stale": false,
   "outside_cidr": false,
+  "views": [
+    1
+  ],
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-11T13:01:23.194Z",
-  "updated_at": "2026-11-11T13:01:23.203Z"
+  "created_at": "2026-11-11T14:02:57.684Z",
+  "updated_at": "2026-11-11T14:02:57.694Z"
 }
 ```
 
@@ -166,8 +172,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-11T13:01:23.176Z",
-  "updated_at": "2026-11-11T13:01:23.212Z"
+  "created_at": "2026-11-11T14:02:57.664Z",
+  "updated_at": "2026-11-11T14:02:57.705Z"
 }
 ```
 
@@ -328,11 +334,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: 50fc118fb99dfde1-10
+id: 40188f3589b1d610-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"x":40,"y":40,"created_at":"2026-11-11T13:01:23.594Z","updated_at":"2026-11-11T13:01:23.594Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-11T14:02:58.096Z","updated_at":"2026-11-11T14:02:58.096Z"}
 
-id: 50fc118fb99dfde1-11
+id: 40188f3589b1d610-11
 event: host.deleted
 data: {"id":2}
 
@@ -348,7 +354,7 @@ Response: `202`
 
 ```json
 {
-  "id": "50fc118fb99dfde1-1",
+  "id": "40188f3589b1d610-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -357,7 +363,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-11T13:01:23.934Z",
+  "started_at": "2026-11-11T14:02:58.428Z",
   "finished_at": null
 }
 ```
@@ -365,14 +371,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/50fc118fb99dfde1-1
+curl -s $INED/api/v1/discovery/40188f3589b1d610-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "50fc118fb99dfde1-1",
+  "id": "40188f3589b1d610-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -381,8 +387,8 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-11T13:01:23.934Z",
-  "finished_at": "2026-11-11T13:01:23.941Z"
+  "started_at": "2026-11-11T14:02:58.428Z",
+  "finished_at": "2026-11-11T14:02:58.435Z"
 }
 ```
 
@@ -450,8 +456,8 @@ Parent:      root
 Status:      unknown
 Collapsed:   yes
 Position:    40, 40
-Created:     2026-11-11 14:01:26
-Updated:     2026-11-11 14:01:26
+Created:     2026-11-11 15:03:00
+Updated:     2026-11-11 15:03:00
 Note:        -
 ```
 
@@ -479,8 +485,8 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-11 14:01:26
-Updated:      2026-11-11 14:01:26
+Created:      2026-11-11 15:03:00
+Updated:      2026-11-11 15:03:00
 Note:         2nd floor
 ```
 
@@ -536,10 +542,13 @@ inedctl --json host show 5
   "last_change": null,
   "stale": false,
   "outside_cidr": false,
+  "views": [
+    1
+  ],
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-11T13:01:26.013Z",
-  "updated_at": "2026-11-11T13:01:26.013Z"
+  "created_at": "2026-11-11T14:03:00.494Z",
+  "updated_at": "2026-11-11T14:03:00.494Z"
 }
 ```
 
@@ -574,8 +583,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job 50fc118fb99dfde1-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job 50fc118fb99dfde1-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job 40188f3589b1d610-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job 40188f3589b1d610-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -635,8 +644,8 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-11T13:01:26.055Z",
-  "updated_at": "2026-11-11T13:01:26.055Z"
+  "created_at": "2026-11-11T14:03:00.54Z",
+  "updated_at": "2026-11-11T14:03:00.54Z"
 }
 ```
 
@@ -661,8 +670,8 @@ Response: `201`
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-11T13:01:26.063Z",
-  "updated_at": "2026-11-11T13:01:26.063Z"
+  "created_at": "2026-11-11T14:03:00.549Z",
+  "updated_at": "2026-11-11T14:03:00.549Z"
 }
 ```
 
@@ -788,8 +797,8 @@ ID:      2
 Name:    Printers
 Kind:    custom
 Order:   1
-Created: 2026-11-11 14:01:26
-Updated: 2026-11-11 14:01:26
+Created: 2026-11-11 15:03:00
+Updated: 2026-11-11 15:03:00
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6

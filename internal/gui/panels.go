@@ -193,6 +193,35 @@ func (d *details) parentName() string {
 	return strconv.FormatInt(*it.ParentID, 10)
 }
 
+// viewNames lists the names of the views a host is in (SPEC-721).
+func (d *details) viewNames(ids []int64) string {
+	d.g.mu.Lock()
+	defer d.g.mu.Unlock()
+	var names []string
+	for _, id := range ids {
+		if v, ok := d.g.model.View(id); ok {
+			names = append(names, v.Name)
+		}
+	}
+	return dash(strings.Join(names, ", "))
+}
+
+// reload loads the selected item's record again, keeping an unsaved note.
+func (d *details) reload() {
+	if d.key == nil {
+		return
+	}
+	k, g, seq := *d.key, d.g, d.seq
+	go func() {
+		h, err := g.c.Host(g.ctx, k.ID)
+		g.do(func() {
+			if err == nil && seq == d.seq {
+				d.setHost(h, false)
+			}
+		})
+	}()
+}
+
 func (d *details) refreshParent() {
 	if d.host != nil || d.group != nil {
 		d.fill()
@@ -239,7 +268,8 @@ func (d *details) fill() {
 			{"Manual name", dash(h.Name)}, {"Status", mapmodel.StatusWord(h.Status, h.Stale)},
 			{"Stale", yesNo(h.Stale)}, {"Monitored", yesNo(h.Monitored)}, {"Round-trip time", rtt},
 			{"Packet loss", loss}, {"Last seen", when(h.LastSeen)}, {"Last change", when(h.LastChange)},
-			{"Parent (this view)", d.parentName()}, {"Description", dash(h.Description)},
+			{"Parent (this view)", d.parentName()}, {"Views", d.viewNames(h.Views)},
+			{"Description", dash(h.Description)},
 		}
 		if d.view == mapmodel.NetworkView {
 			rows = append(rows, [2]string{"Outside its CIDR", yesNo(h.OutsideCIDR)})
@@ -301,6 +331,12 @@ func (d *details) onEvent(ev client.Event) {
 		if json.Unmarshal(ev.Data, &s) == nil && d.group != nil && k == mapmodel.GroupKey(s.ID) {
 			d.group.Status = s.Status
 			d.fill()
+		}
+	case apitypes.EventPlacementUpdated, apitypes.EventPlacementDeleted:
+		// The host's views changed (SPEC-509): load it again.
+		var p apitypes.PlacementDeletedEvent
+		if json.Unmarshal(ev.Data, &p) == nil && k == mapmodel.HostKey(p.HostID) {
+			d.reload()
 		}
 	case apitypes.EventHostDeleted, apitypes.EventGroupDeleted:
 		var del apitypes.DeletedEvent
@@ -443,14 +479,16 @@ func (g *GUI) goToHost(host int64) {
 }
 
 // showView selects a view's tab.
-func (g *GUI) showView(view int64) {
+// showView selects a view's tab; false if there is none (yet).
+func (g *GUI) showView(view int64) bool {
 	for i, ti := range g.tabs.Items {
 		if mv, ok := ti.Content.(*MapView); ok && mv.view == view {
 			g.tabs.SelectIndex(i)
 			g.setCurrent(view)
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // ---- contrast (SPEC-004, 005, 709) ----

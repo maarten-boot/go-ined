@@ -3,7 +3,7 @@
 A network monitor loosely modelled on [Tkined](https://github.com/flightaware/scotty) (Scotty), split into three parts:
 
 - **`ined-server`**: a daemon that keeps the inventory in SQLite and serves it over a REST + Server-Sent Events API. It pings every monitored host in the background (IPv4 and IPv6), discovers hosts in IPv4 ranges, and keeps their reverse-DNS names up to date.
-- **`ined-gui`**: a desktop client ([Fyne](https://fyne.io)) that shows hosts and groups on a map per view, with live status. Groups can be collapsed and expanded, as in Tkined. Editing on the map (drag and drop, adding and deleting) follows in milestone M6.
+- **`ined-gui`**: a desktop client ([Fyne](https://fyne.io)) that shows hosts and groups on a map per view, with live status. Groups can be collapsed and expanded, as in Tkined, and everything can be edited on the map: drag and drop, adding, editing and deleting, discovery and views.
 - **`inedctl`**: a command-line client, built on the Go client package `pkg/client`.
 
 Hosts and groups form a tree. A group with a CIDR is a **network group**: discovery fills it, and a host added by hand goes into the most specific network group that contains its IP address. Every host and group can have a note.
@@ -14,8 +14,8 @@ Besides this **network view**, you can make **custom views**: extra maps (tabs i
 
 ## Status
 
-Early development. **Milestones 1–5 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, custom views, and a read-only GUI.
-Next up: editing in the GUI (M6).
+Early development. **Milestones 1–6 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, custom views, and the GUI with editing.
+Next up: CI and release 0.1.0 (M7).
 See [`architecture/Plan.md`](architecture/Plan.md) for the roadmap.
 
 ## Build and run
@@ -56,6 +56,7 @@ echo "replaced disk 3" | bin/inedctl note set host 1
 bin/inedctl view add Storage                        # a custom view (id 2)
 bin/inedctl view place 2 1                          # show host 1 there too
 bin/inedctl view show 2
+bin/inedctl group shift 1 --dx 200                # move group 1 with everything in it
 bin/inedctl events                                  # live events; Ctrl-C to stop
 bin/inedctl -h                                      # all commands
 ```
@@ -75,7 +76,11 @@ bin/ined-gui -url https://ined.example.org:8470 -token … -ca-cert ca.pem
 - Network groups have a double-bordered folder icon and a dashed frame; ordinary groups a plain folder and a solid frame. A folded corner marks a note.
 - Double-click a collapsed group to expand it, or the label of a frame to collapse it (also in the right-click menu). This changes the shared state on the server.
 - Drag on empty space or use the scroll bars to pan; mouse wheel or Ctrl+= / Ctrl+- to zoom, Ctrl+0 for 100 %, Ctrl+1 to fit all, Ctrl+F to find a host.
-- The details panel shows the selected item's fields and lets you edit its note.
+- Drag a host, a group icon or a frame (by its label) to move it; a group takes everything in it along. Drop onto a group icon or a frame label (marked "into") to move the item into that group. Esc cancels a drag.
+- Right-click empty space for "New group here…" and "New host here…"; right-click an item to edit, move ("Move to group…"), delete it, or, for a host, show it in another view ("Show in view") or remove it from the current custom view. Deleting always asks first and says what goes; the Delete key deletes the selected item.
+- "Discover…" in the toolbar (or "Scan this network" on a network group) finds the hosts that answer ping in an IPv4 range, with progress and a cancel button; closing the dialog leaves the job running, with its progress in the status bar.
+- "View ▾" creates, renames, moves and deletes views (tabs). The network view can't be deleted.
+- The details panel shows the selected item's fields, the views a host is in, and lets you edit its note.
 - The contrast selector (AA, AAA, Max, custom) applies at once and is saved in `gui.toml`.
 - The status bar shows the connection state and errors.
 

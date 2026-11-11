@@ -154,3 +154,83 @@ func (r *Reloader) Stop() {
 		delete(r.pending, v)
 	}
 }
+
+// Subtree returns the keys of a group's items in a loaded view: the group
+// and everything below it (for dragging, SPEC-704).
+func (m *Model) Subtree(view, group int64) map[Key]bool {
+	vm := m.maps[view]
+	out := map[Key]bool{}
+	if vm == nil || vm.Items[GroupKey(group)] == nil {
+		return out
+	}
+	out[GroupKey(group)] = true
+	for k, it := range vm.Items {
+		for p, n := it.ParentID, 0; p != nil && n <= len(vm.Items); n++ {
+			if *p == group {
+				out[k] = true
+				break
+			}
+			g := vm.Items[GroupKey(*p)]
+			if g == nil {
+				break
+			}
+			p = g.ParentID
+		}
+	}
+	return out
+}
+
+// Contents counts the hosts and groups below a group in a loaded view (for
+// the delete question, SPEC-719).
+func (m *Model) Contents(view, group int64) (hosts, groups int) {
+	for k := range m.Subtree(view, group) {
+		switch {
+		case k == GroupKey(group):
+		case k.Type == apitypes.TypeHost:
+			hosts++
+		default:
+			groups++
+		}
+	}
+	return hosts, groups
+}
+
+// Shift moves an item, and for a group everything below it, by (dx, dy)
+// in the model only: the GUI shows a drag's result at once, and the
+// server's events confirm or correct it (SPEC-704).
+func (m *Model) Shift(view int64, k Key, dx, dy float64) {
+	vm := m.maps[view]
+	if vm == nil {
+		return
+	}
+	keys := map[Key]bool{k: true}
+	if k.Type == apitypes.TypeGroup {
+		keys = m.Subtree(view, k.ID)
+	}
+	for key := range keys {
+		if it := vm.Items[key]; it != nil {
+			it.X += dx
+			it.Y += dy
+		}
+	}
+	vm.gen++
+}
+
+// Groups returns the groups of a loaded view ordered by name, then id (for
+// "Move to group…" and the discovery target).
+func (m *Model) Groups(view int64) []apitypes.MapItem {
+	vm := m.maps[view]
+	if vm == nil {
+		return nil
+	}
+	var out []apitypes.MapItem
+	for _, it := range vm.Items {
+		if it.Type == apitypes.TypeGroup {
+			out = append(out, *it)
+		}
+	}
+	slices.SortFunc(out, func(a, b apitypes.MapItem) int {
+		return cmp.Or(strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)), cmp.Compare(a.ID, b.ID))
+	})
+	return out
+}

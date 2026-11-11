@@ -1,0 +1,444 @@
+package gui
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"testing"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
+
+	"github.com/maarten-boot/go-ined/internal/gui/mapmodel"
+	"github.com/maarten-boot/go-ined/internal/testserver"
+	"github.com/maarten-boot/go-ined/internal/theme"
+	"github.com/maarten-boot/go-ined/pkg/apitypes"
+	"github.com/maarten-boot/go-ined/pkg/client"
+)
+
+// drag simulates a pointer drag on a map from a map point by screen
+// pixels, in small steps, then releases.
+func drag(mv *MapView, mx, my, dx, dy float64) {
+	sx, sy := mv.vp.ToScreen(mx, my)
+	steps := 5
+	for i := 1; i <= steps; i++ {
+		ddx, ddy := float32(dx/float64(steps)), float32(dy/float64(steps))
+		pos := fyne.NewPos(float32(sx+dx*float64(i)/float64(steps)), float32(sy+dy*float64(i)/float64(steps)))
+		mv.Dragged(&fyne.DragEvent{PointEvent: fyne.PointEvent{Position: pos}, Dragged: fyne.Delta{DX: ddx, DY: ddy}})
+	}
+	mv.DragEnd()
+}
+
+// TC-718 (widget): click vs drag, item drags, drop targets, Esc, panning
+// inside a frame.
+func TestDragWidget(t *testing.T) {
+	p := theme.NewPalette(theme.Default)
+	mv, _ := newMap(t, p,
+		apitypes.MapItem{Type: "group", ID: 1, Name: "office", X: 100, Y: 100, Status: "up"},
+		apitypes.MapItem{Type: "host", ID: 1, ParentID: pid(1), Name: "web", X: 100, Y: 200, Status: "up", Monitored: true},
+		apitypes.MapItem{Type: "host", ID: 2, ParentID: pid(1), Name: "db", X: 250, Y: 200, Status: "up", Monitored: true},
+		apitypes.MapItem{Type: "group", ID: 2, Name: "lab", X: 500, Y: 100, Collapsed: true, Status: "up"},
+		apitypes.MapItem{Type: "host", ID: 3, Name: "laptop", X: 500, Y: 400, Status: "up", Monitored: true},
+	)
+	var log []string
+	mv.OnMoved = func(k mapmodel.Key, dx, dy float64) {
+		log = append(log, fmt.Sprintf("move %s %d %g,%g", k.Type, k.ID, dx, dy))
+	}
+	mv.OnDropInto = func(k mapmodel.Key, g int64, _, _ float64) {
+		log = append(log, fmt.Sprintf("into %s %d → %d", k.Type, k.ID, g))
+	}
+	mv.Subtree = func(k mapmodel.Key) map[mapmodel.Key]bool {
+		if k == mapmodel.GroupKey(1) {
+			return map[mapmodel.Key]bool{k: true, mapmodel.HostKey(1): true, mapmodel.HostKey(2): true}
+		}
+		return map[mapmodel.Key]bool{k: true}
+	}
+	take := func() string { s := strings.Join(log, "; "); log = nil; return s }
+
+	// Under 4 pixels: nothing moves, the map doesn't pan.
+	v0 := mv.vp
+	drag(mv, 500, 400, 3, 0)
+	if got := take(); got != "" || mv.vp != v0 {
+		t.Errorf("tiny drag: %q, viewport %+v", got, mv.vp)
+	}
+	// A host onto empty space.
+	drag(mv, 500, 400, 40, 20)
+	if got := take(); got != "move host 3 40,20" {
+		t.Errorf("host move: %q", got)
+	}
+	// A host onto the collapsed group "lab".
+	drag(mv, 500, 400, 0, -300)
+	if got := take(); got != "into host 3 → 2" {
+		t.Errorf("drop into icon: %q", got)
+	}
+	// The frame of "office" by its label: the group (with its subtree).
+	frame := mv.Nodes()[0]
+	drag(mv, frame.Icon.X+10, frame.Icon.Y+5, 0, 300)
+	if got := take(); got != "move group 1 0,300" {
+		t.Errorf("frame drag: %q", got)
+	}
+	// Inside the frame's body: a pan.
+	v1 := mv.vp
+	drag(mv, frame.Bounds.X+frame.Bounds.W-4, frame.Bounds.Y+frame.Bounds.H-4, 30, 0)
+	if got := take(); got != "" || mv.vp.X != v1.X-30 {
+		t.Errorf("frame body drag: %q, %+v", got, mv.vp)
+	}
+	// A host onto the frame label of a group: into it; not onto itself.
+	drag(mv, 500, 400, frame.Icon.X+20-500, frame.Icon.Y+8-400)
+	if got := take(); got != "into host 3 → 1" {
+		t.Errorf("drop on frame label: %q", got)
+	}
+	// While dragging, the target is marked; Esc cancels.
+	sx, sy := mv.vp.ToScreen(500, 400)
+	for i := 1; i <= 10; i++ {
+		mv.Dragged(&fyne.DragEvent{PointEvent: fyne.PointEvent{Position: fyne.NewPos(float32(sx), float32(sy)-float32(30*i))}, Dragged: fyne.Delta{DY: -30}})
+	}
+	if !mv.Dragging() || mv.dropTarget == nil || mv.dropTarget.Item.ID != 2 {
+		t.Fatalf("drop target while dragging: %+v", mv.dropTarget)
+	}
+	if !has(count(testObjects(mv)).texts, "into") {
+		t.Error("drop target not marked with \"into\"")
+	}
+	mv.CancelDrag()
+	mv.DragEnd()
+	if got := take(); got != "" || mv.Dragging() {
+		t.Errorf("after Esc: %q", got)
+	}
+}
+
+func testObjects(mv *MapView) []fyne.CanvasObject { return test.WidgetRenderer(mv).Objects() }
+
+// Short names for the widgets inside the forms.
+type (
+	fyneEntry  = widget.Entry
+	fyneCheck  = widget.Check
+	fyneSelect = widget.Select
+	fyneLabel  = widget.Label
+	fyneRadio  = widget.RadioGroup
+)
+
+func clientFor(url string) (*client.Client, error) { return client.New(client.Options{URL: url}) }
+
+// TC-718 (GUI): drags reach the server: a host's position, a group with
+// its contents, a drop into a group, a placement in a custom view.
+func TestDragGUI(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	a := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "a", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	b := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "b", X: ptr(600.0), Y: ptr(100.0)}))
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &a.ID, X: ptr(100.0), Y: ptr(220.0)}))
+	lone := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", X: ptr(600.0), Y: ptr(400.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return len(e.nodes(1)) == 4 })
+	e.ui.Wait(func() { g.maps[1].SetViewport(mapmodel.Viewport{Zoom: 1}) })
+
+	e.ui.Wait(func() { drag(g.maps[1], 600, 400, 50, 0) })
+	eventually(t, e.ui, "host moved on the server", func() bool { return must(c.Host(ctx, lone.ID)).X == 650 })
+
+	e.ui.Wait(func() {
+		f := find(e.nodes(1), "group", a.ID)
+		drag(g.maps[1], f.Icon.X+5, f.Icon.Y+5, 0, 100)
+	})
+	eventually(t, e.ui, "group moved with its host", func() bool {
+		return must(c.Group(ctx, a.ID)).Y == 200 && must(c.Host(ctx, h.ID)).Y == 320
+	})
+
+	eventually(t, e.ui, "map laid out after the moves", func() bool {
+		n := find(e.nodes(1), "host", lone.ID)
+		return n != nil && n.Icon.X == 650-mapmodel.HostSize/2
+	})
+	e.ui.Wait(func() {
+		drag(g.maps[1], 650, 400, -50, -300)
+	}) // onto group b's icon
+	eventually(t, e.ui, "dropped into b", func() bool {
+		hh := must(c.Host(ctx, lone.ID))
+		return hh.ParentID != nil && *hh.ParentID == b.ID
+	})
+
+	// A custom view: the drag changes the placement only.
+	v := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "Lab"}))
+	must(c.PlaceHost(ctx, v.ID, h.ID, apitypes.PlacementSet{X: ptr(50.0), Y: ptr(50.0)}))
+	eventually(t, e.ui, "Lab tab", func() bool { return e.tabNames() == "Networks,Lab" })
+	e.ui.Wait(func() { g.showView(v.ID) })
+	eventually(t, e.ui, "Lab map", func() bool { return find(e.nodes(v.ID), "host", h.ID) != nil })
+	e.ui.Wait(func() {
+		g.maps[v.ID].SetViewport(mapmodel.Viewport{Zoom: 1})
+		drag(g.maps[v.ID], 50, 50, 25, 25)
+	})
+	eventually(t, e.ui, "placement moved", func() bool {
+		m := must(c.ViewMap(ctx, v.ID))
+		return m.Items[0].X == 75 && m.Items[0].Y == 75
+	})
+	if hh := must(c.Host(ctx, h.ID)); hh.Y != 320 {
+		t.Errorf("network position changed by a custom-view drag: %+v", hh)
+	}
+}
+
+// TC-719: create, edit, move and delete through the dialogs; an API error
+// stays in the dialog; the Delete key; cascade wording.
+func TestDialogs(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "connected", func() bool { return strings.Contains(g.status.Text(), "connected") })
+
+	// New group: a bad CIDR first, then a good one.
+	var f *formDialog
+	e.ui.Wait(func() {
+		f = g.newGroupDialog(1, nil, 300, 300)
+		items := f.form.Items
+		items[0].Widget.(*fyneEntry).SetText("lan")
+		items[2].Widget.(*fyneEntry).SetText("10.0.0.5/24")
+		f.Submit()
+	})
+	eventually(t, e.ui, "error in the dialog", func() bool { return strings.Contains(f.errL.Text, "Error:") && !f.done })
+	e.ui.Wait(func() {
+		f.form.Items[2].Widget.(*fyneEntry).SetText("10.0.0.0/24")
+		f.Submit()
+	})
+	eventually(t, e.ui, "group created", func() bool { return f.done && len(e.nodes(1)) == 1 })
+	gr := must(c.Groups(ctx))[0]
+	if gr.Name != "lan" || gr.CIDR != "10.0.0.0/24" || gr.X != 300 {
+		t.Errorf("created group: %+v", gr)
+	}
+
+	// New host into the group's frame (expanded), edit it.
+	must(c.UpdateGroup(ctx, gr.ID, apitypes.GroupPatch{Collapsed: apitypes.Some(false)}))
+	e.ui.Wait(func() {
+		f = g.newHostDialog(&gr.ID, 300, 420)
+		f.form.Items[0].Widget.(*fyneEntry).SetText("10.0.0.9")
+		f.form.Items[1].Widget.(*fyneEntry).SetText("nas")
+		f.Submit()
+	})
+	eventually(t, e.ui, "host created", func() bool { return f.done && len(e.nodes(1)) == 2 })
+	h := must(c.Hosts(ctx))[0]
+	e.ui.Wait(func() { g.lastForm = nil; g.editHostDialog(h.ID) })
+	eventually(t, e.ui, "edit form", func() bool { return g.lastForm != nil })
+	e.ui.Wait(func() {
+		f = g.lastForm
+		f.form.Items[1].Widget.(*fyneEntry).SetText("storage")
+		f.form.Items[3].Widget.(*fyneCheck).SetChecked(false)
+		f.Submit()
+	})
+	eventually(t, e.ui, "host edited", func() bool { return f.done })
+	if hh := must(c.Host(ctx, h.ID)); hh.Name != "storage" || hh.Monitored {
+		t.Errorf("edited host: %+v", hh)
+	}
+	e.ui.Wait(func() { g.lastForm = nil; g.editGroupDialog(1, gr.ID) })
+	eventually(t, e.ui, "group edit form", func() bool { return g.lastForm != nil })
+	e.ui.Wait(func() {
+		f = g.lastForm
+		f.form.Items[1].Widget.(*fyneEntry).SetText("the LAN")
+		f.Submit()
+	})
+	eventually(t, e.ui, "group edited", func() bool { return f.done })
+	if gg := must(c.Group(ctx, gr.ID)); gg.Description != "the LAN" || gg.CIDR != "10.0.0.0/24" {
+		t.Errorf("edited group: %+v", gg)
+	}
+
+	// Move to group: the group can't go into itself; the host goes to Root.
+	sub := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "sub", ParentID: &gr.ID}))
+	eventually(t, e.ui, "sub shown", func() bool { return find(e.nodes(1), "group", sub.ID) != nil })
+	e.ui.Wait(func() {
+		f = g.moveToDialog(1, mapmodel.GroupKey(gr.ID))
+		if opts := f.form.Items[0].Widget.(*fyneSelect).Options; len(opts) != 1 || opts[0] != "Root" {
+			t.Errorf("move options for the group: %v", opts)
+		}
+		f.d.Hide()
+		f = g.moveToDialog(1, mapmodel.HostKey(h.ID))
+		sel := f.form.Items[0].Widget.(*fyneSelect)
+		if sel.Selected != fmt.Sprintf("lan (%d)", gr.ID) || len(sel.Options) != 3 {
+			t.Errorf("host move dialog: %q %v", sel.Selected, sel.Options)
+		}
+		sel.SetSelected("Root")
+		f.Submit()
+	})
+	eventually(t, e.ui, "host at root", func() bool { return f.done && must(c.Host(ctx, h.ID)).ParentID == nil })
+
+	// Delete: Delete key on the selected host; the group's cascade question.
+	must(c.UpdateHost(ctx, h.ID, apitypes.HostPatch{ParentID: apitypes.Some(&sub.ID)}))
+	eventually(t, e.ui, "host in sub", func() bool {
+		n := find(e.nodes(1), "host", h.ID)
+		return n != nil && n.Item.ParentID != nil && *n.Item.ParentID == sub.ID
+	})
+	e.ui.Wait(func() {
+		f = g.deleteDialog(1, mapmodel.GroupKey(gr.ID))
+		text := f.form.Items[0].Widget.(*fyneLabel).Text
+		if !strings.Contains(text, "1 host and 1 group.") || !strings.Contains(text, "deletes 1 host and 1 group") {
+			t.Errorf("cascade wording: %q", text)
+		}
+		f.form.Items[1].Widget.(*fyneRadio).SetSelected("Delete its contents too")
+		f.Submit()
+	})
+	eventually(t, e.ui, "cascade done", func() bool { return f.done && len(must(c.Hosts(ctx))) == 0 && len(e.nodes(1)) == 0 })
+
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.5", Name: "pc"}))
+	eventually(t, e.ui, "pc shown", func() bool { return find(e.nodes(1), "host", h2.ID) != nil })
+	e.ui.Wait(func() {
+		k := mapmodel.HostKey(h2.ID)
+		g.maps[1].Select(&k)
+		g.lastForm = nil
+		g.onKey(&fyne.KeyEvent{Name: fyne.KeyDelete})
+		f = g.lastForm
+		if f == nil || !strings.Contains(f.form.Items[0].Widget.(*fyneLabel).Text, "removed from every view") {
+			t.Fatalf("Delete key: %+v", f)
+		}
+		f.Submit()
+	})
+	eventually(t, e.ui, "host deleted", func() bool { return f.done && len(must(c.Hosts(ctx))) == 0 })
+
+	// In a custom view, the cascade keeps the hosts.
+	h3 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.6"}))
+	v := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "Lab"}))
+	cg := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "rack", ViewID: &v.ID}))
+	must(c.PlaceHost(ctx, v.ID, h3.ID, apitypes.PlacementSet{ParentID: &cg.ID}))
+	eventually(t, e.ui, "Lab tab", func() bool { return e.tabNames() == "Networks,Lab" })
+	e.ui.Wait(func() { g.showView(v.ID) })
+	eventually(t, e.ui, "Lab loaded", func() bool { return find(e.nodes(v.ID), "group", cg.ID) != nil })
+	e.ui.Wait(func() {
+		f = g.deleteDialog(v.ID, mapmodel.GroupKey(cg.ID))
+		if text := f.form.Items[0].Widget.(*fyneLabel).Text; !strings.Contains(text, "stay in the network view") {
+			t.Errorf("custom cascade wording: %q", text)
+		}
+	})
+}
+
+// TC-720: the discovery dialog, progress in the dialog and the status bar,
+// cancel, "Scan this network" disabled for IPv6.
+func TestDiscoveryDialog(t *testing.T) {
+	gate := make(chan struct{})
+	e := &env{t: t, srv: testserver.Start(t, testserver.Options{Gate: gate}), ui: newUI(t), ctx: t.Context()}
+	e.c = must(clientFor(e.srv.URL()))
+	c, ctx := e.c, e.ctx
+	v6 := must(c.CreateGroup(ctx, apitypes.GroupCreate{CIDR: "2001:db8::/64"}))
+	v4 := must(c.CreateGroup(ctx, apitypes.GroupCreate{CIDR: "10.9.0.0/30"}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return len(e.nodes(1)) == 2 })
+	e.ui.Wait(func() {
+		if it := menuItem(g.menuItems(1, find(e.nodes(1), "group", v6.ID), 0, 0, nil), "Scan this network"); it == nil || !it.Disabled {
+			t.Errorf("IPv6 scan item: %+v", it)
+		}
+		it := menuItem(g.menuItems(1, find(e.nodes(1), "group", v4.ID), 0, 0, nil), "Scan this network")
+		if it == nil || it.Disabled {
+			t.Fatalf("IPv4 scan item: %+v", it)
+		}
+		it.Action()
+		if g.disc == nil || g.disc.cidr.Text != "10.9.0.0/30" {
+			t.Fatalf("dialog: %+v", g.disc)
+		}
+		g.startDiscovery(g.disc)
+	})
+	eventually(t, e.ui, "job running", func() bool { return g.disc.job != "" && !g.disc.cancel.Disabled() })
+	e.ui.Wait(func() { g.disc.cancel.OnTapped() })
+	close(gate)
+	eventually(t, e.ui, "cancelled", func() bool {
+		return strings.Contains(g.disc.info.Text, "cancelled") && strings.Contains(g.status.Text(), "discovery 10.9.0.0/30 cancelled")
+	})
+
+	// A second job with the dialog closed: progress goes to the status bar.
+	var dd *discoveryDialog
+	e.ui.Wait(func() {
+		dd = g.openDiscovery("")
+		dd.cidr.SetText("10.8.0.0/30")
+		g.startDiscovery(dd)
+	})
+	eventually(t, e.ui, "started", func() bool { return dd.job != "" })
+	e.ui.Wait(func() { dd.d.Hide() })
+	eventually(t, e.ui, "done in the status bar", func() bool {
+		return g.disc == nil && strings.Contains(g.status.Text(), "discovery 10.8.0.0/30 done: 2 found")
+	})
+	// A bad range: the error is in the dialog.
+	e.ui.Wait(func() {
+		dd = g.openDiscovery("")
+		dd.cidr.SetText("2001:db8::/120")
+		g.startDiscovery(dd)
+	})
+	eventually(t, e.ui, "error shown", func() bool { return strings.HasPrefix(dd.info.Text, "Error:") && !dd.start.Disabled() })
+}
+
+// TC-721: the View menu.
+func TestViewMenu(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "tabs", func() bool { return e.tabNames() == "Networks" })
+	e.ui.Wait(func() {
+		items := g.viewMenuItems()
+		if !menuItem(items, "Delete view…").Disabled || !menuItem(items, "Move view left").Disabled {
+			t.Errorf("network view menu: %v", labels(items))
+		}
+	})
+	var f *formDialog
+	e.ui.Wait(func() {
+		f = g.newViewDialog()
+		f.form.Items[0].Widget.(*fyneEntry).SetText("Lab")
+		f.Submit()
+	})
+	eventually(t, e.ui, "new view selected", func() bool { return e.tabNames() == "Networks,Lab" && g.current == 2 })
+	e.ui.Wait(func() {
+		f = g.renameViewDialog()
+		f.form.Items[0].Widget.(*fyneEntry).SetText("Rack")
+		f.Submit()
+	})
+	eventually(t, e.ui, "renamed", func() bool { return e.tabNames() == "Networks,Rack" })
+	e.ui.Wait(func() { menuItem(g.viewMenuItems(), "Move view left").Action() })
+	eventually(t, e.ui, "moved left", func() bool { return e.tabNames() == "Rack,Networks" })
+	e.ui.Wait(func() {
+		if !menuItem(g.viewMenuItems(), "Move view left").Disabled {
+			t.Error("left of the first tab")
+		}
+		f = g.deleteViewDialog()
+		f.Submit()
+	})
+	eventually(t, e.ui, "deleted", func() bool { return e.tabNames() == "Networks" && g.current == 1 })
+	if vs := must(c.Views(ctx)); len(vs) != 1 {
+		t.Errorf("views: %+v", vs)
+	}
+}
+
+// TC-722: "Show in view ▸", "Remove from this view", and the details.
+func TestShowInView(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Name: "web"}))
+	a := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "A"}))
+	b := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "B"}))
+	must(c.PlaceHost(ctx, a.ID, h.ID, apitypes.PlacementSet{}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return len(e.nodes(1)) == 1 })
+	host := must(c.Host(ctx, h.ID))
+	e.ui.Wait(func() {
+		item := menuItem(g.menuItems(1, find(e.nodes(1), "host", h.ID), 0, 0, &host), "Show in view")
+		if item == nil || item.ChildMenu == nil {
+			t.Fatalf("Show in view: %+v", item)
+		}
+		sub := item.ChildMenu.Items
+		if len(sub) != 2 || !sub[0].Checked || sub[1].Checked {
+			t.Fatalf("sub menu: %+v", sub)
+		}
+		if menuItem(g.menuItems(1, find(e.nodes(1), "host", h.ID), 0, 0, &host), "Remove from this view") != nil {
+			t.Error("remove in the network view")
+		}
+		k := mapmodel.HostKey(h.ID)
+		g.details.show(1, &k)
+		sub[1].Action() // place in B
+	})
+	eventually(t, e.ui, "placed in B; details list it", func() bool {
+		return slices.Equal(must(c.Host(ctx, h.ID)).Views, []int64{1, a.ID, b.ID}) && strings.Contains(formText(g.details), "Networks, A, B")
+	})
+	e.ui.Wait(func() { g.showView(a.ID) })
+	eventually(t, e.ui, "A loaded", func() bool { return find(e.nodes(a.ID), "host", h.ID) != nil })
+	host = must(c.Host(ctx, h.ID))
+	e.ui.Wait(func() {
+		menuItem(g.menuItems(a.ID, find(e.nodes(a.ID), "host", h.ID), 0, 0, &host), "Remove from this view").Action()
+	})
+	eventually(t, e.ui, "removed from A", func() bool {
+		return find(e.nodes(a.ID), "host", h.ID) == nil && slices.Equal(must(c.Host(ctx, h.ID)).Views, []int64{1, b.ID})
+	})
+}

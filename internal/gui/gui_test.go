@@ -499,23 +499,20 @@ func TestFindMenuToolbarDetails(t *testing.T) {
 	// Context menu of the (now expanded) network group: Collapse only.
 	e.ui.Wait(func() {
 		n := find(e.nodes(1), "group", net.ID)
-		items := g.menuItems(n)
-		if len(items) != 2 || !items[0].Disabled || items[1].Disabled {
-			t.Fatalf("frame menu: %+v", items)
+		items := g.menuItems(1, n, n.Icon.X+2, n.Icon.Y+2, nil)
+		if menuItem(items, "Expand") == nil || !menuItem(items, "Expand").Disabled || menuItem(items, "Collapse").Disabled {
+			t.Fatalf("frame menu: %v", labels(items))
 		}
-		if g.menuItems(find(e.nodes(1), "host", db.ID)) != nil || g.menuItems(nil) != nil {
-			t.Error("menu for a host or empty space")
-		}
-		items[1].Action()
+		menuItem(items, "Collapse").Action()
 	})
 	eventually(t, e.ui, "collapsed by the menu", func() bool {
 		n := find(e.nodes(1), "group", net.ID)
 		return n != nil && n.Kind == mapmodel.KindGroup
 	})
 	e.ui.Wait(func() {
-		items := g.menuItems(find(e.nodes(1), "group", net.ID))
-		if items[0].Disabled || !items[1].Disabled {
-			t.Errorf("icon menu: %+v", items)
+		items := g.menuItems(1, find(e.nodes(1), "group", net.ID), 0, 0, nil)
+		if menuItem(items, "Expand").Disabled || !menuItem(items, "Collapse").Disabled {
+			t.Errorf("icon menu: %v", labels(items))
 		}
 	})
 
@@ -605,4 +602,22 @@ func TestCustomContrastAndBorders(t *testing.T) {
 			}
 		}
 	})
+}
+
+// menuItem finds a menu entry by label (nil if absent).
+func menuItem(items []*fyne.MenuItem, label string) *fyne.MenuItem {
+	for _, it := range items {
+		if it.Label == label {
+			return it
+		}
+	}
+	return nil
+}
+
+func labels(items []*fyne.MenuItem) []string {
+	var out []string
+	for _, it := range items {
+		out = append(out, it.Label)
+	}
+	return out
 }

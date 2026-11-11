@@ -1,0 +1,486 @@
+package gui
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
+
+	"github.com/maarten-boot/go-ined/internal/gui/mapmodel"
+	"github.com/maarten-boot/go-ined/pkg/apitypes"
+	"github.com/maarten-boot/go-ined/pkg/client"
+)
+
+// ---- forms (M6-10: an API error stays in the dialog) ----
+
+// formDialog is a dialog with a form. Submitting runs the request in the
+// background; on an error the message appears under the form and the
+// dialog stays open, so the input can be fixed (SPEC-706).
+type formDialog struct {
+	d    dialog.Dialog
+	form *widget.Form
+	errL *widget.Label
+	done bool // closed after a successful submit
+}
+
+// showForm opens a form dialog; run does the request.
+func (g *GUI) showForm(title, submit string, items []*widget.FormItem, run func() error) *formDialog {
+	f := &formDialog{errL: widget.NewLabel("")}
+	f.errL.Wrapping = fyne.TextWrapWord
+	f.errL.Importance = widget.DangerImportance
+	f.form = &widget.Form{Items: items, SubmitText: submit, CancelText: "Cancel"}
+	f.form.OnCancel = func() { f.d.Hide() }
+	f.form.OnSubmit = func() {
+		f.errL.SetText("")
+		go func() {
+			err := run()
+			g.do(func() {
+				if err != nil {
+					f.errL.SetText("Error: " + err.Error())
+					return
+				}
+				f.done = true
+				f.d.Hide()
+			})
+		}()
+	}
+	f.d = dialog.NewCustomWithoutButtons(title, container.NewVBox(f.form, f.errL), g.win)
+	f.d.Resize(fyne.NewSize(460, 0))
+	f.d.Show()
+	for _, it := range items { // type at once into the first field
+		if e, ok := it.Widget.(*widget.Entry); ok {
+			g.win.Canvas().Focus(e)
+			break
+		}
+	}
+	g.lastForm = f
+	return f
+}
+
+// Submit presses the form's submit button (for tests).
+func (f *formDialog) Submit() { f.form.OnSubmit() }
+
+func entry(text string) *widget.Entry {
+	e := widget.NewEntry()
+	e.SetText(text)
+	return e
+}
+
+// ---- groups and hosts (SPEC-706) ----
+
+func (g *GUI) newGroupDialog(view int64, parent *int64, x, y float64) *formDialog {
+	name, desc, cidr := entry(""), entry(""), entry("")
+	cidr.SetPlaceHolder("for example 10.0.1.0/24 (optional)")
+	items := []*widget.FormItem{widget.NewFormItem("Name", name), widget.NewFormItem("Description", desc)}
+	if view == mapmodel.NetworkView {
+		items = append(items, widget.NewFormItem("CIDR", cidr))
+	}
+	return g.showForm("New group", "Create", items, func() error {
+		_, err := g.c.CreateGroup(g.ctx, apitypes.GroupCreate{
+			Name: name.Text, Description: desc.Text, CIDR: strings.TrimSpace(cidr.Text),
+			ViewID: &view, ParentID: parent, X: &x, Y: &y,
+		})
+		return err
+	})
+}
+
+func (g *GUI) editGroupDialog(view, id int64) {
+	go func() {
+		gr, err := g.c.Group(g.ctx, id)
+		g.do(func() {
+			if err != nil {
+				g.status.message(fmt.Sprintf("group %d: %v", id, err))
+				return
+			}
+			name, desc, cidr := entry(gr.Name), entry(gr.Description), entry(gr.CIDR)
+			items := []*widget.FormItem{widget.NewFormItem("Name", name), widget.NewFormItem("Description", desc)}
+			if view == mapmodel.NetworkView {
+				items = append(items, widget.NewFormItem("CIDR (empty: none)", cidr))
+			}
+			g.showForm("Edit group "+gr.Name, "Save", items, func() error {
+				p := apitypes.GroupPatch{Name: apitypes.Some(name.Text), Description: apitypes.Some(desc.Text)}
+				if view == mapmodel.NetworkView {
+					p.CIDR = apitypes.Some(strings.TrimSpace(cidr.Text))
+				}
+				_, err := g.c.UpdateGroup(g.ctx, id, p)
+				return err
+			})
+		})
+	}()
+}
+
+func (g *GUI) newHostDialog(parent *int64, x, y float64) *formDialog {
+	ip, name, desc := entry(""), entry(""), entry("")
+	ip.SetPlaceHolder("IPv4 or IPv6 address")
+	return g.showForm("New host", "Create", []*widget.FormItem{
+		widget.NewFormItem("IP address", ip), widget.NewFormItem("Name", name), widget.NewFormItem("Description", desc),
+	}, func() error {
+		_, err := g.c.CreateHost(g.ctx, apitypes.HostCreate{
+			IP: strings.TrimSpace(ip.Text), Name: name.Text, Description: desc.Text, ParentID: parent, X: &x, Y: &y,
+		})
+		return err
+	})
+}
+
+func (g *GUI) editHostDialog(id int64) {
+	go func() {
+		h, err := g.c.Host(g.ctx, id)
+		g.do(func() {
+			if err != nil {
+				g.status.message(fmt.Sprintf("host %d: %v", id, err))
+				return
+			}
+			ip, name, desc := entry(h.IP), entry(h.Name), entry(h.Description)
+			mon := widget.NewCheck("pinged by the server", nil)
+			mon.SetChecked(h.Monitored)
+			g.showForm("Edit host "+h.DisplayName, "Save", []*widget.FormItem{
+				widget.NewFormItem("IP address", ip), widget.NewFormItem("Name", name),
+				widget.NewFormItem("Description", desc), widget.NewFormItem("Monitored", mon),
+			}, func() error {
+				_, err := g.c.UpdateHost(g.ctx, id, apitypes.HostPatch{
+					IP: apitypes.Some(strings.TrimSpace(ip.Text)), Name: apitypes.Some(name.Text),
+					Description: apitypes.Some(desc.Text), Monitored: apitypes.Some(mon.Checked),
+				})
+				return err
+			})
+		})
+	}()
+}
+
+// moveToDialog: "Move to group…" with the view's groups and "Root"
+// (SPEC-704). A group can't move into itself or below itself.
+func (g *GUI) moveToDialog(view int64, k mapmodel.Key) *formDialog {
+	g.mu.Lock()
+	groups := g.model.Groups(view)
+	skip := map[mapmodel.Key]bool{}
+	if k.Type == apitypes.TypeGroup {
+		skip = g.model.Subtree(view, k.ID)
+	}
+	var current string
+	if it := g.item(view, k); it != nil && it.ParentID != nil {
+		if p := g.item(view, mapmodel.GroupKey(*it.ParentID)); p != nil {
+			current = groupOption(*p)
+		}
+	}
+	g.mu.Unlock()
+	opts := []string{"Root"}
+	ids := map[string]*int64{"Root": nil}
+	for _, gr := range groups {
+		if skip[mapmodel.GroupKey(gr.ID)] {
+			continue
+		}
+		o, id := groupOption(gr), gr.ID
+		opts = append(opts, o)
+		ids[o] = &id
+	}
+	sel := widget.NewSelect(opts, nil)
+	if current == "" {
+		current = "Root"
+	}
+	sel.SetSelected(current)
+	return g.showForm(fmt.Sprintf("Move %s %d", k.Type, k.ID), "Move", []*widget.FormItem{widget.NewFormItem("Into", sel)},
+		func() error { return g.setParent(view, k, ids[sel.Selected]) })
+}
+
+// plural writes a count with its noun: "no hosts", "1 host", "2 hosts".
+func plural(n int, noun string) string {
+	switch n {
+	case 0:
+		return "no " + noun + "s"
+	case 1:
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
+}
+
+func groupOption(gr apitypes.MapItem) string { return fmt.Sprintf("%s (%d)", gr.Name, gr.ID) }
+
+// setParent changes an item's parent (nil: root) in a view (SPEC-508).
+func (g *GUI) setParent(view int64, k mapmodel.Key, group *int64) error {
+	var err error
+	switch {
+	case k.Type == apitypes.TypeGroup:
+		_, err = g.c.UpdateGroup(g.ctx, k.ID, apitypes.GroupPatch{ParentID: apitypes.Some(group)})
+	case view == mapmodel.NetworkView:
+		_, err = g.c.UpdateHost(g.ctx, k.ID, apitypes.HostPatch{ParentID: apitypes.Some(group)})
+	default:
+		_, err = g.c.PlaceHost(g.ctx, view, k.ID, apitypes.PlacementSet{ParentID: group})
+	}
+	return err
+}
+
+// ---- deleting (SPEC-719) ----
+
+// deleteDialog asks before deleting and says what goes. A non-empty group
+// offers reparent or cascade; in the network view the cascade deletes
+// hosts, in a custom view it only takes them out of the view.
+func (g *GUI) deleteDialog(view int64, k mapmodel.Key) *formDialog {
+	g.mu.Lock()
+	it := g.item(view, k)
+	var hosts, groups int
+	if k.Type == apitypes.TypeGroup {
+		hosts, groups = g.model.Contents(view, k.ID)
+	}
+	g.mu.Unlock()
+	if it == nil {
+		return nil
+	}
+	label := func(s string) *widget.FormItem {
+		l := widget.NewLabel(s)
+		l.Wrapping = fyne.TextWrapWord
+		return widget.NewFormItem("", l)
+	}
+	if k.Type == apitypes.TypeHost {
+		return g.showForm("Delete host", "Delete", []*widget.FormItem{
+			label(fmt.Sprintf("Delete host %s (%s)? It is removed from every view. This can't be undone.", it.Name, it.IP)),
+		}, func() error { return g.c.DeleteHost(g.ctx, k.ID) })
+	}
+	if hosts+groups == 0 {
+		return g.showForm("Delete group", "Delete", []*widget.FormItem{
+			label(fmt.Sprintf("Delete the empty group %s? This can't be undone.", it.Name)),
+		}, func() error { return g.c.DeleteGroup(g.ctx, k.ID, "") })
+	}
+	const up, all = "Move its contents up", "Delete its contents too"
+	what := plural(hosts, "host") + " and " + plural(groups, "group")
+	cascade := "deletes " + what + "."
+	if view != mapmodel.NetworkView {
+		cascade = fmt.Sprintf("removes %s from this view (they stay in the network view) and deletes %s.",
+			plural(hosts, "host"), plural(groups, "group"))
+	}
+	radio := widget.NewRadioGroup([]string{up, all}, nil)
+	radio.SetSelected(up)
+	return g.showForm("Delete group", "Delete", []*widget.FormItem{
+		label(fmt.Sprintf("Group %s holds %s. \"%s\" puts them in its parent; \"%s\" %s This can't be undone.",
+			it.Name, what, up, all, cascade)),
+		widget.NewFormItem("Contents", radio),
+	}, func() error {
+		mode := apitypes.ChildrenReparent
+		if radio.Selected == all {
+			mode = apitypes.ChildrenCascade
+		}
+		return g.c.DeleteGroup(g.ctx, k.ID, mode)
+	})
+}
+
+// ---- discovery (SPEC-707) ----
+
+// discoveryDialog starts a discovery job and follows it.
+type discoveryDialog struct {
+	d       dialog.Dialog
+	cidr    *widget.Entry
+	target  *widget.Select
+	start   *widget.Button
+	cancel  *widget.Button
+	bar     *widget.ProgressBar
+	info    *widget.Label
+	job     string
+	targets map[string]*int64
+}
+
+// openDiscovery opens the discovery dialog, with a range filled in for
+// "Scan this network".
+func (g *GUI) openDiscovery(cidr string) *discoveryDialog {
+	dd := &discoveryDialog{cidr: entry(cidr), info: widget.NewLabel("Not started"), bar: widget.NewProgressBar(),
+		targets: map[string]*int64{"Root": nil}}
+	dd.cidr.SetPlaceHolder("IPv4 range, for example 192.168.1.0/24")
+	opts := []string{"Root"}
+	g.mu.Lock()
+	for _, gr := range g.model.Groups(mapmodel.NetworkView) {
+		o, id := groupOption(gr), gr.ID
+		opts = append(opts, o)
+		dd.targets[o] = &id
+	}
+	g.mu.Unlock()
+	dd.target = widget.NewSelect(opts, nil)
+	dd.target.SetSelected("Root")
+	dd.start = widget.NewButton("Start", func() { g.startDiscovery(dd) })
+	dd.cancel = widget.NewButton("Cancel job", func() {
+		job := dd.job
+		go func() {
+			if _, err := g.c.CancelDiscovery(g.ctx, job); err != nil {
+				g.fail("cancel discovery", err)
+			}
+		}()
+	})
+	dd.cancel.Disable()
+	form := widget.NewForm(widget.NewFormItem("Range", dd.cidr),
+		widget.NewFormItem("New network group under", dd.target))
+	content := container.NewVBox(form,
+		widget.NewLabel("Hosts that answer go into the network group for the range, which is created if needed."),
+		dd.bar, dd.info, container.NewHBox(dd.start, dd.cancel))
+	dd.d = dialog.NewCustom("Discover hosts", "Close", content, g.win)
+	dd.d.SetOnClosed(func() {
+		if g.disc == dd {
+			g.disc = nil // a running job keeps reporting in the status bar
+		}
+	})
+	dd.d.Resize(fyne.NewSize(480, 0))
+	dd.d.Show()
+	g.disc = dd
+	return dd
+}
+
+func (g *GUI) startDiscovery(dd *discoveryDialog) {
+	in := apitypes.DiscoveryCreate{CIDR: strings.TrimSpace(dd.cidr.Text), ParentID: dd.targets[dd.target.Selected]}
+	dd.start.Disable()
+	dd.info.SetText("Starting…")
+	go func() {
+		job, err := g.c.StartDiscovery(g.ctx, in)
+		g.do(func() {
+			if err != nil {
+				dd.info.SetText("Error: " + err.Error())
+				dd.start.Enable()
+				return
+			}
+			dd.job = job.ID
+			g.jobs[job.ID] = true
+			dd.cancel.Enable()
+			g.showJob(job)
+		})
+	}()
+}
+
+// onDiscoveryEvent follows the jobs this GUI started: in the dialog if it
+// is open, and in the status bar.
+func (g *GUI) onDiscoveryEvent(ev client.Event) {
+	var job apitypes.Discovery
+	if json.Unmarshal(ev.Data, &job) != nil || !g.jobs[job.ID] {
+		return
+	}
+	g.showJob(job)
+	if job.State != apitypes.DiscoveryRunning {
+		delete(g.jobs, job.ID)
+	}
+}
+
+func jobText(j apitypes.Discovery) string {
+	s := fmt.Sprintf("discovery %s: %d of %d probed, %d found", j.CIDR, j.Probed, j.Total, j.Found)
+	if j.State != apitypes.DiscoveryRunning {
+		s = fmt.Sprintf("discovery %s %s: %d found, %d new hosts", j.CIDR, j.State, j.Found, j.Added)
+		if j.Error != "" {
+			s += " (" + j.Error + ")"
+		}
+	}
+	return s
+}
+
+func (g *GUI) showJob(j apitypes.Discovery) {
+	g.status.message(jobText(j))
+	dd := g.disc
+	if dd == nil || dd.job != j.ID {
+		return
+	}
+	if j.Total > 0 {
+		dd.bar.SetValue(float64(j.Probed) / float64(j.Total))
+	}
+	dd.info.SetText(jobText(j))
+	if j.State != apitypes.DiscoveryRunning {
+		dd.cancel.Disable()
+		dd.start.Enable()
+	}
+}
+
+// ---- views (SPEC-720) ----
+
+// viewMenuItems is the toolbar's View menu for the current tab.
+func (g *GUI) viewMenuItems() []*fyne.MenuItem {
+	g.mu.Lock()
+	views := g.model.Views()
+	cur, _ := g.model.View(g.current)
+	g.mu.Unlock()
+	i := 0
+	for j, v := range views {
+		if v.ID == cur.ID {
+			i = j
+		}
+	}
+	left := fyne.NewMenuItem("Move view left", func() { g.moveView(-1) })
+	right := fyne.NewMenuItem("Move view right", func() { g.moveView(+1) })
+	del := fyne.NewMenuItem("Delete view…", func() { g.deleteViewDialog() })
+	left.Disabled, right.Disabled = i == 0, i >= len(views)-1
+	del.Disabled = cur.ID == mapmodel.NetworkView || cur.ID == 0
+	return []*fyne.MenuItem{
+		fyne.NewMenuItem("New view…", func() { g.newViewDialog() }),
+		fyne.NewMenuItem("Rename view…", func() { g.renameViewDialog() }),
+		left, right, fyne.NewMenuItemSeparator(), del,
+	}
+}
+
+func (g *GUI) newViewDialog() *formDialog {
+	name := entry("")
+	return g.showForm("New view", "Create", []*widget.FormItem{widget.NewFormItem("Name", name)}, func() error {
+		v, err := g.c.CreateView(g.ctx, apitypes.ViewCreate{Name: name.Text})
+		if err == nil {
+			g.do(func() { g.selectView(v.ID) })
+		}
+		return err
+	})
+}
+
+// selectView selects a view's tab, now or when its view.created arrives.
+func (g *GUI) selectView(id int64) {
+	if g.showView(id) {
+		return
+	}
+	g.wantView = id
+}
+
+func (g *GUI) renameViewDialog() *formDialog {
+	g.mu.Lock()
+	v, _ := g.model.View(g.current)
+	g.mu.Unlock()
+	name := entry(v.Name)
+	return g.showForm("Rename view", "Rename", []*widget.FormItem{widget.NewFormItem("Name", name)}, func() error {
+		_, err := g.c.UpdateView(g.ctx, v.ID, apitypes.ViewPatch{Name: apitypes.Some(name.Text)})
+		return err
+	})
+}
+
+// moveView moves the current tab one place (dir -1 or +1) by giving the
+// views the orders 0, 1, 2, … in the new sequence; only changed ones are
+// saved.
+func (g *GUI) moveView(dir int) {
+	g.mu.Lock()
+	views := g.model.Views()
+	cur := g.current
+	g.mu.Unlock()
+	i := -1
+	for j, v := range views {
+		if v.ID == cur {
+			i = j
+		}
+	}
+	j := i + dir
+	if i < 0 || j < 0 || j >= len(views) {
+		return
+	}
+	views[i], views[j] = views[j], views[i]
+	go func() {
+		for n, v := range views {
+			if v.Order == int64(n) {
+				continue
+			}
+			if _, err := g.c.UpdateView(g.ctx, v.ID, apitypes.ViewPatch{Order: apitypes.Some(int64(n))}); err != nil {
+				g.fail("move view", err)
+				return
+			}
+		}
+	}()
+}
+
+func (g *GUI) deleteViewDialog() *formDialog {
+	g.mu.Lock()
+	v, _ := g.model.View(g.current)
+	g.mu.Unlock()
+	if v.ID == mapmodel.NetworkView || v.ID == 0 {
+		return nil
+	}
+	l := widget.NewLabel(fmt.Sprintf("Delete view %s? Its groups and placements go; its hosts stay in the network view. This can't be undone.", v.Name))
+	l.Wrapping = fyne.TextWrapWord
+	return g.showForm("Delete view", "Delete", []*widget.FormItem{widget.NewFormItem("", l)},
+		func() error { return g.c.DeleteView(g.ctx, v.ID) })
+}

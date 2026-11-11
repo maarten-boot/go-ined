@@ -185,7 +185,7 @@ func TestMapInput(t *testing.T) {
 	var menu *mapmodel.Node
 	mv.OnSelect = func(k *mapmodel.Key) { selected = k }
 	mv.OnToggle = func(g int64, expand bool) { toggled = append(toggled, fmt.Sprint(g, expand)) }
-	mv.OnMenu = func(n *mapmodel.Node, _ fyne.Position) { menu = n }
+	mv.OnMenu = func(n *mapmodel.Node, _ fyne.Position, _, _ float64) { menu = n }
 	at := func(x, y float64) *fyne.PointEvent {
 		sx, sy := mv.vp.ToScreen(x, y)
 		return &fyne.PointEvent{Position: fyne.NewPos(float32(sx), float32(sy))}

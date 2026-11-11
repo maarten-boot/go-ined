@@ -82,6 +82,13 @@ type GUI struct {
 	contrSel  *widget.Select
 	zoomL     *widget.Label       // the current map's zoom (crosscheck 2026-11-11-02 I1)
 	borders   []*canvas.Rectangle // button borders, shown in Max contrast (D1)
+
+	// Editing (M6).
+	lastForm *formDialog      // the form opened last (for tests)
+	disc     *discoveryDialog // the open discovery dialog
+	jobs     map[string]bool  // discovery jobs started here, still running
+	wantView int64            // a new view to select once its tab exists
+	viewBtn  *widget.Button
 }
 
 // New builds the window. Call Start to connect, then ShowAndRun (or use
@@ -91,7 +98,7 @@ func New(a fyne.App, opt Options) *GUI {
 	g := &GUI{
 		app: a, c: opt.Client, opt: opt, model: mapmodel.New(),
 		ctx: ctx, cancel: cancel, maps: map[int64]*MapView{}, current: mapmodel.NetworkView,
-		dirty: map[int64]bool{},
+		dirty: map[int64]bool{}, jobs: map[string]bool{},
 	}
 	g.do = opt.Do
 	if g.do == nil {
@@ -119,6 +126,7 @@ func New(a fyne.App, opt Options) *GUI {
 	g.win.SetContent(container.NewBorder(g.toolbar(), g.status.obj, nil, nil, split))
 	g.win.Resize(fyne.NewSize(1200, 800))
 	g.shortcuts()
+	g.win.Canvas().SetOnTypedKey(g.onKey)
 	g.win.SetOnClosed(g.Stop)
 	return g
 }
@@ -257,6 +265,9 @@ func (g *GUI) apply(ev client.Event) {
 		go g.loadAll()
 	}
 	g.details.onEvent(ev)
+	if ev.Type == apitypes.EventDiscoveryProgress || ev.Type == apitypes.EventDiscoveryFinished {
+		g.onDiscoveryEvent(ev)
+	}
 }
 
 // markDirty asks for a redraw of a view. Redraws are coalesced: the flush
@@ -348,6 +359,10 @@ func (g *GUI) rebuildTabs() {
 		g.tabs.SelectIndex(sel)
 	}
 	g.tabs.OnSelected = func(ti *container.TabItem) { g.selectTab(ti) }
+	if id := g.wantView; id != 0 && containsView(views, id) {
+		g.wantView = 0
+		g.showView(id)
+	}
 }
 
 func containsView(vs []apitypes.View, id int64) bool {
@@ -373,7 +388,7 @@ func (g *GUI) mapView(view int64) *MapView {
 	mv := NewMapView(view, func() theme.Palette { return g.palette })
 	mv.OnSelect = func(k *mapmodel.Key) { g.details.show(view, k) }
 	mv.OnToggle = func(group int64, expand bool) { g.setCollapsed(group, !expand) }
-	mv.OnMenu = func(n *mapmodel.Node, at fyne.Position) { g.contextMenu(n, at) }
+	g.wireEditing(mv)
 	mv.OnViewport = func(mapmodel.Viewport) {
 		if view == g.current {
 			g.showZoom()
@@ -411,31 +426,6 @@ func (g *GUI) setCollapsed(group int64, collapsed bool) {
 			g.fail(fmt.Sprintf("group %d", group), err)
 		}
 	}()
-}
-
-func (g *GUI) contextMenu(n *mapmodel.Node, at fyne.Position) {
-	if items := g.menuItems(n); items != nil {
-		widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", items...), g.win.Canvas(), at)
-	}
-}
-
-// menuItems are the context menu of a map node (SPEC-703); nil for a host
-// or empty space in M5.
-func (g *GUI) menuItems(n *mapmodel.Node) []*fyne.MenuItem {
-	if n == nil || n.Item.Type != apitypes.TypeGroup {
-		return nil
-	}
-	id := n.Item.ID
-	items := []*fyne.MenuItem{
-		fyne.NewMenuItem("Expand", func() { g.setCollapsed(id, false) }),
-		fyne.NewMenuItem("Collapse", func() { g.setCollapsed(id, true) }),
-	}
-	if n.Kind == mapmodel.KindFrame {
-		items[0].Disabled = true
-	} else {
-		items[1].Disabled = true
-	}
-	return items
 }
 
 // ---- toolbar and shortcuts (SPEC-713, 717) ----
@@ -503,9 +493,22 @@ func (g *GUI) toolbar() fyne.CanvasObject {
 		btn("Fit all", g.fitAll),
 		widget.NewSeparator(),
 		btn("Find host…", g.showFind),
+		btn("Discover…", func() { g.openDiscovery("") }),
+		g.viewMenuButton(),
 		widget.NewSeparator(),
 		widget.NewLabel("Contrast:"), g.bordered(g.contrSel),
 	)
+}
+
+// viewMenuButton opens the View menu below itself (SPEC-720).
+func (g *GUI) viewMenuButton() fyne.CanvasObject {
+	g.viewBtn = widget.NewButton("View ▾", nil)
+	g.viewBtn.OnTapped = func() {
+		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(g.viewBtn)
+		pos.Y += g.viewBtn.Size().Height
+		widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", g.viewMenuItems()...), g.win.Canvas(), pos)
+	}
+	return g.bordered(g.viewBtn)
 }
 
 // shortcuts: Ctrl+= / Ctrl++ zoom in, Ctrl+- zoom out, Ctrl+0 100 %,

@@ -27,6 +27,8 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - `inedctl`: hosts, groups, notes, discovery (`--wait` follows a job), events and health; tables or `--json`; exit codes 0–3.
 - Client config key `server.ca_cert` (and `inedctl --ca-cert`) to trust a self-signed server certificate.
 - Views: custom maps with their own groups, where hosts can be placed in addition to the network view (`/views`, `GET /map?view=`, `PUT|DELETE /views/{id}/hosts/{host_id}`, `GET /groups?view=`, `view.*` and `placement.*` events); database migration 3; `pkg/client` view calls; `inedctl view …` and `--view`.
+- `ined-gui` editing (milestone M6): drag and drop of hosts and groups (a group moves with its contents), dropping into a group, "Move to group…", creating, editing and deleting groups and hosts with confirmations, the Delete key, a discovery dialog with progress and cancel, a View menu (new, rename, move, delete), "Show in view" and "Remove from this view" for hosts.
+- API: `POST /groups/{id}/move` moves a group with everything in it, with one `group.moved` event; host JSON has `views`; `pkg/client` `MoveGroup`; `inedctl group shift`.
 - `ined-gui` (milestone M5, read-only): one tab per view; hosts and groups with status shown as shape plus word; network groups with their own icon and dashed frames; expand/collapse; pan, zoom, fit all and find host; a details panel with note editing; live updates over the event stream with automatic reconnect; a status bar with the connection state; contrast presets AA, AAA, Max and custom, applied at once and saved in `gui.toml`. Flags `-url`, `-token`, `-ca-cert`, `-config`, `-version`.
 - `internal/theme`: WCAG contrast math and the palettes of the contrast presets.
 - `make build-nogui` (server and CLI without cgo) and a check that they stay free of Fyne and cgo.
@@ -35,6 +37,7 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 
 ### Changed
+- A new parent without a position puts the item next to the new parent (and a group's contents move along); `inedctl host move` and `group move` now do this too.
 - A group's members are placed in rows that grow with the group (about the square root of its size, 10–50 per row), so a large discovered network forms a block instead of a tall strip. Existing positions don't change.
 - `ined-gui`: the toolbar shows the zoom; in Max contrast, buttons get a black border.
 - New members of a group are placed 120 map units below it instead of 80, so an expanded group's frame in the GUI doesn't cover the labels next to it. Existing positions don't change.

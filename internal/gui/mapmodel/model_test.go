@@ -392,3 +392,35 @@ func TestReloader(t *testing.T) {
 	case <-time.After(150 * time.Millisecond):
 	}
 }
+
+// TC-718 (model part): subtree, contents, optimistic shift, group list.
+func TestSubtreeAndShift(t *testing.T) {
+	m := loaded()
+	st := m.Subtree(1, 1)
+	if len(st) != 5 || !st[GroupKey(2)] || !st[HostKey(1)] || st[HostKey(4)] {
+		t.Errorf("subtree of 1: %v", st)
+	}
+	if h, g := m.Contents(1, 1); h != 3 || g != 1 {
+		t.Errorf("contents: %d hosts, %d groups", h, g)
+	}
+	if len(m.Subtree(1, 99)) != 0 || len(m.Subtree(9, 1)) != 0 {
+		t.Error("subtree of unknown")
+	}
+	gen := m.Gen(1)
+	m.Shift(1, GroupKey(2), 10, 20)
+	if it := m.Map(1).Items[HostKey(1)]; it.X != 60 || it.Y != 320 {
+		t.Errorf("host in shifted group: %+v", it)
+	}
+	if it := m.Map(1).Items[GroupKey(1)]; it.X != 100 {
+		t.Errorf("parent moved: %+v", it)
+	}
+	m.Shift(1, HostKey(4), -1, -1)
+	if it := m.Map(1).Items[HostKey(4)]; it.X != 399 || m.Gen(1) == gen {
+		t.Errorf("host shift: %+v", it)
+	}
+	m.Shift(9, HostKey(4), 1, 1) // not loaded: no-op
+	gs := m.Groups(1)
+	if len(gs) != 2 || gs[0].Name != "10.0.0.0/24" || gs[1].Name != "servers" || m.Groups(9) != nil {
+		t.Errorf("groups: %+v", gs)
+	}
+}

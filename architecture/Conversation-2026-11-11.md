@@ -174,3 +174,8 @@
     - Spec and Plan v0.26 with the user report's changes (SPEC-304, 707, 717).
     - Left open: re-checking CI on `main` after the outage. Dependabot will close its obsolete PR #1 itself.
     - After the outage, CI on `main` (run 43099982463, commit `a871677`) passed all four jobs.
+22. **User**: pushed; do the release.
+    **Claude** noted that the GUI visual check (TC-005, 702, 705, 708) hadn't been reported, and took "do the release" as the user's choice to release without it; it stays open.
+    - Dated `## [0.1.0] - 2026-11-11` on `feature/release-0.1.0` and merged it; the release notes extract correctly.
+    - Created the annotated tag `v0.1.0` on `main`, with the GitHub noreply address as tagger.
+    - Gave the push commands, then follows the release workflow.

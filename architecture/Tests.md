@@ -6,15 +6,15 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 
 | ID | Spec | Lvl | Description | Go test | Status |
 |----|------|-----|-------------|---------|--------|
-| TC-001 | SPEC-001 | U | The default theme is #FFFFFF background with #000000 text | — | planned |
-| TC-002 | SPEC-002, 709 | U | Every colour pair in every palette and preset has contrast ≥ 4.5:1 (table-driven) | — | planned |
-| TC-003 | SPEC-003 | U | Each preset meets its minimum: AA 4.5, AAA 7, Max = 21 | — | planned |
-| TC-004 | SPEC-003 | U | A custom ratio below 4.5 or above 21 is rejected | — | planned |
-| TC-005 | SPEC-004, 709 | M | Changing the preset in the GUI recolours every visible element | — | planned |
-| TC-006 | SPEC-005 | U | The preset is loaded from the config file. An invalid value falls back to AA with a warning | — | planned |
+| TC-001 | SPEC-001 | U | The default theme is #FFFFFF background with #000000 text | theme: TestDefault | passing |
+| TC-002 | SPEC-002, 709 | U | Every colour pair in every palette and preset has contrast ≥ 4.5:1 (table-driven) | theme: TestRatio, TestPalettesMeetMinimum | passing |
+| TC-003 | SPEC-003 | U | Each preset meets its minimum: AA 4.5, AAA 7, Max = 21 | theme: TestParse, TestPalettesMeetMinimum | passing |
+| TC-004 | SPEC-003 | U | A custom ratio below 4.5 or above 21 is rejected | theme: TestParse | passing |
+| TC-005 | SPEC-004, 709 | M | Changing the preset in the GUI recolours every visible element | gui: TestContrastChange, TestScreenshot | partial: automated part passes; visual check by the user pending |
+| TC-006 | SPEC-005 | U | The preset is loaded from the config file. An invalid value falls back to AA with a warning | ined-gui: TestBadContrast | passing |
 | TC-007 | SPEC-006 | U | Every `uses:` in the workflows points to a 40-character hex SHA and has a version comment | — | planned |
-| TC-008 | SPEC-003, 702 | U | The Max palette contains only #000000 and #FFFFFF. Every status is still distinct by shape and text | — | planned |
-| TC-009 | SPEC-005 | U | A preset change made through the GUI's settings code is applied without a restart and written back to `gui.toml`; other keys are kept | — | planned |
+| TC-008 | SPEC-003, 702 | U | The Max palette contains only #000000 and #FFFFFF. Every status is still distinct by shape and text | theme: TestMaxIsBlackAndWhite; gui: TestStatusShapes, TestContrastChange | passing |
+| TC-009 | SPEC-005 | U | A preset change made through the GUI's settings code is applied without a restart and written back to `gui.toml`; other keys are kept | config: TestSaveContrast, TestSaveContrastCreates; gui: TestContrastChange | passing |
 | TC-101 | SPEC-101, 107 | I | Adding a host with a duplicate IP address fails with 409 `conflict` | inventory: TestDuplicateIP; api: TestCRUD | passing |
 | TC-102 | SPEC-102 | U | An item has at most one parent. Moving it changes the parent | inventory: TestMoveHost | passing |
 | TC-103 | SPEC-103 | U | Moving a group into itself or into one of its subgroups is rejected | inventory: TestNoCycles; api: TestTreeRulesAPI | passing |
@@ -77,7 +77,7 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-501 | SPEC-501, 504 | I | CRUD round trip for hosts and groups (with and without `cidr`). Every error case returns the HTTP status and `code` from the SPEC-504 table | api: TestCRUD, TestRequestErrors; apitypes: TestOpt, TestOptNull; inventory: TestRepoFailureKeepsModel | passing |
 | TC-502 | SPEC-502, 503 | I | SSE: events arrive in order. Reconnecting with Last-Event-ID replays missed events; an id that has dropped out of the buffer gets `resync` | events: TestReplay, TestResync; api: TestEventsStream, TestEventsReplayAndResync; api: TestEventsKeepalive | passing |
 | TC-503 | SPEC-506 | I | `pkg/client` works against a test server for all endpoints and the event stream | client: TestCRUD, TestDoRaw, TestErrors, TestDiscovery, TestCancelDiscovery, TestEventsUnauthorized, TestEventsFailFirst, TestEventsIdleTimeout; client: TestEventShort | passing |
-| TC-504 | SPEC-501 | I | `GET /map` returns every item with its type, parent, position, collapsed flag, `cidr`, status, `stale`, `has_note` and `outside_cidr` | api: TestMap | passing |
+| TC-504 | SPEC-501 | I | `GET /map` returns every item with its type, parent, position, collapsed flag, `cidr`, status, `stale`, `has_note`, `outside_cidr` and `monitored` | api: TestMap | passing |
 | TC-505 | SPEC-505 | I | `/api/v1/openapi.json` is valid OpenAPI 3 and lists every route the server registers | — | planned |
 | TC-506 | SPEC-503 | I | Event ids have the form `<run>-<seq>`. After a restart, a `Last-Event-ID` from the previous run gets `resync` | events: TestEventIDs, TestResync; api: TestEventsReplayAndResync | passing |
 | TC-507 | SPEC-502 | I | Event payloads: full object on created/updated/host.status, `{id}` on deleted (one per item on cascade), `{id,status}` on group.status. A client that falls behind gets `resync` and the stream ends | events: TestLaggedSubscriber; inventory: TestDeleteEvents; api: TestEventsStream, TestEventsLagged | passing |
@@ -89,26 +89,26 @@ Test levels: **U** = unit, **I** = integration (real SQLite and HTTP server, fak
 | TC-606 | SPEC-601, 805 | I | The database is created at `storage.db_path` (also with `?`, `#`, `%`, spaces or a relative path), or at the XDG default when the path is empty | store: TestMigrateFresh, TestSpecialCharacterPaths; config: TestXDGPaths; ined-server: TestDefaultDBPath | passing |
 | TC-604 | SPEC-604 | I | A second store or server on the same database is refused at once; the first keeps working; the lock is released on close | store: TestExclusiveLock; ined-server: TestSecondServerRefused | passing |
 | TC-605 | SPEC-605 | U | Orphans move to the root (saved, one warning each, not repeated); a cycle refuses to load | inventory: TestRepairOnLoad | passing |
-| TC-701 | SPEC-702 | U | Every status has a distinct shape and text label (not only a colour) | — | planned |
-| TC-702 | SPEC-703, 704, 706, 707 | M | GUI manual script: expand/collapse groups, drag items and frames, drop into a group, manage groups (including network groups) and hosts, scan an IPv4 network group; "Scan this network" is disabled for an IPv6 network group | — | planned |
-| TC-703 | SPEC-705 | I | After the server restarts, the GUI client reconnects and resyncs | — | planned |
-| TC-704 | SPEC-702 | U | A network group has an icon shape and frame style different from an ordinary group, and shows its CIDR label | — | planned |
-| TC-705 | SPEC-708, 711 | M | Edit a note in the details panel; the note marker appears and disappears. A stale host shows its stale marker | — | planned |
-| TC-706 | SPEC-712 | U | Collapsed group counts are correct for nested groups. Only monitored hosts are counted, plus `· n off` when unmonitored hosts are present | — | planned |
-| TC-707 | SPEC-701, 805 | U | The GUI reads its URL and token from flags, then INED_URL / INED_TOKEN, then `gui.toml`, then defaults, in that order of precedence | config: TestClientEnvOverridesFile | partial: config precedence passes; GUI flags in M5 |
-| TC-708 | SPEC-713 | U+M | U: converting between screen and map coordinates gives the same result back at 10 %, 100 % and 400 % zoom. M: pan, zoom and "fit all" with 5,000 generated hosts stay responsive | — | planned |
-| TC-709 | SPEC-714 | U | Find host matches display name, PTR name and IP address substrings over all hosts, picks the current view if the host is placed there (else the network view), and returns the groups that must be expanded | — | planned |
-| TC-710 | SPEC-715 | U | Tabs follow `GET /views` order; `view.created`, `view.updated` (rename, reorder) and `view.deleted` update them; deleting the selected view switches to the network view with a status message | — | planned |
-| TC-711 | SPEC-716 | U | Client model: `host.status`/`group.status` change items in place in every loaded view; structural events reload only the affected view, at most once per 250 ms; `resync` reloads all; unloaded views aren't fetched | — | planned |
-| TC-712 | SPEC-717, 705, 802 | U | The status bar shows `connected`, `reconnecting in N s` and `stopped: <reason>` in words, and the plain-HTTP token warning | — | planned |
-| TC-713 | SPEC-718, 703, 708 | I | Against a test server: expand/collapse and a note edit from the GUI code reach the server; an API error appears in the status bar and the map keeps the server's state | — | planned |
+| TC-701 | SPEC-702 | U | Every status has a distinct shape and text label (not only a colour) | gui: TestStatusShapes | passing |
+| TC-702 | SPEC-703, 704, 706, 707 | M | GUI manual script: expand/collapse groups, drag items and frames, drop into a group, manage groups (including network groups) and hosts, scan an IPv4 network group; "Scan this network" is disabled for an IPv6 network group | gui: TestGUI, TestMapInput | partial: expand/collapse passes (M5); the rest is M6 |
+| TC-703 | SPEC-705 | I | After the server restarts, the GUI client reconnects and resyncs | gui: TestReconnect | passing |
+| TC-704 | SPEC-702 | U | A network group has an icon shape and frame style different from an ordinary group, and shows its CIDR label | gui: TestGroupShapes; mapmodel: TestLayout | passing |
+| TC-705 | SPEC-708, 711 | M | Edit a note in the details panel; the note marker appears and disappears. A stale host shows its stale marker | gui: TestGUI, TestStatusShapes | partial: automated part passes; visual check by the user pending |
+| TC-706 | SPEC-712 | U | Collapsed group counts are correct for nested groups. Only monitored hosts are counted, plus `· n off` when unmonitored hosts are present | mapmodel: TestLayout | passing |
+| TC-707 | SPEC-701, 805 | U | The GUI reads its URL and token from flags, then INED_URL / INED_TOKEN, then `gui.toml`, then defaults, in that order of precedence | config: TestClientEnvOverridesFile; ined-gui: TestSettingsPrecedence | passing |
+| TC-708 | SPEC-713 | U+M | U: converting between screen and map coordinates gives the same result back at 10 %, 100 % and 400 % zoom. M: pan, zoom and "fit all" with 5,000 generated hosts stay responsive | mapmodel: TestViewport; gui: TestMapInput, TestCulling, BenchmarkLayoutAndDraw5000 | partial: U passes (5,000 hosts: about 10 ms per layout and draw); M by the user pending |
+| TC-709 | SPEC-714 | U | Find host matches display name, PTR name and IP address substrings over all hosts, picks the current view if the host is placed there (else the network view), and returns the groups that must be expanded | mapmodel: TestFindAndLocate; gui: TestGoToHost | passing |
+| TC-710 | SPEC-715 | U | Tabs follow `GET /views` order; `view.created`, `view.updated` (rename, reorder) and `view.deleted` update them; deleting the selected view switches to the network view with a status message | mapmodel: TestViews; gui: TestGUI | passing |
+| TC-711 | SPEC-716 | U | Client model: `host.status`/`group.status` change items in place in every loaded view; structural events reload only the affected view, at most once per 250 ms; `resync` reloads all; unloaded views aren't fetched | mapmodel: TestApply, TestReloader; gui: TestGUI | passing |
+| TC-712 | SPEC-717, 705, 802 | U | The status bar shows `connected`, `reconnecting in N s` and `stopped: <reason>` in words, and the plain-HTTP token warning | gui: TestStatusBar | passing |
+| TC-713 | SPEC-718, 703, 708 | I | Against a test server: expand/collapse and a note edit from the GUI code reach the server; an API error appears in the status bar and the map keeps the server's state | gui: TestGUI | passing |
 | TC-801 | SPEC-801, 802 | I | A non-loopback listener without a token refuses to start. A wrong or missing token gets 401. Clients warn before sending a token over plain HTTP to a non-loopback host (v0.15) | config: TestListenSecurity; ined-server: TestRefuseNonLoopbackWithoutToken; api: TestAuthAndHealth; client: TestTokenInClear; inedctl: TestEmptyFlagAndWarning | passing |
 | TC-802 | SPEC-804 | I | SIGTERM closes SSE streams and the database cleanly | ined-server: TestCleanShutdown; events: TestClose; api: TestEventsClosedAtShutdown; monitor: TestStopSavesPending | passing |
 | TC-803 | SPEC-803 | I | With `tls_cert` and `tls_key` set, the server serves HTTPS and the client connects with the test CA | ined-server: TestTLS | passing |
 | TC-804 | SPEC-805 | U | Config precedence (flag, then environment, then file, then default) and XDG path fallbacks when the variables are unset | config: TestServerFileOverridesDefaults, TestMissingFiles, TestXDGPaths, TestClientEnvOverridesFile; config: TestValidate; inedctl: TestConfigAndCACert, TestEmptyFlagAndWarning; config: TestRelativeCACert | passing |
 | TC-805 | SPEC-805 | U | Each file in `examples/*.toml` parses, has no unknown keys, and every value equals the built-in default (keeps the examples and the code in sync) | config: TestExamplesMatchDefaults, TestUnknownKeysRejected | passing |
 | TC-806 | SPEC-501, 802 | I | `/health` without a token returns only `{status, version}`; with a valid token, the full details | api: TestAuthAndHealth; api: TestHealthDegraded | passing |
-| TC-807 | SPEC-806 | U | `-version` prints the program name and version to stdout and exits 0 | ined-server: TestVersionFlag; inedctl: TestVersion | passing (server and CLI; GUI later) |
+| TC-807 | SPEC-806 | U | `-version` prints the program name and version to stdout and exits 0 | ined-server: TestVersionFlag; inedctl: TestVersion; ined-gui: TestVersion | passing |
 | TC-901 | SPEC-901 | I | Each `inedctl` subcommand works against a test server, including `note set` from stdin | inedctl: TestCommands, TestDiscoverCancel, TestEvents | passing |
 | TC-902 | SPEC-902 | I | `--json` output equals the API response; the default output is a table | inedctl: TestJSON, TestCommands; inedctl: TestFormatRTT, TestViewCommands | passing |
 | TC-903 | SPEC-903 | I | Exit codes: 0 OK, 1 API error, 2 usage error, 3 server unreachable or wrong token | inedctl: TestExitCodes; inedctl: TestInterruptWait | passing |

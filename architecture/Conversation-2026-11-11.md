@@ -31,3 +31,25 @@
    - **Amended:** SPEC-708 (the parent shown is the one in the current view), SPEC-713 (zoom and pan per tab), SPEC-714 (find over all hosts).
    - **Tests:** TC-710..713 added, and TC-709 extended.
    - **Decisions:** proposed M5-1..10 (D15) with defaults. The code waits for the decisions.
+5. **User**: pushed; OK, defaults (M5 decisions 1–10).
+   **Claude** built M5 on `feature/m5-gui`:
+   - **`internal/theme`:** WCAG contrast math, the presets and derived palettes. Every colour pair is tested for every preset, and Max is black and white only.
+   - **`internal/gui/mapmodel` (pure Go):**
+     - the views and the loaded maps;
+     - events: status and names in place, other changes reload the view at most every 250 ms, `resync` reloads everything;
+     - layout with frames and counts, coordinates, find and locate.
+   - **`internal/gui` (Fyne v2.8.2):**
+     - a map widget that draws only what is near the visible area, with status as shape plus word, folder icons, dashed network frames and note corners;
+     - pan, wheel zoom, scroll bars, double-click expand/collapse and a context menu;
+     - view tabs, a toolbar, a details panel with note editing, a status bar, the find dialog and the contrast selector.
+   - **`cmd/ined-gui`:** flags, `gui.toml` and `-version`. The contrast setting is saved line by line, so comments stay.
+   - **Small additions:**
+     - API map items carry `monitored` (needed for the "· n off" count).
+     - New group members start 120 units below their group, so expanded frames don't cover neighbouring labels; seen in a screenshot.
+     - `make build-nogui` and `nogui-check`.
+     - README GUI section with a screenshot.
+   - **Tests:**
+     - GUI tests run headless against the real test server with `-race`, through a serial UI queue, because Fyne's test driver runs `fyne.Do` at once.
+     - Smoke test of the real binary under Xvfb with screenshots.
+     - Benchmark: about 10 ms to lay out and draw 5,000 hosts.
+   - **Docs:** Spec and Plan v0.19, D15 recorded. Test cases: 103 passing, 4 partial (visual checks by the user, M6 parts), 2 planned (CI, OpenAPI). `make all` passes.

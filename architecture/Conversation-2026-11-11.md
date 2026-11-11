@@ -97,3 +97,23 @@
      - the View menu; "Show in view" and "Remove from this view"; views in the details.
    - **Smoke test of the real binary:** under Xvfb with `xdotool`. It found three small issues, now fixed: dragged items were drawn under others, a new form had no focus, and the delete question had wrong plurals.
    - **Docs:** Spec and Plan v0.22, D17 recorded, TC-715..722 passing. TC-702 waits for the manual script and the user's check. `make all` passes.
+10. **User**: pushed; do a crosscheck.
+    **Claude** ran crosscheck `Crosscheck-2026-11-11-03.md` (the eighth) on M6:
+    - 190 tests pass, and the tracing is complete.
+    - **Probes:**
+      - a `PATCH` of a group's x now moves its contents too (not in the Spec);
+      - 1 of 20 tiny discovery jobs finished before the GUI started following it, and the dialog stayed at "0 of 2";
+      - in the real binary under Xvfb, "Show in view", Esc during a drag, the View menu and a real discovery all work. But the discovery dialog doesn't focus its field, and Fyne's progress bar draws white text on pale blue (about 2:1).
+    - **Findings:** 0 H, 3 M (C1 discovery race, C2 progress-bar contrast, C3 `PATCH` moves contents), 7 L.
+    - **Decisions:** D1 (what a position `PATCH` moves) and D2 (where "New host here…" puts a host).
+    - The fixes wait for the user's OK.
+11. **User**: pushed; OK, all.
+    **Claude** applied the crosscheck 2026-11-11-03 fixes on `fix/crosscheck-08`:
+    - **C1:** the discovery dialog asks for the job's state once more after starting it, so an early end is seen (20 of 20 in the test).
+    - **C2:** our own progress bar in palette colours.
+    - **C5:** focus on the range field.
+    - **D1:** a `PATCH` of a group's position moves only the group.
+    - **D2:** "New host here…" on empty space puts the host next to its network group.
+    - **C6:** `group.moved` only with contents.
+    - **Tests and examples:** new API and GUI tests (menus, Esc, the host pop-up); a "Moving groups" section in `API-examples.md`.
+    - **Docs:** Spec and Plan v0.23, D18 recorded. `make all` passes.

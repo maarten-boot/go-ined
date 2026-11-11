@@ -150,7 +150,7 @@ Testing: the API additions get unit and API tests as before. GUI actions are tes
 - [x] `[log]` config (SPEC-807)
 - [x] User report (2026-11-11): scanning as an ordinary user failed (no ICMP mode on the user's machine) and the GUI's error couldn't be copied. Fixed: copyable messages in the discovery dialog and status bar, a ping warning on connect, the server message names the commands, README "Ping permissions" (crosscheck 2026-11-11-04 U1–U5)
 - [x] Curated `[0.1.0]` section in `Changes.md` (crosscheck 2026-11-11-04 D1)
-- [ ] CI on `main` green: run 43096857026 was queued during a GitHub Actions outage (2026-11-11 evening); re-check
+- [x] CI on `main` green: run 43099982463 (commit `a871677`) passed all four jobs after the GitHub Actions outage; the earlier run 43096857026, queued during the outage, was superseded
 - [ ] The user's visual check and TC-702 (open since M5/M6)
 - [ ] Add the date to `## [0.1.0]` in `Changes.md`; the user pushes the tag `v0.1.0`; check the release (TC-011)
 

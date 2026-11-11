@@ -173,3 +173,4 @@
     - a Plan note on Dependabot toolchain updates;
     - Spec and Plan v0.26 with the user report's changes (SPEC-304, 707, 717).
     - Left open: re-checking CI on `main` after the outage. Dependabot will close its obsolete PR #1 itself.
+    - After the outage, CI on `main` (run 43099982463, commit `a871677`) passed all four jobs.

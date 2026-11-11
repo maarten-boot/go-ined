@@ -4,17 +4,16 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-12
+
 ### Added
 - `ined-gui`: "Wrap names" (toolbar toggle, on by default, saved in `gui.toml`): a long DNS name breaks after its dots where it would run into the next item. "Reflow…" on a group and "Reflow view…" lay out the members on a grid wide enough for the longest full name.
-- `ined-gui`: select several items (Ctrl+click, Shift+drag rubber band); keys as in Tkined: **g** groups the selection, **c** / **e** collapse and expand the selected groups, Delete deletes the selection, Esc clears it; dragging a selected item moves the whole selection.
+- `ined-gui`: select several items (Ctrl+click, Shift+drag rubber band); keys as in Tkined: **g** groups the selection, **c** / **e** collapse and expand the selected groups, Delete deletes the selection, Esc clears it; dragging a selected item moves the whole selection. A right-click on one of the selected items keeps the selection, and the menu's "Move N items to group…" and "Delete N items…" act on all of them.
 - `ined-gui`: expanding and collapsing a group keep its top-left corner in place: the frame opens where the icon was, and the icon appears where the frame started. API: `POST /groups/{id}/move` takes `"contents_only": true`.
 - API: `POST /views/{id}/arrange` lays out a group's members (or a view's top level) on a grid, with one `map.arranged` event; `inedctl view arrange`.
 
 ### Changed
 - When the server can't ping (no ICMP mode), it now checks again every minute and before each scan, so allowing ping (the sysctl or `setcap`) works without restarting it; the log says when ICMP is found. The GUI re-reads the server's health every 30 seconds, so its ping warning goes away by itself.
-- `ined-gui`: a right-click on one of several selected items keeps the selection; the menu's "Move N items to group…" and "Delete N items…" act on all of them.
-- When a better ping mode is found, the old one is closed two minutes later instead of at once, so a check still running on it isn't cut short.
-- `inedctl view arrange` says "arranged 1 member" for one.
 
 ## [0.1.0] - 2026-11-11
 

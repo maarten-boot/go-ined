@@ -3,14 +3,17 @@ package gui
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/maarten-boot/go-ined/internal/gui/mapmodel"
+	"github.com/maarten-boot/go-ined/internal/theme"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 	"github.com/maarten-boot/go-ined/pkg/client"
 )
@@ -119,9 +122,14 @@ func (g *GUI) newHostDialog(parent *int64, x, y float64) *formDialog {
 	return g.showForm("New host", "Create", []*widget.FormItem{
 		widget.NewFormItem("IP address", ip), widget.NewFormItem("Name", name), widget.NewFormItem("Description", desc),
 	}, func() error {
-		_, err := g.c.CreateHost(g.ctx, apitypes.HostCreate{
-			IP: strings.TrimSpace(ip.Text), Name: name.Text, Description: desc.Text, ParentID: parent, X: &x, Y: &y,
-		})
+		in := apitypes.HostCreate{IP: strings.TrimSpace(ip.Text), Name: name.Text, Description: desc.Text, ParentID: parent}
+		// Inside a frame the host goes where the user clicked. On empty
+		// space the server picks its network group (SPEC-107) and puts it
+		// next to that group (crosscheck 2026-11-11-03 D2).
+		if parent != nil {
+			in.X, in.Y = &x, &y
+		}
+		_, err := g.c.CreateHost(g.ctx, in)
 		return err
 	})
 }
@@ -275,7 +283,7 @@ type discoveryDialog struct {
 	target  *widget.Select
 	start   *widget.Button
 	cancel  *widget.Button
-	bar     *widget.ProgressBar
+	bar     *progressBar
 	info    *widget.Label
 	job     string
 	targets map[string]*int64
@@ -284,7 +292,7 @@ type discoveryDialog struct {
 // openDiscovery opens the discovery dialog, with a range filled in for
 // "Scan this network".
 func (g *GUI) openDiscovery(cidr string) *discoveryDialog {
-	dd := &discoveryDialog{cidr: entry(cidr), info: widget.NewLabel("Not started"), bar: widget.NewProgressBar(),
+	dd := &discoveryDialog{cidr: entry(cidr), info: widget.NewLabel("Not started"), bar: newProgressBar(func() theme.Palette { return g.palette }),
 		targets: map[string]*int64{"Root": nil}}
 	dd.cidr.SetPlaceHolder("IPv4 range, for example 192.168.1.0/24")
 	opts := []string{"Root"}
@@ -320,6 +328,9 @@ func (g *GUI) openDiscovery(cidr string) *discoveryDialog {
 	})
 	dd.d.Resize(fyne.NewSize(480, 0))
 	dd.d.Show()
+	if cidr == "" { // type the range at once (C5)
+		g.win.Canvas().Focus(dd.cidr)
+	}
 	g.disc = dd
 	return dd
 }
@@ -340,8 +351,73 @@ func (g *GUI) startDiscovery(dd *discoveryDialog) {
 			g.jobs[job.ID] = true
 			dd.cancel.Enable()
 			g.showJob(job)
+			// A small job can end before this answer arrived; its
+			// discovery.finished was then ignored. Ask once more (C1).
+			go func() {
+				now, err := g.c.Discovery(g.ctx, job.ID)
+				g.do(func() {
+					if err != nil || !g.jobs[now.ID] {
+						return
+					}
+					g.showJob(now)
+					if now.State != apitypes.DiscoveryRunning {
+						delete(g.jobs, now.ID)
+					}
+				})
+			}()
 		})
 	}()
+}
+
+// progressBar shows progress in palette colours only: a bordered track
+// and a filled part, with no text inside (Fyne's bar draws white text on
+// a translucent colour; SPEC-002, 709, crosscheck 2026-11-11-03 C2).
+type progressBar struct {
+	widget.BaseWidget
+	value   float64
+	palette func() theme.Palette
+}
+
+func newProgressBar(p func() theme.Palette) *progressBar {
+	b := &progressBar{palette: p}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+// SetValue sets the progress, 0 to 1.
+func (b *progressBar) SetValue(v float64) {
+	b.value = math.Min(1, math.Max(0, v))
+	b.Refresh()
+}
+
+func (b *progressBar) CreateRenderer() fyne.WidgetRenderer {
+	r := &barRenderer{b: b, track: canvas.NewRectangle(nil), fill: canvas.NewRectangle(nil)}
+	r.Refresh()
+	return r
+}
+
+type barRenderer struct {
+	b           *progressBar
+	track, fill *canvas.Rectangle
+}
+
+func (r *barRenderer) Destroy()                     {}
+func (r *barRenderer) MinSize() fyne.Size           { return fyne.NewSize(100, 14) }
+func (r *barRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.track, r.fill} }
+
+func (r *barRenderer) Layout(s fyne.Size) {
+	r.track.Resize(s)
+	r.fill.Move(fyne.NewPos(1, 1))
+	r.fill.Resize(fyne.NewSize(float32(float64(s.Width-2)*r.b.value), s.Height-2))
+}
+
+func (r *barRenderer) Refresh() {
+	p := r.b.palette()
+	r.track.FillColor, r.track.StrokeColor, r.track.StrokeWidth = nrgba(p.Background), nrgba(p.Border), 1
+	r.fill.FillColor = nrgba(p.Primary)
+	r.Layout(r.b.Size())
+	r.track.Refresh()
+	r.fill.Refresh()
 }
 
 // onDiscoveryEvent follows the jobs this GUI started: in the dialog if it

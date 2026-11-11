@@ -651,7 +651,12 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 		return apitypes.Group{}, err
 	}
 	cur.UpdatedAt = s.stamp()
-	dx, dy := cur.X-old.X, cur.Y-old.Y
+	// Only a new parent takes the contents along (SPEC-508); a position
+	// change alone moves just the group (crosscheck 2026-11-11-03 D1).
+	var dx, dy float64
+	if cur.ParentID != old.ParentID {
+		dx, dy = cur.X-old.X, cur.Y-old.Y
+	}
 	ch := s.subtreeShift(cur, dx, dy, cur.UpdatedAt)
 	ch.Groups = append([]Group{*cur}, ch.Groups...)
 	if err := s.repo.Apply(ctx, ch); err != nil {
@@ -694,7 +699,9 @@ func (s *Service) MoveGroup(ctx context.Context, id int64, dx, dy float64) (apit
 	s.applyShift(ch, g.ViewID)
 	v := groupView(cur, s.m.In(cur.ViewID).Aggregate()[id])
 	s.notify.Publish(apitypes.EventGroupUpdated, v)
-	s.notify.Publish(apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: id, ViewID: cur.ViewID, DX: dx, DY: dy})
+	if len(ch.Groups) > 1 || len(ch.Hosts) > 0 || len(ch.Placements) > 0 { // only with contents (C6)
+		s.notify.Publish(apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: id, ViewID: cur.ViewID, DX: dx, DY: dy})
+	}
 	return v, nil
 }
 

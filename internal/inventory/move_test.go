@@ -136,3 +136,34 @@ func TestHostViews(t *testing.T) {
 		t.Errorf("after unplace: %v", hs[0].Views)
 	}
 }
+
+// Crosscheck 2026-11-11-03 D1, C6: a PATCH of the position moves only the
+// group; moving an empty group emits no group.moved.
+func TestPatchPositionMovesOnlyTheGroup(t *testing.T) {
+	s, _ := newSvc(t)
+	rec := &recorder{}
+	g := mustGroup(t, s, apitypes.GroupCreate{Name: "g", X: ptr(100.0), Y: ptr(100.0)})
+	h := mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &g.ID, X: ptr(100.0), Y: ptr(220.0)})
+	empty := mustGroup(t, s, apitypes.GroupCreate{Name: "e"})
+	s.SetNotifier(rec)
+	if _, err := s.UpdateGroup(ctx, g.ID, apitypes.GroupPatch{X: apitypes.Some(300.0)}); err != nil {
+		t.Fatal(err)
+	}
+	if hh, _ := s.Host(h.ID); hh.X != 100 {
+		t.Errorf("contents moved by a position PATCH: %g", hh.X)
+	}
+	if _, err := s.MoveGroup(ctx, empty.ID, 5, 5); err != nil {
+		t.Fatal(err)
+	}
+	if ev := rec.take(); ev != "group.updated 1 unknown; group.updated 2 unknown" {
+		t.Errorf("events: %s", ev)
+	}
+	// A new parent with an explicit position still takes the contents along.
+	other := mustGroup(t, s, apitypes.GroupCreate{Name: "o"})
+	if _, err := s.UpdateGroup(ctx, g.ID, apitypes.GroupPatch{ParentID: apitypes.Some(&other.ID), X: apitypes.Some(310.0), Y: apitypes.Some(100.0)}); err != nil {
+		t.Fatal(err)
+	}
+	if hh, _ := s.Host(h.ID); hh.X != 110 {
+		t.Errorf("contents didn't follow a new parent: %g", hh.X)
+	}
+}

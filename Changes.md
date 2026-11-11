@@ -43,6 +43,8 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - New members of a group are placed 120 map units below it instead of 80, so an expanded group's frame in the GUI doesn't cover the labels next to it. Existing positions don't change.
 
 ### Fixed
+- `ined-gui`: the discovery dialog could miss the end of a small job and stay at "0 of n probed"; its progress bar (Fyne's, white text on a translucent colour) failed the contrast rules and is now drawn in palette colours; the range field has the focus; "New host here…" on empty space puts the host next to its network group instead of at the clicked spot.
+- API: `PATCH /groups/{id}` with only `x`/`y` moved the group's contents too (since M6); now only a new parent takes the contents along. An empty group's move no longer emits `group.moved`.
 - `ined-gui` kept up badly with many changes at once: every status change re-laid out and redrew the whole map. Redraws are now combined (at most every 100 ms per view) and the drawing objects are reused, so 1,000 changes on a 5,000-host map take milliseconds instead of seconds, and memory stays flat.
 - `ined-gui` could miss a view created or renamed while it was reloading its list of views.
 - API: `null` in a PATCH body is rejected (400) for every field except `parent_id`; before, it silently set the zero value (for example, `"monitored": null` turned monitoring off).

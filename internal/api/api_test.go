@@ -441,3 +441,27 @@ func TestDiscoveryAPI(t *testing.T) {
 		srv.Close()
 	}
 }
+
+// TC-715: POST /groups/{id}/move.
+func TestMoveGroupAPI(t *testing.T) {
+	e := newEnv(t, "")
+	var g apitypes.Group
+	e.want(201, "POST", "/groups", apitypes.GroupCreate{Name: "g", X: ptr(10.0), Y: ptr(10.0)}, &g)
+	var h apitypes.Host
+	e.want(201, "POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1", ParentID: &g.ID, X: ptr(10.0), Y: ptr(50.0)}, &h)
+	var moved apitypes.Group
+	e.want(200, "POST", "/groups/"+itoa(g.ID)+"/move", apitypes.GroupMove{DX: 5, DY: -5}, &moved)
+	if moved.X != 15 || moved.Y != 5 {
+		t.Errorf("moved group: %+v", moved)
+	}
+	e.want(200, "GET", "/hosts/"+itoa(h.ID), nil, &h)
+	if h.X != 15 || h.Y != 45 {
+		t.Errorf("host after move: %+v", h)
+	}
+	e.wantErr(404, "not_found", "POST", "/groups/999/move", apitypes.GroupMove{DX: 1})
+	e.wantErr(400, "invalid_argument", "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": "far"}`)
+	// A position that overflows to infinity is refused.
+	e.want(200, "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": 1.7e308, "dy": 0}`, nil)
+	e.wantErr(400, "invalid_argument", "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": 1.7e308, "dy": 0}`)
+	e.wantErr(405, "method_not_allowed", "GET", "/groups/"+itoa(g.ID)+"/move", nil)
+}

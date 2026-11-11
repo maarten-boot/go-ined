@@ -509,6 +509,9 @@ func (g *GUI) setContrast(c theme.Contrast) {
 	g.contrast, g.palette = c, theme.NewPalette(c)
 	g.app.Settings().SetTheme(newFyneTheme(g.palette))
 	g.colourBorders()
+	if g.disc != nil {
+		g.disc.bar.Refresh()
+	}
 	for _, mv := range g.maps {
 		mv.Refresh()
 	}

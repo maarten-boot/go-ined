@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
@@ -441,4 +442,130 @@ func TestShowInView(t *testing.T) {
 	eventually(t, e.ui, "removed from A", func() bool {
 		return find(e.nodes(a.ID), "host", h.ID) == nil && slices.Equal(must(c.Host(ctx, h.ID)).Views, []int64{1, b.ID})
 	})
+}
+
+// Crosscheck 2026-11-11-03 C1, C5, P1: every tiny discovery job's end
+// reaches the dialog; the range field has the focus.
+func TestDiscoveryEndsAreSeen(t *testing.T) {
+	e := start(t)
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "connected", func() bool { return strings.Contains(g.status.Text(), "connected") })
+	for i := 0; i < 20; i++ {
+		var dd *discoveryDialog
+		e.ui.Wait(func() {
+			dd = g.openDiscovery("")
+			if g.win.Canvas().Focused() != dd.cidr {
+				t.Fatal("range field not focused")
+			}
+			dd.cidr.SetText(fmt.Sprintf("10.%d.0.0/30", 100+i))
+			g.startDiscovery(dd)
+		})
+		eventually(t, e.ui, fmt.Sprintf("job %d done", i), func() bool { return strings.Contains(dd.info.Text, "done") && dd.cancel.Disabled() })
+		e.ui.Wait(func() { dd.d.Hide() })
+	}
+}
+
+// Crosscheck 2026-11-11-03 C2, P1: the progress bar uses palette colours
+// only (black and white in Max) and fills with its value.
+func TestProgressBar(t *testing.T) {
+	test.NewTempApp(t)
+	p := theme.NewPalette(theme.Contrast{Preset: theme.PresetMax, Min: 21})
+	b := newProgressBar(func() theme.Palette { return p })
+	b.Resize(fyne.NewSize(202, 14))
+	b.SetValue(0.5)
+	objs := test.WidgetRenderer(b).Objects()
+	assertBlackWhite(t, objs)
+	if w := objs[1].Size().Width; w != 100 {
+		t.Errorf("fill width %g, want 100", w)
+	}
+	b.SetValue(7)
+	if w := objs[1].Size().Width; w != 200 {
+		t.Errorf("fill width at > 1: %g", w)
+	}
+	for _, o := range objs {
+		if _, ok := o.(*canvas.Text); ok {
+			t.Error("text inside the bar")
+		}
+	}
+}
+
+// Crosscheck 2026-11-11-03 C4, C7: "New host here…" on empty space goes
+// next to its network group; the empty-space and frame menus; the host
+// menu opens after loading the host; Esc stops a drag.
+func TestMenusAndNewHost(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	net := must(c.CreateGroup(ctx, apitypes.GroupCreate{CIDR: "10.5.0.0/24", X: ptr(1000.0), Y: ptr(1000.0), Collapsed: ptr(false)}))
+	h0 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "10.5.0.1", X: ptr(1000.0), Y: ptr(1120.0)}))
+	v := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "Lab"}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return len(e.nodes(1)) == 2 })
+
+	var f *formDialog
+	e.ui.Wait(func() {
+		items := g.menuItems(1, nil, 5, 5, nil)
+		if fmt.Sprint(labels(items)) != "[New group here… New host here…]" {
+			t.Errorf("empty-space menu: %v", labels(items))
+		}
+		if fmt.Sprint(labels(g.menuItems(v.ID, nil, 5, 5, nil))) != "[New group here…]" {
+			t.Error("custom view offers New host")
+		}
+		f = g.newHostDialog(nil, 5, 5)
+		f.form.Items[0].Widget.(*fyneEntry).SetText("10.5.0.9")
+		f.Submit()
+	})
+	eventually(t, e.ui, "host created", func() bool { return f.done })
+	for _, h := range must(c.Hosts(ctx)) {
+		if h.IP == "10.5.0.9" && (h.ParentID == nil || *h.ParentID != net.ID || h.X < 1000 || h.Y < 1000) {
+			t.Errorf("new host not next to its network group: %+v", h)
+		}
+	}
+
+	// The frame's body offers new items inside the group.
+	e.ui.Wait(func() {
+		fr := find(e.nodes(1), "group", net.ID)
+		items := g.menuItems(1, fr, fr.Bounds.X+fr.Bounds.W-3, fr.Bounds.Y+fr.Bounds.H-3, nil)
+		menuItem(items, "New group here…").Action()
+		f = g.lastForm
+		f.form.Items[0].Widget.(*fyneEntry).SetText("inner")
+		f.Submit()
+	})
+	eventually(t, e.ui, "group inside the frame", func() bool { return f.done })
+	for _, gr := range must(c.Groups(ctx)) {
+		if gr.Name == "inner" && (gr.ParentID == nil || *gr.ParentID != net.ID) {
+			t.Errorf("inner group: %+v", gr)
+		}
+	}
+
+	// The host menu: loaded first, then shown as a pop-up.
+	eventually(t, e.ui, "host shown", func() bool { return find(e.nodes(1), "host", h0.ID) != nil })
+	var before int
+	e.ui.Wait(func() {
+		before = len(g.win.Canvas().Overlays().List())
+		g.openMenu(1, find(e.nodes(1), "host", h0.ID), fyne.NewPos(10, 10), 0, 0)
+	})
+	eventually(t, e.ui, "pop-up menu", func() bool { return len(g.win.Canvas().Overlays().List()) == before+1 })
+
+	// Esc during a drag.
+	e.ui.Wait(func() {
+		mv := g.maps[1]
+		mv.SetViewport(mapmodel.Viewport{Zoom: 1, X: 900, Y: 900})
+		sx, sy := mv.vp.ToScreen(1000, 1120)
+		for i := 1; i <= 5; i++ {
+			mv.Dragged(&fyne.DragEvent{PointEvent: fyne.PointEvent{Position: fyne.NewPos(float32(sx)+float32(10*i), float32(sy))}, Dragged: fyne.Delta{DX: 10}})
+		}
+		if !mv.Dragging() {
+			t.Fatal("not dragging")
+		}
+		g.onKey(&fyne.KeyEvent{Name: fyne.KeyEscape})
+		mv.DragEnd()
+		if mv.Dragging() {
+			t.Error("Esc didn't stop the drag")
+		}
+	})
+	if h := must(c.Host(ctx, h0.ID)); h.X != 1000 {
+		t.Errorf("host moved after Esc: %+v", h)
+	}
 }

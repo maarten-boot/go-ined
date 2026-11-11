@@ -135,6 +135,13 @@ ex "Error: the network view can't be deleted" DELETE /views/1
 ctl "The views in tab order" "view list" view list
 ctl "A view and its hosts" "view show 2" view show 2
 
+# Moving a group with everything in it (SPEC-507, 508).
+{ echo "## Moving groups"; echo
+  echo 'A group moves with its contents in one request; one `group.moved` event tells clients about the contents. A new parent without a position puts the item next to the new parent.'; echo; } >>"$OUT"
+ex "Move group 6 (in view 2) and its hosts 50 units right" POST /groups/6/move '{"dx":50,"dy":0}'
+ctl "The same with inedctl" "group shift 6 --dy 40" group shift 6 --dy 40
+ctl "A new parent: the host moves next to it" "host move 5 root" host move 5 root
+
 {
 cat <<'EOF'
 # API examples — go-ined

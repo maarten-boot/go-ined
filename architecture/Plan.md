@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.21** (2026-11-11)
+Status: **draft v0.22** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -19,7 +19,7 @@ Status: **draft v0.21** (2026-11-11)
 | D12 | ICMP: own small prober on `golang.org/x/net/icmp` (BSD-3), not `pro-bing` (Apache-2.0, would need a licence notice in binaries) | 2026-11-10 |
 | D13 | Views (one tab per view, per-view host placements, network view fixed as view 1) as milestone M4b before the GUI; integer ids. See `Design-views.md` | 2026-11-10 |
 | D14 | M4b details (user OK 2026-11-10): hosts keep their network placement in `hosts`, a `placements` table holds custom-view placements only (no `hosts` rebuild); one `view.deleted` per view; per-item events for cascade/reparent in a custom view; only `host.deleted` when a host goes; unique view names, new views last; `GET /groups?view=`; `inedctl view …`; the GUI tabs are specified in M5 | 2026-11-10 |
-| D17 | M6 details (**proposed, waiting for the user's OK**): M6-1..10 below | — |
+| D17 | M6 details (user OK 2026-11-11, all defaults): dragging a group moves its subtree; `POST /groups/{id}/move` with one `group.moved`, and `inedctl group shift`; a new parent gives a free position; dropping onto empty space keeps the parent; `views` in host JSON; a View menu button; the discovery dialog can close while the job runs; always confirm deletes, Delete key, no undo; single-item drag with a 4-pixel threshold and Esc; dialog errors stay in the dialog. See the M6 decisions table | 2026-11-11 |
 | D16 | Crosscheck 2026-11-11-02 decisions (user OK 2026-11-11): black button borders in Max contrast (D1 a); overlapping frames are handled by dragging in M6, no tidy-up action (D2 a); rows of a group grow with its size, 10–50 per row (D3 a); the toolbar shows the zoom (I1) | 2026-11-11 |
 | D15 | M5 details (user OK 2026-11-11, all defaults): Fyne v2.8.2 in the same module with a cgo-free check for server and CLI; canvas-object map with culling; status and names in place, other changes reload the view; M5 changes only expand/collapse, notes and contrast; tabs not saved; find over all hosts; contrast saved line by line in `gui.toml`; derived palettes; shapes as in M5-9; no host-views API in M5. See the M5 decisions table | 2026-11-11 |
 
@@ -111,15 +111,16 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] Load probe with the real binaries (2,046 discovered hosts, about 1,600 changes in 10 s under Xvfb): memory +69 MB, no backlog after the changes stop. Repeat it after large GUI changes
 - [ ] The user's visual check of the GUI (TC-005, 702 partly, 705, 708 manual part)
 
-### M6: GUI editing
+### M6: GUI editing ✅ (branch `feature/m6-gui-editing`)
 - [x] Spec items (draft v0.21): SPEC-507..509 (API), SPEC-704/706/707 detailed, SPEC-719..721; test cases TC-715..722
-- [ ] Decisions M6-1..10 (D17)
-- [ ] API: `POST /groups/{id}/move` and `group.moved`; new parent → free position with the subtree; `views` in host JSON; `pkg/client` and `inedctl group shift` (M6-2)
-- [ ] GUI: drag (hosts, groups with their contents), drop into a group, "Move to group…"
-- [ ] GUI: create, edit and delete groups and hosts; confirmations; Delete key
-- [ ] GUI: discovery dialog with progress and cancel
-- [ ] GUI: View menu; hosts in custom views
-- [ ] TC-702 manual script; the user's visual check of M5 and M6
+- [x] Decisions M6-1..10 (D17)
+- [x] API: `POST /groups/{id}/move` and `group.moved`; new parent → free position with the subtree; `views` in host JSON; `pkg/client` and `inedctl group shift` (M6-2)
+- [x] GUI: drag (hosts, groups with their contents), drop into a group, "Move to group…"
+- [x] GUI: create, edit and delete groups and hosts; confirmations; Delete key
+- [x] GUI: discovery dialog with progress and cancel
+- [x] GUI: View menu; hosts in custom views
+- [x] Smoke test of the real binary under Xvfb driven by `xdotool`: drag onto a group (marked "into"), frame drag with contents, right-click menus, New group dialog, Delete group dialog. Fixed from it: dragged items drawn on top, the first field of a form gets focus, plurals in the delete question
+- [ ] TC-702 manual script and the user's visual check of M5 and M6
 
 ### M6 decisions (proposed; defaults recommended)
 | # | Question | Recommended default | Alternative |

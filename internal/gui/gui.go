@@ -112,7 +112,7 @@ func New(a fyne.App, opt Options) *GUI {
 		title = "go-ined"
 	}
 	g.win = a.NewWindow(title)
-	g.status = newStatusBar(g.c.URL(), g.c.TokenInClear())
+	g.status = newStatusBar(g.c.URL(), g.c.TokenInClear(), a.Clipboard)
 	for _, w := range opt.Warnings {
 		g.status.message(w)
 	}
@@ -171,6 +171,9 @@ func (g *GUI) ShowAndRun() {
 // loadAll reloads the views, the selected view's map and every other
 // loaded map (start, reconnect, resync).
 func (g *GUI) loadAll() {
+	if h, err := g.c.Health(g.ctx); err == nil {
+		g.do(func() { g.status.ping(pingWarning(h)) })
+	}
 	var views []int64
 	for try := 0; ; try++ {
 		g.mu.Lock()

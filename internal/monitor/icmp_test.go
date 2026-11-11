@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -118,4 +119,17 @@ func TestICMPRawLoopback(t *testing.T) {
 		}
 	}
 	wg.Wait()
+}
+
+// The no-ICMP error names the exact commands to fix it.
+func TestNoICMPError(t *testing.T) {
+	err := noICMPError(errors.New("v4 denied"), errors.New("v6 denied"), "/opt/ined/ined-server")
+	for _, want := range []string{
+		"v4 denied", "v6 denied", `sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"`,
+		"/etc/sysctl.d/", "sudo setcap cap_net_raw+ep /opt/ined/ined-server",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("message lacks %q:\n%s", want, err)
+		}
+	}
 }

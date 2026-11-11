@@ -35,6 +35,7 @@ func (g *GUI) showForm(title, submit string, items []*widget.FormItem, run func(
 	f := &formDialog{errL: widget.NewLabel("")}
 	f.errL.Wrapping = fyne.TextWrapWord
 	f.errL.Importance = widget.DangerImportance
+	f.errL.Selectable = true // can be copied
 	f.form = &widget.Form{Items: items, SubmitText: submit, CancelText: "Cancel"}
 	f.form.OnCancel = func() { f.d.Hide() }
 	f.form.OnSubmit = func() {
@@ -285,6 +286,8 @@ type discoveryDialog struct {
 	cancel  *widget.Button
 	bar     *progressBar
 	info    *widget.Label
+	copyB   *widget.Button
+	last    *apitypes.Discovery // the job's latest state, for "Copy"
 	job     string
 	targets map[string]*int64
 }
@@ -303,6 +306,11 @@ func (g *GUI) openDiscovery(cidr string) *discoveryDialog {
 		dd.targets[o] = &id
 	}
 	g.mu.Unlock()
+	// Messages wrap, can be selected, and "Copy" puts them with the job's
+	// details on the clipboard (user request).
+	dd.info.Wrapping = fyne.TextWrapWord
+	dd.info.Selectable = true
+	dd.copyB = widget.NewButton("Copy", func() { g.app.Clipboard().SetContent(dd.details()) })
 	dd.target = widget.NewSelect(opts, nil)
 	dd.target.SetSelected("Root")
 	dd.start = widget.NewButton("Start", func() { g.startDiscovery(dd) })
@@ -319,7 +327,7 @@ func (g *GUI) openDiscovery(cidr string) *discoveryDialog {
 		widget.NewFormItem("New network group under", dd.target))
 	content := container.NewVBox(form,
 		widget.NewLabel("Hosts that answer go into the network group for the range, which is created if needed."),
-		dd.bar, dd.info, container.NewHBox(dd.start, dd.cancel))
+		dd.bar, dd.info, container.NewHBox(dd.start, dd.cancel, dd.copyB))
 	dd.d = dialog.NewCustom("Discover hosts", "Close", content, g.win)
 	dd.d.SetOnClosed(func() {
 		if g.disc == dd {
@@ -433,8 +441,24 @@ func (g *GUI) onDiscoveryEvent(ev client.Event) {
 	}
 }
 
+// details is what "Copy" copies: the message, and the job's fields.
+func (dd *discoveryDialog) details() string {
+	s := dd.info.Text
+	if j := dd.last; j != nil {
+		s += fmt.Sprintf("\njob %s, range %s, state %s: %d of %d probed, %d found, %d new hosts, %d probes failed",
+			j.ID, j.CIDR, j.State, j.Probed, j.Total, j.Found, j.Added, j.Errors)
+		if j.Error != "" {
+			s += "\nfirst error: " + j.Error
+		}
+	}
+	return s
+}
+
 func jobText(j apitypes.Discovery) string {
 	s := fmt.Sprintf("discovery %s: %d of %d probed, %d found", j.CIDR, j.Probed, j.Total, j.Found)
+	if j.Errors > 0 && j.State == apitypes.DiscoveryRunning {
+		s += fmt.Sprintf(", %d probes failed", j.Errors)
+	}
 	if j.State != apitypes.DiscoveryRunning {
 		s = fmt.Sprintf("discovery %s %s: %d found, %d new hosts", j.CIDR, j.State, j.Found, j.Added)
 		if j.Error != "" {
@@ -454,6 +478,8 @@ func (g *GUI) showJob(j apitypes.Discovery) {
 		dd.bar.SetValue(float64(j.Probed) / float64(j.Total))
 	}
 	dd.info.SetText(jobText(j))
+	jj := j
+	dd.last = &jj
 	if j.State != apitypes.DiscoveryRunning {
 		dd.cancel.Disable()
 		dd.start.Enable()

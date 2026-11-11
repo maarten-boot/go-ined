@@ -352,6 +352,12 @@ func TestDiscoveryDialog(t *testing.T) {
 	eventually(t, e.ui, "done in the status bar", func() bool {
 		return g.disc == nil && strings.Contains(g.status.Text(), "discovery 10.8.0.0/30 done: 2 found")
 	})
+	e.ui.Wait(func() {
+		dd.copyB.OnTapped()
+		if got := fyne.CurrentApp().Clipboard().Content(); !strings.Contains(got, "range 10.8.0.0/30, state done: 2 of 2 probed") {
+			t.Errorf("copied job details: %q", got)
+		}
+	})
 	// A bad range: the error is in the dialog.
 	e.ui.Wait(func() {
 		dd = g.openDiscovery("")
@@ -359,6 +365,16 @@ func TestDiscoveryDialog(t *testing.T) {
 		g.startDiscovery(dd)
 	})
 	eventually(t, e.ui, "error shown", func() bool { return strings.HasPrefix(dd.info.Text, "Error:") && !dd.start.Disabled() })
+	// The message can be selected and copied (user request).
+	e.ui.Wait(func() {
+		if !dd.info.Selectable || dd.info.Wrapping != fyne.TextWrapWord {
+			t.Error("message not selectable or not wrapped")
+		}
+		dd.copyB.OnTapped()
+		if got := fyne.CurrentApp().Clipboard().Content(); !strings.HasPrefix(got, "Error: ") || !strings.Contains(got, "IPv6") {
+			t.Errorf("copied: %q", got)
+		}
+	})
 }
 
 // TC-721: the View menu.

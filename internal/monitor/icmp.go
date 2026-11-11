@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"sync"
 	"time"
 
@@ -74,9 +75,22 @@ func NewICMPProber() (*ICMPProber, error) { return newICMPProber(false) }
 func newICMPProber(rawOnly bool) (*ICMPProber, error) {
 	p := &ICMPProber{v4: detect(true, rawOnly), v6: detect(false, rawOnly), gap: MinGap}
 	if p.v4.mode == "" && p.v6.mode == "" {
-		return nil, fmt.Errorf("no ICMP mode available (IPv4: %v; IPv6: %v); allow unprivileged ICMP with sysctl net.ipv4.ping_group_range, or run with CAP_NET_RAW", p.v4.err, p.v6.err)
+		exe, err := os.Executable()
+		if err != nil {
+			exe = "ined-server"
+		}
+		return nil, noICMPError(p.v4.err, p.v6.err, exe)
 	}
 	return p, nil
+}
+
+// noICMPError explains that the server can't ping and how to allow it,
+// with the exact commands (SPEC-304).
+func noICMPError(v4, v6 error, exe string) error {
+	return fmt.Errorf("no ICMP mode available, so the server can't ping (IPv4: %v; IPv6: %v). "+
+		"To allow ping for this user: sudo sysctl -w net.ipv4.ping_group_range=\"0 2147483647\" "+
+		"(put the setting in /etc/sysctl.d/ to keep it after a reboot), "+
+		"or give the server raw sockets: sudo setcap cap_net_raw+ep %s", v4, v6, exe)
 }
 
 func detect(v4, rawOnly bool) *family {

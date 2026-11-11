@@ -35,25 +35,62 @@ func ConnText(st client.StreamState) string {
 }
 
 type statusBar struct {
-	obj                fyne.CanvasObject
-	connL, msgL, warnL *widget.Label
+	obj                       fyne.CanvasObject
+	connL, msgL, warnL, pingL *widget.Label
+	copyB                     *widget.Button
+	clip                      func() fyne.Clipboard
+	log                       []string // recent messages with their time, newest last
 }
 
-func newStatusBar(url string, tokenInClear bool) *statusBar {
+// statusLogSize is how many messages "Copy" keeps.
+const statusLogSize = 50
+
+// newStatusBar builds the status bar. Its messages can be selected, and
+// "Copy" puts the recent ones on the clipboard, e.g. for a bug report.
+func newStatusBar(url string, tokenInClear bool, clip func() fyne.Clipboard) *statusBar {
 	s := &statusBar{
 		connL: widget.NewLabel("connecting…"),
 		msgL:  widget.NewLabel(""),
 		warnL: widget.NewLabel(""),
+		pingL: widget.NewLabel(""),
+		clip:  clip,
 	}
 	s.msgL.Truncation = fyne.TextTruncateEllipsis
+	s.msgL.Selectable = true
+	s.pingL.TextStyle.Bold = true
+	s.pingL.Truncation = fyne.TextTruncateEllipsis
+	s.pingL.Hide()
 	if tokenInClear {
 		s.warnL.SetText("Warning: the token is sent unencrypted; use https")
 		s.warnL.TextStyle.Bold = true
 	}
-	s.obj = container.NewBorder(nil, nil,
+	s.copyB = widget.NewButton("Copy", s.copyLog)
+	s.obj = container.NewBorder(s.pingL, nil,
 		container.NewHBox(widget.NewLabel(url), widget.NewSeparator(), s.connL, widget.NewSeparator()),
-		s.warnL, s.msgL)
+		container.NewHBox(s.warnL, s.copyB), s.msgL)
 	return s
+}
+
+// copyLog puts the recent messages (and a ping warning) on the clipboard.
+func (s *statusBar) copyLog() {
+	if s.clip == nil {
+		return
+	}
+	lines := s.log
+	if s.pingL.Text != "" {
+		lines = append([]string{s.pingL.Text}, lines...)
+	}
+	s.clip().SetContent(strings.Join(lines, "\n"))
+}
+
+// ping shows (or with "" hides) the warning that the server can't ping.
+func (s *statusBar) ping(warning string) {
+	s.pingL.SetText(warning)
+	if warning == "" {
+		s.pingL.Hide()
+		return
+	}
+	s.pingL.Show()
 }
 
 func (s *statusBar) conn(st client.StreamState) { s.connL.SetText(ConnText(st)) }
@@ -61,12 +98,29 @@ func (s *statusBar) conn(st client.StreamState) { s.connL.SetText(ConnText(st)) 
 func (s *statusBar) stopped(err error) { s.connL.SetText("stopped: " + err.Error()) }
 
 func (s *statusBar) message(m string) {
-	s.msgL.SetText(time.Now().Format("15:04:05") + " " + m)
+	line := time.Now().Format("15:04:05") + " " + m
+	s.log = append(s.log, line)
+	if len(s.log) > statusLogSize {
+		s.log = s.log[len(s.log)-statusLogSize:]
+	}
+	s.msgL.SetText(line)
 }
 
 // Text returns everything the status bar shows (for tests).
 func (s *statusBar) Text() string {
-	return strings.Join([]string{s.connL.Text, s.msgL.Text, s.warnL.Text}, " | ")
+	return strings.Join([]string{s.connL.Text, s.msgL.Text, s.warnL.Text, s.pingL.Text}, " | ")
+}
+
+// pingWarning is the status-bar warning for a server that can't ping, or
+// "" (crosscheck 2026-11-11-04, user report).
+func pingWarning(h apitypes.Health) string {
+	switch {
+	case h.ICMPMode == apitypes.ICMPUnavailable:
+		return "The server can't ping, so discovery and monitoring don't work: " + h.ICMPError
+	case h.Status == "degraded" && h.ICMPMode == "":
+		return "The server reports a problem (status degraded); details need a valid token (inedctl health)"
+	}
+	return ""
 }
 
 // ---- details panel (SPEC-708) ----

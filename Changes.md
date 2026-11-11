@@ -47,6 +47,8 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - New members of a group are placed 120 map units below it instead of 80, so an expanded group's frame in the GUI doesn't cover the labels next to it. Existing positions don't change.
 
 ### Fixed
+- `ined-gui`: messages in the discovery dialog wrap, can be selected and copied ("Copy" adds the job's details); the status bar's messages can be selected, and its "Copy" button copies the recent ones. When the server can't ping, the status bar says so as soon as the GUI connects (user report: scanning failed for an ordinary user, and the error couldn't be copied).
+- `ined-server`: when no ICMP mode works, the message names the exact commands to allow ping (the sysctl, and `setcap` with the binary's path); the README explains them.
 - Go toolchain 1.26.11 and `golang.org/x/image` v0.48.0, for the vulnerabilities `govulncheck` reported in the standard library (`net/http`, `crypto/x509`, `crypto/tls`, `mime/multipart`) and in `golang.org/x/image/tiff`.
 - `ined-gui`: the discovery dialog could miss the end of a small job and stay at "0 of n probed"; its progress bar (Fyne's, white text on a translucent colour) failed the contrast rules and is now drawn in palette colours; the range field has the focus; "New host here…" on empty space puts the host next to its network group instead of at the clicked spot.
 - API: `PATCH /groups/{id}` with only `x`/`y` moved the group's contents too (since M6); now only a new parent takes the contents along. An empty group's move no longer emits `group.moved`.

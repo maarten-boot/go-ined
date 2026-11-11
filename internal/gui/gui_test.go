@@ -351,8 +351,8 @@ func TestStatusBar(t *testing.T) {
 			t.Errorf("ConnText(%+v) = %q, want %q", tc.st, got, tc.want)
 		}
 	}
-	test.NewTempApp(t)
-	s := newStatusBar("http://example.org:8470", true)
+	app := test.NewTempApp(t)
+	s := newStatusBar("http://example.org:8470", true, app.Clipboard)
 	s.stopped(errors.New("unauthenticated (HTTP 401)"))
 	s.message("hello")
 	txt := s.Text()
@@ -361,7 +361,7 @@ func TestStatusBar(t *testing.T) {
 			t.Errorf("status bar %q lacks %q", txt, want)
 		}
 	}
-	if s := newStatusBar("https://x", false); strings.Contains(s.Text(), "unencrypted") {
+	if s := newStatusBar("https://x", false, app.Clipboard); strings.Contains(s.Text(), "unencrypted") {
 		t.Error("warning without reason")
 	}
 	// A stream refused with 401 ends as "stopped".
@@ -620,4 +620,40 @@ func labels(items []*fyne.MenuItem) []string {
 		out = append(out, it.Label)
 	}
 	return out
+}
+
+// User request (2026-11-11): status-bar messages can be selected and
+// copied; a server that can't ping is announced at once.
+func TestStatusBarCopyAndPing(t *testing.T) {
+	app := test.NewTempApp(t)
+	s := newStatusBar("http://x", false, app.Clipboard)
+	if !s.msgL.Selectable {
+		t.Error("message not selectable")
+	}
+	for i := range 60 {
+		s.message(fmt.Sprint("msg ", i))
+	}
+	s.ping("The server can't ping")
+	s.copyB.OnTapped()
+	got := strings.Split(app.Clipboard().Content(), "\n")
+	if len(got) != statusLogSize+1 || got[0] != "The server can't ping" || !strings.HasSuffix(got[1], " msg 10") || !strings.HasSuffix(got[len(got)-1], " msg 59") {
+		t.Errorf("copied %d lines: %q … %q", len(got), got[0], got[len(got)-1])
+	}
+	s.ping("")
+	if s.pingL.Visible() {
+		t.Error("ping warning still shown")
+	}
+	for _, tc := range []struct {
+		h    apitypes.Health
+		want string
+	}{
+		{apitypes.Health{Status: "ok", ICMPMode: "unprivileged"}, ""},
+		{apitypes.Health{Status: "ok"}, ""},
+		{apitypes.Health{Status: "degraded", ICMPMode: "unavailable", ICMPError: "no ICMP mode available"}, "The server can't ping, so discovery and monitoring don't work: no ICMP mode available"},
+		{apitypes.Health{Status: "degraded"}, "The server reports a problem (status degraded); details need a valid token (inedctl health)"},
+	} {
+		if got := pingWarning(tc.h); got != tc.want {
+			t.Errorf("pingWarning(%+v) = %q", tc.h, got)
+		}
+	}
 }

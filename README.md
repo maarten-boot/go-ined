@@ -107,7 +107,17 @@ Security: by default the server listens on loopback only. To listen on any other
 
 Only one `ined-server` can use a database at a time; a second one refuses to start.
 
-Ping: the server first tries unprivileged ICMP sockets, then raw sockets. On Linux, unprivileged ICMP needs the server's group inside `sysctl net.ipv4.ping_group_range` (many distributions allow all groups). Otherwise, give the binary `CAP_NET_RAW` (`sudo setcap cap_net_raw+ep bin/ined-server`). If neither works, the server still runs: hosts stay `unknown`, and `/api/v1/health` (with a token) reports the problem. The startup log shows the mode in use. Set `monitor.enabled = false` to turn background pinging off (discovery still works).
+Ping permissions: the server first tries unprivileged ICMP sockets, then raw sockets. If neither works, the server still runs, but it can't scan or monitor: discovery answers 503 with the reason, hosts stay `unknown`, `inedctl health` and the GUI's status bar say so, and the startup log shows the mode in use. On Linux, either of these fixes it (then restart the server):
+
+```bash
+# A: allow unprivileged ping ("ping sockets", not raw sockets) for all groups; covers IPv4 and IPv6
+sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"                                  # until the next reboot
+echo 'net.ipv4.ping_group_range = 0 2147483647' | sudo tee /etc/sysctl.d/60-ined-ping.conf  # from the next boot on
+# B: give only the server binary raw sockets (repeat after every rebuild)
+sudo setcap cap_net_raw+ep bin/ined-server
+```
+
+Many distributions already allow ping sockets for all groups (option A's value). Set `monitor.enabled = false` to turn background pinging off (discovery still works).
 
 Discovery probes IPv4 ranges up to `/16` (`discovery.max_prefix`) at 200 addresses per second (`discovery.rate`). The server is designed for about 5,000 hosts; a range with more addresses than that logs a warning. Reverse DNS uses the system's resolver; set `dns.enabled = false` to turn it off.
 

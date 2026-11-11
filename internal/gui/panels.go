@@ -97,7 +97,7 @@ func newDetails(g *GUI) *details {
 	d.save = widget.NewButton("Save note", d.saveNote)
 	d.note.Disable()
 	d.save.Disable()
-	d.obj = container.NewBorder(d.title, container.NewVBox(widget.NewLabel("Note"), d.note, d.save), nil, nil,
+	d.obj = container.NewBorder(d.title, container.NewVBox(widget.NewLabel("Note"), d.note, g.bordered(d.save)), nil, nil,
 		container.NewVScroll(d.form))
 	return d
 }
@@ -251,7 +251,11 @@ func (d *details) fill() {
 		view, _ := d.g.model.View(gr.ViewID)
 		d.g.mu.Unlock()
 		counts := "-"
-		for _, n := range d.g.maps[d.view].Nodes() {
+		var nodes []mapmodel.Node
+		if mv := d.g.maps[d.view]; mv != nil { // nil once the view is gone (C3)
+			nodes = mv.Nodes()
+		}
+		for _, n := range nodes {
 			if n.Item.Type == apitypes.TypeGroup && n.Item.ID == gr.ID {
 				counts = dash(n.Counts.String())
 			}
@@ -336,7 +340,17 @@ func (d *details) saveNote() {
 
 // ---- find host (SPEC-714) ----
 
-func (g *GUI) showFind() {
+// findDialog is the open find dialog (kept for tests).
+type findDialog struct {
+	entry *widget.Entry
+	list  *widget.List
+	info  *widget.Label
+}
+
+func (g *GUI) showFind() { g.openFind() }
+
+// openFind opens the find dialog; it loads the hosts in the background.
+func (g *GUI) openFind() *findDialog {
 	var hosts, found []apitypes.Host
 	entry := widget.NewEntry()
 	entry.SetPlaceHolder("Name, PTR name or IP address")
@@ -380,6 +394,7 @@ func (g *GUI) showFind() {
 			update()
 		})
 	}()
+	return &findDialog{entry: entry, list: list, info: info}
 }
 
 // goToHost shows a host (SPEC-714): in the current tab if it is placed in
@@ -442,13 +457,6 @@ func (g *GUI) showView(view int64) {
 
 const customOption = "custom…"
 
-func contrastOption(c theme.Contrast) string {
-	if c.Preset == theme.PresetCustom {
-		return c.String()
-	}
-	return c.String()
-}
-
 func contrastOptions() []string {
 	var out []string
 	for _, p := range []string{theme.PresetAA, theme.PresetAAA, theme.PresetMax} {
@@ -462,13 +470,14 @@ func contrastOptions() []string {
 func (g *GUI) setContrast(c theme.Contrast) {
 	g.contrast, g.palette = c, theme.NewPalette(c)
 	g.app.Settings().SetTheme(newFyneTheme(g.palette))
+	g.colourBorders()
 	for _, mv := range g.maps {
 		mv.Refresh()
 	}
 }
 
 func (g *GUI) pickContrast(s string) {
-	if s == contrastOption(g.contrast) {
+	if s == g.contrast.String() {
 		return
 	}
 	if s == customOption {
@@ -484,7 +493,11 @@ func (g *GUI) pickContrast(s string) {
 	g.changeContrast(c)
 }
 
-func (g *GUI) askCustomContrast() {
+func (g *GUI) askCustomContrast() { g.customContrastForm().Show() }
+
+// customContrastForm builds the dialog for a custom ratio; tests use its
+// entry and Submit.
+func (g *GUI) customContrastForm() *customForm {
 	e := widget.NewEntry()
 	e.SetText(strconv.FormatFloat(g.contrast.Min, 'f', -1, 64))
 	e.Validator = func(s string) error {
@@ -495,11 +508,11 @@ func (g *GUI) askCustomContrast() {
 		_, err = theme.Parse(theme.PresetCustom, r)
 		return err
 	}
-	dialog.ShowForm("Custom contrast", "Apply", "Cancel",
+	d := dialog.NewForm("Custom contrast", "Apply", "Cancel",
 		[]*widget.FormItem{widget.NewFormItem("Minimum ratio (4.5–21)", e)},
 		func(ok bool) {
 			if !ok {
-				g.contrSel.SetSelected(contrastOption(g.contrast))
+				g.contrSel.SetSelected(g.contrast.String())
 				return
 			}
 			r, _ := strconv.ParseFloat(strings.TrimSpace(e.Text), 64)
@@ -510,6 +523,12 @@ func (g *GUI) askCustomContrast() {
 			}
 			g.changeContrast(c)
 		}, g.win)
+	return &customForm{FormDialog: d, entry: e}
+}
+
+type customForm struct {
+	*dialog.FormDialog
+	entry *widget.Entry
 }
 
 // changeContrast applies and saves a contrast setting chosen in the GUI.
@@ -520,7 +539,7 @@ func (g *GUI) changeContrast(c theme.Contrast) {
 		opts = append(opts[:len(opts)-1], c.String(), customOption)
 	}
 	g.contrSel.Options = opts
-	g.contrSel.SetSelected(contrastOption(c))
+	g.contrSel.SetSelected(c.String())
 	if g.opt.SaveContrast == nil {
 		return
 	}

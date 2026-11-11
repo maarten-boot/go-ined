@@ -2,8 +2,10 @@ package gui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -24,8 +26,13 @@ import (
 )
 
 // uiThread runs functions one at a time on one goroutine, like Fyne's
-// event loop does in the real app.
-type uiThread struct{ ch chan func() }
+// event loop does in the real app. After the test, Do drops functions
+// (a late reload or timer), as a closed app would.
+type uiThread struct {
+	mu     sync.Mutex
+	closed bool
+	ch     chan func()
+}
 
 func newUI(t *testing.T) *uiThread {
 	u := &uiThread{ch: make(chan func(), 100000)}
@@ -36,16 +43,28 @@ func newUI(t *testing.T) *uiThread {
 			f()
 		}
 	}()
-	t.Cleanup(func() { close(u.ch); <-done })
+	t.Cleanup(func() {
+		u.mu.Lock()
+		u.closed = true
+		close(u.ch)
+		u.mu.Unlock()
+		<-done
+	})
 	return u
 }
 
-func (u *uiThread) Do(f func()) { u.ch <- f }
+func (u *uiThread) Do(f func()) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if !u.closed {
+		u.ch <- f
+	}
+}
 
 // Wait runs f on the UI goroutine and waits for it.
 func (u *uiThread) Wait(f func()) {
 	done := make(chan struct{})
-	u.ch <- func() { defer close(done); f() }
+	u.Do(func() { defer close(done); f() })
 	<-done
 }
 
@@ -404,3 +423,186 @@ func TestScreenshot(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// TC-714: a burst of 1,000 status events with 5,000 hosts loaded is
+// handled in well under a second, with coalesced redraws (SPEC-716,
+// crosscheck 2026-11-11-02 C1).
+func TestEventBurst(t *testing.T) {
+	ui := newUI(t)
+	a := test.NewTempApp(t)
+	c := must(client.New(client.Options{URL: "http://127.0.0.1:1"})) // never contacted
+	var g *GUI
+	ui.Wait(func() {
+		g = New(a, Options{Client: c, Contrast: theme.Default, Do: ui.Do})
+		g.Window().Resize(fyne.NewSize(1200, 800))
+		g.model.SetViews([]apitypes.View{{ID: 1, Name: "Networks"}})
+		g.model.SetMap(apitypes.Map{ViewID: 1, Items: hosts(5000)})
+		g.rebuildTabs()
+		g.redraw(1)
+		g.layouts = 0
+	})
+	t.Cleanup(g.Stop)
+	evs := make([]client.Event, 1000)
+	for i := range evs {
+		b, _ := json.Marshal(apitypes.Host{ID: int64(i + 1), DisplayName: fmt.Sprint("h", i), Status: "down", Monitored: true})
+		evs[i] = client.Event{Type: apitypes.EventHostStatus, Data: b}
+	}
+	start := time.Now()
+	for _, ev := range evs {
+		ui.Do(func() { g.apply(ev) })
+	}
+	eventually(t, ui, "burst handled and drawn", func() bool { return len(g.dirty) == 0 && !g.flushing && g.layouts > 0 })
+	d := time.Since(start)
+	var layouts int
+	var n *mapmodel.Node
+	ui.Wait(func() { layouts, n = g.layouts, find(g.maps[1].Nodes(), "host", 1000) })
+	t.Logf("1000 events: %v, %d layouts", d, layouts)
+	if d > time.Second || layouts > 3 {
+		t.Errorf("1000 events took %v with %d layouts; want < 1 s and at most 3", d, layouts)
+	}
+	if n == nil || n.Item.Status != "down" || n.Labels[0] != "h999" {
+		t.Errorf("last event not drawn: %+v", n)
+	}
+}
+
+// C5 (crosscheck 2026-11-11-02): the find dialog, the context menu, the
+// toolbar's zoom with its label, and the details following events.
+func TestFindMenuToolbarDetails(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	net := must(c.CreateGroup(ctx, apitypes.GroupCreate{CIDR: "10.0.0.0/24"}))
+	db := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "10.0.0.7", Name: "db"}))
+	web := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "10.0.0.8", Name: "web"}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return len(e.nodes(1)) == 1 })
+
+	// Find: type, see the count, pick the result.
+	var f *findDialog
+	e.ui.Wait(func() { f = g.openFind() })
+	eventually(t, e.ui, "hosts loaded", func() bool { return f.info.Text == "0 of 2 hosts" })
+	e.ui.Wait(func() { f.entry.SetText("10.0.0.") })
+	eventually(t, e.ui, "two found", func() bool { return f.info.Text == "2 of 2 hosts" })
+	e.ui.Wait(func() { f.entry.SetText("DB") })
+	e.ui.Wait(func() {
+		if f.info.Text != "1 of 2 hosts" || f.list.Length() != 1 {
+			t.Errorf("find db: %q", f.info.Text)
+		}
+		f.list.Select(0)
+	})
+	eventually(t, e.ui, "db shown and selected", func() bool {
+		sel := g.maps[1].Selected()
+		return sel != nil && *sel == mapmodel.HostKey(db.ID) && find(e.nodes(1), "host", db.ID) != nil &&
+			g.details.title.Text == "Host db"
+	})
+
+	// Context menu of the (now expanded) network group: Collapse only.
+	e.ui.Wait(func() {
+		n := find(e.nodes(1), "group", net.ID)
+		items := g.menuItems(n)
+		if len(items) != 2 || !items[0].Disabled || items[1].Disabled {
+			t.Fatalf("frame menu: %+v", items)
+		}
+		if g.menuItems(find(e.nodes(1), "host", db.ID)) != nil || g.menuItems(nil) != nil {
+			t.Error("menu for a host or empty space")
+		}
+		items[1].Action()
+	})
+	eventually(t, e.ui, "collapsed by the menu", func() bool {
+		n := find(e.nodes(1), "group", net.ID)
+		return n != nil && n.Kind == mapmodel.KindGroup
+	})
+	e.ui.Wait(func() {
+		items := g.menuItems(find(e.nodes(1), "group", net.ID))
+		if items[0].Disabled || !items[1].Disabled {
+			t.Errorf("icon menu: %+v", items)
+		}
+	})
+
+	// Toolbar zoom and the zoom label (I1).
+	e.ui.Wait(func() {
+		g.zoomTo(1)
+		g.zoomBy(2)
+		if g.zoomL.Text != "200 %" || g.maps[1].Viewport().Zoom != 2 {
+			t.Errorf("zoom: %q", g.zoomL.Text)
+		}
+		g.fitAll()
+		if g.zoomL.Text != zoomLabel(g.maps[1].Viewport().Zoom) {
+			t.Errorf("zoom label after fit: %q", g.zoomL.Text)
+		}
+	})
+
+	// Details follow events; an unsaved note edit isn't overwritten.
+	k := mapmodel.HostKey(web.ID)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	eventually(t, e.ui, "web details", func() bool { return g.details.title.Text == "Host web" })
+	must(c.UpdateHost(ctx, web.ID, apitypes.HostPatch{Name: apitypes.Some("www"), Note: apitypes.Some("from elsewhere")}))
+	eventually(t, e.ui, "renamed", func() bool {
+		return g.details.title.Text == "Host www" && g.details.note.Text == "from elsewhere"
+	})
+	e.ui.Wait(func() { g.details.note.SetText("my unsaved edit") })
+	must(c.UpdateHost(ctx, web.ID, apitypes.HostPatch{Description: apitypes.Some("x")}))
+	eventually(t, e.ui, "description shown", func() bool { return strings.Contains(formText(g.details), "x\n") })
+	e.ui.Wait(func() {
+		if g.details.note.Text != "my unsaved edit" {
+			t.Errorf("edit overwritten: %q", g.details.note.Text)
+		}
+	})
+	gk := mapmodel.GroupKey(net.ID)
+	e.ui.Wait(func() { g.details.show(1, &gk) })
+	eventually(t, e.ui, "group details", func() bool { return g.details.title.Text == "Group 10.0.0.0/24" })
+	e.ui.Wait(func() {
+		b, _ := json.Marshal(apitypes.GroupStatusEvent{ID: net.ID, Status: "down"})
+		g.details.onEvent(client.Event{Type: apitypes.EventGroupStatus, Data: b})
+		if !strings.Contains(formText(g.details), "down") {
+			t.Error("group.status not shown")
+		}
+	})
+	if err := c.DeleteGroup(ctx, net.ID, apitypes.ChildrenReparent); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, e.ui, "cleared after delete", func() bool { return g.details.key == nil && g.details.title.Text == "Nothing selected" })
+}
+
+// C5, D1: the custom-contrast dialog validates its ratio; Max shows
+// button borders.
+func TestCustomContrastAndBorders(t *testing.T) {
+	e := start(t)
+	e.open()
+	g := e.g
+	var f *customForm
+	e.ui.Wait(func() {
+		for _, r := range g.borders {
+			if r.StrokeColor != color.Transparent {
+				t.Fatalf("border visible in AA: %v", r.StrokeColor)
+			}
+		}
+		f = g.customContrastForm()
+		f.Show()
+		for _, bad := range []string{"3", "22", "x"} {
+			if f.entry.Validator(bad) == nil {
+				t.Errorf("ratio %q accepted", bad)
+			}
+		}
+		f.entry.SetText("12")
+		f.Submit()
+	})
+	eventually(t, e.ui, "custom applied", func() bool { return g.Contrast() == theme.Contrast{Preset: theme.PresetCustom, Min: 12} })
+	e.ui.Wait(func() {
+		f = g.customContrastForm()
+		f.Show()
+		f.Hide() // cancel: the selector shows the setting in use
+		if g.contrSel.Selected != "custom (12:1)" {
+			t.Errorf("after cancel: %q", g.contrSel.Selected)
+		}
+		g.pickContrast("Max (21:1)")
+		if len(g.borders) < 6 {
+			t.Fatalf("%d borders", len(g.borders))
+		}
+		for _, r := range g.borders {
+			if r.StrokeColor != nrgba(theme.Black) {
+				t.Errorf("Max border colour %v", r.StrokeColor)
+			}
+		}
+	})
+}

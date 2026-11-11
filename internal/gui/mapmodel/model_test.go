@@ -65,7 +65,11 @@ func TestViews(t *testing.T) {
 	if got := names(); !slices.Equal(got, []string{"Networks", "Payroll", "Lab"}) {
 		t.Fatalf("order: %v", got)
 	}
+	g0 := m.ViewsGen()
 	e, _ := m.Apply(apitypes.EventViewCreated, raw(t, apitypes.View{ID: 4, Name: "First", Order: -1}))
+	if m.ViewsGen() == g0 {
+		t.Error("ViewsGen not bumped by view.created")
+	}
 	if !e.ViewsChanged || names()[0] != "First" {
 		t.Fatalf("created: %+v %v", e, names())
 	}
@@ -77,7 +81,8 @@ func TestViews(t *testing.T) {
 		t.Fatalf("View(2): %+v", v)
 	}
 	e, _ = m.Apply(apitypes.EventViewDeleted, raw(t, apitypes.DeletedEvent{ID: 2}))
-	if !e.ViewsChanged || !slices.Equal(e.Deleted, []int64{2}) || m.Loaded(2) || len(m.Views()) != 3 {
+	g1 := m.ViewsGen()
+	if !e.ViewsChanged || !slices.Equal(e.Deleted, []int64{2}) || m.Loaded(2) || len(m.Views()) != 3 || g1 <= g0+1 {
 		t.Fatalf("deleted: %+v loaded=%v", e, m.Loaded(2))
 	}
 	// SetViews drops the maps of views that are gone.

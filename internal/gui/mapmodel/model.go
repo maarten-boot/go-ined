@@ -37,8 +37,9 @@ type ViewMap struct {
 
 // Model holds the views and the loaded maps.
 type Model struct {
-	views []apitypes.View
-	maps  map[int64]*ViewMap
+	views    []apitypes.View
+	viewsGen uint64 // bumped by every view event
+	maps     map[int64]*ViewMap
 }
 
 // New returns an empty model.
@@ -55,6 +56,11 @@ func (m *Model) SetViews(vs []apitypes.View) {
 		}
 	}
 }
+
+// ViewsGen returns a counter that changes with every view event. Like
+// Gen for maps: a caller that fetches the views notes it, and fetches
+// again if it changed meanwhile (crosscheck 2026-11-11-02 C2).
+func (m *Model) ViewsGen() uint64 { return m.viewsGen }
 
 // Views returns the views in tab order (SPEC-715).
 func (m *Model) Views() []apitypes.View { return slices.Clone(m.views) }
@@ -207,6 +213,7 @@ func (m *Model) Apply(typ string, data json.RawMessage) (Effect, error) {
 			m.views = append(m.views, v)
 		}
 		m.sortViews()
+		m.viewsGen++
 		e.ViewsChanged = true
 
 	case apitypes.EventViewDeleted:
@@ -219,6 +226,7 @@ func (m *Model) Apply(typ string, data json.RawMessage) (Effect, error) {
 			e.ViewsChanged = true
 		}
 		delete(m.maps, d.ID)
+		m.viewsGen++
 		e.Deleted = []int64{d.ID}
 	}
 	return e, nil

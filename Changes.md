@@ -35,9 +35,13 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 
 ### Changed
+- A group's members are placed in rows that grow with the group (about the square root of its size, 10–50 per row), so a large discovered network forms a block instead of a tall strip. Existing positions don't change.
+- `ined-gui`: the toolbar shows the zoom; in Max contrast, buttons get a black border.
 - New members of a group are placed 120 map units below it instead of 80, so an expanded group's frame in the GUI doesn't cover the labels next to it. Existing positions don't change.
 
 ### Fixed
+- `ined-gui` kept up badly with many changes at once: every status change re-laid out and redrew the whole map. Redraws are now combined (at most every 100 ms per view) and the drawing objects are reused, so 1,000 changes on a 5,000-host map take milliseconds instead of seconds, and memory stays flat.
+- `ined-gui` could miss a view created or renamed while it was reloading its list of views.
 - API: `null` in a PATCH body is rejected (400) for every field except `parent_id`; before, it silently set the zero value (for example, `"monitored": null` turned monitoring off).
 - `inedctl`: `group list` has a VIEW column and `group show` a `View:` row; `view show` exits non-zero when it can't read the view's hosts; the usage text says that `view place` without `--parent` puts the host at the view's root.
 - `inedctl`: Ctrl-C exits 130 and, for `discover start --wait`, says the job keeps running on the server; a relative `ca_cert` is read from the config file's folder; `--token ""` clears a token from the config or environment; `--json --wait` prints the API's response unchanged; round-trip times below 1 ms get two decimals.

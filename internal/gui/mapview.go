@@ -38,6 +38,8 @@ type MapView struct {
 	OnSelect func(k *mapmodel.Key)          // nil: nothing selected
 	OnToggle func(group int64, expand bool) // expand or collapse a group
 	OnMenu   func(n *mapmodel.Node, at fyne.Position)
+	// OnViewport is called when the viewport changes (zoom display).
+	OnViewport func(mapmodel.Viewport)
 
 	drag dragMode
 }
@@ -81,6 +83,13 @@ func (mv *MapView) Viewport() mapmodel.Viewport { return mv.vp }
 func (mv *MapView) SetViewport(v mapmodel.Viewport) {
 	mv.vp, mv.placed = v, true
 	mv.Refresh()
+	mv.viewportChanged()
+}
+
+func (mv *MapView) viewportChanged() {
+	if mv.OnViewport != nil {
+		mv.OnViewport(mv.vp)
+	}
 }
 
 // Select marks an item as selected (nil clears).
@@ -235,6 +244,7 @@ func (mv *MapView) CreateRenderer() fyne.WidgetRenderer { return &mapRenderer{mv
 type mapRenderer struct {
 	mv   *MapView
 	objs []fyne.CanvasObject
+	pool pool
 }
 
 func (r *mapRenderer) Destroy()                     {}
@@ -253,10 +263,14 @@ func (r *mapRenderer) build() {
 	if !mv.placed && len(mv.nodes) > 0 {
 		mv.vp = mapmodel.Fit(mapmodel.Extent(mv.nodes), float64(s.Width), float64(s.Height))
 		mv.placed = true
+		defer mv.viewportChanged()
 	}
 	p := mv.palette()
-	d := &drawer{vp: mv.vp, p: p}
-	bg := canvas.NewRectangle(nrgba(p.Background))
+	r.pool.reset()
+	d := &drawer{vp: mv.vp, p: p, pool: &r.pool, objs: r.objs[:0]}
+	bg := d.pool.rect()
+	bg.FillColor, bg.StrokeColor, bg.StrokeWidth = nrgba(p.Background), nil, 0
+	bg.Move(fyne.NewPos(0, 0))
 	bg.Resize(s)
 	d.objs = append(d.objs, bg)
 
@@ -279,11 +293,82 @@ func (r *mapRenderer) build() {
 	r.objs = d.objs
 }
 
-// drawer turns nodes into canvas objects in screen coordinates.
+// drawer turns nodes into canvas objects in screen coordinates. Objects
+// come from a pool and are reused by the next build, so a redraw doesn't
+// allocate new objects and text textures stay cached (crosscheck
+// 2026-11-11-02 C1).
 type drawer struct {
 	vp   mapmodel.Viewport
 	p    theme.Palette
+	pool *pool
 	objs []fyne.CanvasObject
+}
+
+// pool keeps the canvas objects of the previous build for reuse.
+type pool struct {
+	rects          []*canvas.Rectangle
+	lines          []*canvas.Line
+	circles        []*canvas.Circle
+	texts          []*pooledText
+	nr, nl, nc, nt int
+}
+
+// pooledText remembers what a text object shows, so an unchanged text
+// keeps its texture and size.
+type pooledText struct {
+	t    *canvas.Text
+	key  textKey
+	size fyne.Size
+}
+
+type textKey struct {
+	s    string
+	px   float32
+	bold bool
+}
+
+func (p *pool) reset() { p.nr, p.nl, p.nc, p.nt = 0, 0, 0, 0 }
+
+func (p *pool) rect() *canvas.Rectangle {
+	if p.nr == len(p.rects) {
+		p.rects = append(p.rects, canvas.NewRectangle(nil))
+	}
+	p.nr++
+	return p.rects[p.nr-1]
+}
+
+func (p *pool) line() *canvas.Line {
+	if p.nl == len(p.lines) {
+		p.lines = append(p.lines, canvas.NewLine(nil))
+	}
+	p.nl++
+	return p.lines[p.nl-1]
+}
+
+func (p *pool) circle() *canvas.Circle {
+	if p.nc == len(p.circles) {
+		p.circles = append(p.circles, canvas.NewCircle(nil))
+	}
+	p.nc++
+	return p.circles[p.nc-1]
+}
+
+// text returns a text object showing s; only a changed text is refreshed
+// and measured again.
+func (p *pool) text(s string, px float32, bold bool, c color.Color) (*canvas.Text, fyne.Size) {
+	if p.nt == len(p.texts) {
+		p.texts = append(p.texts, &pooledText{t: canvas.NewText("", c)})
+	}
+	pt := p.texts[p.nt]
+	p.nt++
+	pt.t.Color = c
+	if k := (textKey{s, px, bold}); k != pt.key {
+		pt.key = k
+		pt.t.Text, pt.t.TextSize, pt.t.TextStyle.Bold = s, px, bold
+		pt.size = pt.t.MinSize()
+		pt.t.Refresh()
+	}
+	return pt.t, pt.size
 }
 
 func (d *drawer) pt(x, y float64) fyne.Position {
@@ -294,16 +379,16 @@ func (d *drawer) pt(x, y float64) fyne.Position {
 func (d *drawer) stroke(w float64) float32 { return float32(math.Max(1, w*d.vp.Zoom)) }
 
 func (d *drawer) rect(r mapmodel.Rect, fill, stroke color.Color, w float64) {
-	o := canvas.NewRectangle(fill)
-	o.StrokeColor, o.StrokeWidth = stroke, d.stroke(w)
+	o := d.pool.rect()
+	o.FillColor, o.StrokeColor, o.StrokeWidth = fill, stroke, d.stroke(w)
 	o.Move(d.pt(r.X, r.Y))
 	o.Resize(fyne.NewSize(float32(r.W*d.vp.Zoom), float32(r.H*d.vp.Zoom)))
 	d.objs = append(d.objs, o)
 }
 
 func (d *drawer) line(x0, y0, x1, y1 float64, c color.Color, w float64) {
-	o := canvas.NewLine(c)
-	o.StrokeWidth = d.stroke(w)
+	o := d.pool.line()
+	o.StrokeColor, o.StrokeWidth = c, d.stroke(w)
 	o.Position1, o.Position2 = d.pt(x0, y0), d.pt(x1, y1)
 	d.objs = append(d.objs, o)
 }
@@ -315,10 +400,7 @@ func (d *drawer) text(s string, x, y float64, c color.Color, centre, bold bool) 
 	if size < minTextPixels {
 		return false
 	}
-	t := canvas.NewText(s, c)
-	t.TextSize = float32(size)
-	t.TextStyle.Bold = bold
-	m := t.MinSize()
+	t, m := d.pool.text(s, float32(size), bold, c)
 	pos := d.pt(x, y)
 	if centre {
 		pos.X -= m.Width / 2
@@ -340,7 +422,8 @@ func (d *drawer) glyph(it *apitypes.MapItem, cx, cy, size float64) {
 	col := nrgba(d.p.Status(it.Status))
 	switch it.Status {
 	case apitypes.StatusUp:
-		c := canvas.NewCircle(col)
+		c := d.pool.circle()
+		c.FillColor, c.StrokeColor, c.StrokeWidth = col, nil, 0
 		if it.Stale {
 			c.FillColor, c.StrokeColor, c.StrokeWidth = color.Transparent, col, d.stroke(2)
 		}
@@ -358,10 +441,7 @@ func (d *drawer) glyph(it *apitypes.MapItem, cx, cy, size float64) {
 		if size*1.3*d.vp.Zoom < minTextPixels {
 			return // too small to read: the empty box is the sign
 		}
-		t := canvas.NewText("?", col)
-		t.TextSize = float32(size * 1.3 * d.vp.Zoom)
-		t.TextStyle.Bold = !it.Stale
-		m := t.MinSize()
+		t, m := d.pool.text("?", float32(size*1.3*d.vp.Zoom), !it.Stale, col)
 		p := d.pt(cx, cy)
 		t.Move(fyne.NewPos(p.X-m.Width/2, p.Y-m.Height/2))
 		t.Resize(m)
@@ -485,7 +565,8 @@ func (d *drawer) scrollBars(mv *MapView, s fyne.Size) {
 	w, h := float64(s.Width), float64(s.Height)
 	track, thumb := nrgba(d.p.Surface), nrgba(d.p.Border)
 	add := func(x, y, rw, rh float64, c color.Color) {
-		o := canvas.NewRectangle(c)
+		o := d.pool.rect()
+		o.FillColor, o.StrokeColor, o.StrokeWidth = c, nil, 0
 		o.Move(fyne.NewPos(float32(x), float32(y)))
 		o.Resize(fyne.NewSize(float32(rw), float32(rh)))
 		d.objs = append(d.objs, o)

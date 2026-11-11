@@ -394,7 +394,8 @@ func (m *Model) HasChildren(id int64) bool {
 
 // Grid used to find a free position for a new item (SPEC-106).
 const (
-	gridCols    = 10
+	minCols     = 10 // members per row: grows with the group (crosscheck
+	maxCols     = 50 // 2026-11-11-02 D3), so a large group is about square
 	gridDX      = 100.0
 	gridDY      = 80.0
 	minDistance = 50.0
@@ -425,9 +426,11 @@ func (m *Model) FreePosition(parentID int64) (float64, float64) {
 			sib = append(sib, pt{g.X, g.Y})
 		}
 	}
+	cols := int(math.Ceil(math.Sqrt(float64(len(sib) + 1))))
+	cols = min(maxCols, max(minCols, cols))
 	for i := 0; ; i++ {
-		x := bx + float64(i%gridCols)*gridDX
-		y := by + float64(i/gridCols)*gridDY
+		x := bx + float64(i%cols)*gridDX
+		y := by + float64(i/cols)*gridDY
 		free := true
 		for _, s := range sib {
 			if math.Hypot(s.x-x, s.y-y) < minDistance {

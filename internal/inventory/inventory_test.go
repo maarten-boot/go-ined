@@ -274,6 +274,17 @@ func TestFreePosition(t *testing.T) {
 			t.Errorf("first member at %v, want (500,%g)", p, 300+childDY)
 		}
 	}
+	// A large group grows about square: 400 members in rows of about 20,
+	// not 40 rows of 10.
+	big := mustGroup(t, s, apitypes.GroupCreate{Name: "big"})
+	xs, ys := map[float64]bool{}, map[float64]bool{}
+	for i := 0; i < 400; i++ {
+		h := mustHost(t, s, apitypes.HostCreate{IP: netip.AddrFrom4([4]byte{10, 9, byte(i / 256), byte(i % 256)}).String(), ParentID: &big.ID})
+		xs[h.X], ys[h.Y] = true, true
+	}
+	if len(xs) < 18 || len(xs) > 22 || len(ys) < 18 || len(ys) > 23 {
+		t.Errorf("400 members: %d columns, %d rows; want about 20 × 20", len(xs), len(ys))
+	}
 	h := mustHost(t, s, apitypes.HostCreate{IP: "198.51.100.1", X: ptr(1.5), Y: ptr(2.5)})
 	if h.X != 1.5 || h.Y != 2.5 {
 		t.Errorf("explicit position lost: %v,%v", h.X, h.Y)

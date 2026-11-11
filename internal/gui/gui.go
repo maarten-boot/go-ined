@@ -7,11 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image/color"
 	"math"
 	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
@@ -22,8 +24,11 @@ import (
 	"github.com/maarten-boot/go-ined/pkg/client"
 )
 
-// reloadDelay coalesces map reloads (SPEC-716).
-const reloadDelay = 250 * time.Millisecond
+// reloadDelay coalesces map reloads, redrawEvery redraws (SPEC-716).
+const (
+	reloadDelay = 250 * time.Millisecond
+	redrawEvery = 100 * time.Millisecond
+)
 
 // Options configure the GUI.
 type Options struct {
@@ -61,12 +66,22 @@ type GUI struct {
 	contrast theme.Contrast
 	palette  theme.Palette
 
-	tabs     *container.AppTabs
-	maps     map[int64]*MapView
-	current  int64 // view of the selected tab
-	details  *details
-	status   *statusBar
-	contrSel *widget.Select
+	tabs    *container.AppTabs
+	maps    map[int64]*MapView
+	current int64 // view of the selected tab
+
+	// Coalesced redraws (UI goroutine only): views waiting for a redraw,
+	// whether a flush is scheduled, when the last one ran, and how many
+	// layouts were made (for tests).
+	dirty     map[int64]bool
+	flushing  bool
+	lastFlush time.Time
+	layouts   int
+	details   *details
+	status    *statusBar
+	contrSel  *widget.Select
+	zoomL     *widget.Label       // the current map's zoom (crosscheck 2026-11-11-02 I1)
+	borders   []*canvas.Rectangle // button borders, shown in Max contrast (D1)
 }
 
 // New builds the window. Call Start to connect, then ShowAndRun (or use
@@ -76,6 +91,7 @@ func New(a fyne.App, opt Options) *GUI {
 	g := &GUI{
 		app: a, c: opt.Client, opt: opt, model: mapmodel.New(),
 		ctx: ctx, cancel: cancel, maps: map[int64]*MapView{}, current: mapmodel.NetworkView,
+		dirty: map[int64]bool{},
 	}
 	g.do = opt.Do
 	if g.do == nil {
@@ -147,15 +163,27 @@ func (g *GUI) ShowAndRun() {
 // loadAll reloads the views, the selected view's map and every other
 // loaded map (start, reconnect, resync).
 func (g *GUI) loadAll() {
-	vs, err := g.c.Views(g.ctx)
-	if err != nil {
-		g.fail("load views", err)
-		return
+	var views []int64
+	for try := 0; ; try++ {
+		g.mu.Lock()
+		gen := g.model.ViewsGen()
+		g.mu.Unlock()
+		vs, err := g.c.Views(g.ctx)
+		if err != nil {
+			g.fail("load views", err)
+			return
+		}
+		g.mu.Lock()
+		// A view event applied during the fetch may be missing from vs.
+		if g.model.ViewsGen() != gen && try < 3 {
+			g.mu.Unlock()
+			continue
+		}
+		g.model.SetViews(vs)
+		views = g.model.LoadedViews()
+		g.mu.Unlock()
+		break
 	}
-	g.mu.Lock()
-	g.model.SetViews(vs)
-	views := g.model.LoadedViews()
-	g.mu.Unlock()
 	g.do(g.rebuildTabs)
 	loaded := map[int64]bool{}
 	for _, v := range views {
@@ -190,7 +218,7 @@ func (g *GUI) loadMap(view int64) {
 	if again {
 		g.reload.Request(view)
 	}
-	g.do(func() { g.redraw(view) })
+	g.do(func() { g.markDirty(view) })
 }
 
 func (g *GUI) fail(what string, err error) {
@@ -217,7 +245,7 @@ func (g *GUI) apply(ev client.Event) {
 		return
 	}
 	for _, v := range eff.Redraw {
-		g.redraw(v)
+		g.markDirty(v)
 	}
 	for _, v := range eff.Reload {
 		g.reload.Request(v)
@@ -231,6 +259,37 @@ func (g *GUI) apply(ev client.Event) {
 	g.details.onEvent(ev)
 }
 
+// markDirty asks for a redraw of a view. Redraws are coalesced: the flush
+// runs after the events already queued, and at most every redrawEvery, so
+// a burst of events costs one layout per view (SPEC-716, crosscheck
+// 2026-11-11-02 C1). UI goroutine only.
+func (g *GUI) markDirty(view int64) {
+	g.dirty[view] = true
+	if g.flushing {
+		return
+	}
+	g.flushing = true
+	if wait := redrawEvery - time.Since(g.lastFlush); wait > 0 {
+		time.AfterFunc(wait, func() {
+			if g.ctx.Err() == nil { // not after Stop
+				g.do(g.flush)
+			}
+		})
+		return
+	}
+	g.do(g.flush)
+}
+
+// flush redraws the views marked dirty.
+func (g *GUI) flush() {
+	g.flushing = false
+	g.lastFlush = time.Now()
+	for v := range g.dirty {
+		delete(g.dirty, v)
+		g.redraw(v)
+	}
+}
+
 // redraw lays out a loaded view again.
 func (g *GUI) redraw(view int64) {
 	mv := g.maps[view]
@@ -240,6 +299,7 @@ func (g *GUI) redraw(view int64) {
 	g.mu.Lock()
 	nodes := g.model.Layout(view, measure)
 	g.mu.Unlock()
+	g.layouts++
 	mv.SetNodes(nodes)
 	if view == g.current {
 		g.details.refreshParent()
@@ -314,6 +374,11 @@ func (g *GUI) mapView(view int64) *MapView {
 	mv.OnSelect = func(k *mapmodel.Key) { g.details.show(view, k) }
 	mv.OnToggle = func(group int64, expand bool) { g.setCollapsed(group, !expand) }
 	mv.OnMenu = func(n *mapmodel.Node, at fyne.Position) { g.contextMenu(n, at) }
+	mv.OnViewport = func(mapmodel.Viewport) {
+		if view == g.current {
+			g.showZoom()
+		}
+	}
 	g.maps[view] = mv
 	return mv
 }
@@ -324,6 +389,7 @@ func (g *GUI) selectTab(ti *container.TabItem) {
 		return
 	}
 	g.setCurrent(mv.view)
+	g.showZoom()
 	g.details.show(mv.view, mv.Selected())
 	g.mu.Lock()
 	loaded := g.model.Loaded(mv.view)
@@ -348,8 +414,16 @@ func (g *GUI) setCollapsed(group int64, collapsed bool) {
 }
 
 func (g *GUI) contextMenu(n *mapmodel.Node, at fyne.Position) {
+	if items := g.menuItems(n); items != nil {
+		widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", items...), g.win.Canvas(), at)
+	}
+}
+
+// menuItems are the context menu of a map node (SPEC-703); nil for a host
+// or empty space in M5.
+func (g *GUI) menuItems(n *mapmodel.Node) []*fyne.MenuItem {
 	if n == nil || n.Item.Type != apitypes.TypeGroup {
-		return
+		return nil
 	}
 	id := n.Item.ID
 	items := []*fyne.MenuItem{
@@ -361,7 +435,7 @@ func (g *GUI) contextMenu(n *mapmodel.Node, at fyne.Position) {
 	} else {
 		items[1].Disabled = true
 	}
-	widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", items...), g.win.Canvas(), at)
+	return items
 }
 
 // ---- toolbar and shortcuts (SPEC-713, 717) ----
@@ -386,19 +460,51 @@ func (g *GUI) fitAll() {
 
 func zoomLabel(z float64) string { return fmt.Sprintf("%d %%", int(math.Round(z*100))) }
 
+// bordered draws a border around a button. In Max contrast buttons have
+// the window's white background, so the border shows where they are; in
+// the other presets their grey background does that and the border is
+// transparent (crosscheck 2026-11-11-02 D1).
+func (g *GUI) bordered(o fyne.CanvasObject) fyne.CanvasObject {
+	r := canvas.NewRectangle(color.Transparent)
+	r.StrokeWidth = 1
+	g.borders = append(g.borders, r)
+	g.colourBorders()
+	return container.NewStack(o, r)
+}
+
+func (g *GUI) colourBorders() {
+	c := color.Color(color.Transparent)
+	if g.contrast.Preset == theme.PresetMax {
+		c = nrgba(g.palette.Text)
+	}
+	for _, r := range g.borders {
+		r.StrokeColor = c
+		r.Refresh()
+	}
+}
+
+// showZoom shows the zoom of the current tab's map.
+func (g *GUI) showZoom() {
+	if mv := g.currentMap(); mv != nil && g.zoomL != nil {
+		g.zoomL.SetText(zoomLabel(mv.Viewport().Zoom))
+	}
+}
+
 func (g *GUI) toolbar() fyne.CanvasObject {
-	btn := func(label string, f func()) *widget.Button { return widget.NewButton(label, f) }
+	btn := func(label string, f func()) fyne.CanvasObject { return g.bordered(widget.NewButton(label, f)) }
 	g.contrSel = widget.NewSelect(contrastOptions(), func(s string) { g.pickContrast(s) })
-	g.contrSel.SetSelected(contrastOption(g.contrast))
+	g.contrSel.SetSelected(g.contrast.String())
+	g.zoomL = widget.NewLabel(zoomLabel(1))
 	return container.NewHBox(
 		btn("Zoom −", func() { g.zoomBy(1 / zoomStep) }),
+		g.zoomL,
 		btn("Zoom +", func() { g.zoomBy(zoomStep) }),
 		btn("100 %", func() { g.zoomTo(1) }),
 		btn("Fit all", g.fitAll),
 		widget.NewSeparator(),
 		btn("Find host…", g.showFind),
 		widget.NewSeparator(),
-		widget.NewLabel("Contrast:"), g.contrSel,
+		widget.NewLabel("Contrast:"), g.bordered(g.contrSel),
 	)
 }
 

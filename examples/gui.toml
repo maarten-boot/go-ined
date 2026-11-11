@@ -12,3 +12,6 @@ ca_cert = ""
 [contrast]                   # SPEC-003, SPEC-005. The GUI saves changes made in its contrast selector back here.
 preset    = "AA"             # AA (4.5:1) | AAA (7:1) | Max (21:1, black and white only) | custom
 min_ratio = 4.5              # Used only when preset = "custom". Range 4.5–21.
+
+[map]                        # SPEC-722. The GUI saves its "Wrap names" toggle back here.
+wrap_names = true            # Break long names (after dots) where they would run into a neighbour.

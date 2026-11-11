@@ -40,6 +40,10 @@ type Model struct {
 	views    []apitypes.View
 	viewsGen uint64 // bumped by every view event
 	maps     map[int64]*ViewMap
+
+	// WrapNames breaks a long name onto more lines where it would run
+	// into the next item on its row (SPEC-722).
+	WrapNames bool
 }
 
 // New returns an empty model.
@@ -194,6 +198,13 @@ func (m *Model) Apply(typ string, data json.RawMessage) (Effect, error) {
 		if vm, _ := m.findGroup(d.ID); vm != nil {
 			e.Reload = []int64{vm.ID}
 		}
+
+	case apitypes.EventMapArranged:
+		var a apitypes.MapArrangedEvent
+		if err := decode(typ, data, &a); err != nil {
+			return e, err
+		}
+		e.Reload = m.ifLoaded(cmp.Or(a.ViewID, NetworkView))
 
 	case apitypes.EventGroupMoved:
 		var mv apitypes.GroupMovedEvent

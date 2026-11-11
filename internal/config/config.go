@@ -108,6 +108,14 @@ type ClientServer struct {
 type GUI struct {
 	Server   ClientServer    `toml:"server"`
 	Contrast ContrastSection `toml:"contrast"`
+	Map      MapSection      `toml:"map"`
+}
+
+// MapSection holds the map display settings of the GUI.
+type MapSection struct {
+	// WrapNames breaks long names onto more lines where they would run
+	// into a neighbour (SPEC-722); the GUI's toggle saves it back.
+	WrapNames bool `toml:"wrap_names"`
 }
 
 // ContrastSection holds the contrast preset (SPEC-003, SPEC-005).
@@ -139,6 +147,7 @@ func DefaultGUI() GUI {
 	return GUI{
 		Server:   DefaultClient().Server,
 		Contrast: ContrastSection{Preset: "AA", MinRatio: 4.5},
+		Map:      MapSection{WrapNames: true},
 	}
 }
 

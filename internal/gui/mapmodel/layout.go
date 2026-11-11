@@ -84,8 +84,11 @@ type Node struct {
 	Icon   Rect     // host or collapsed-group icon; for a frame, the label strip
 	Bounds Rect     // everything the node covers: icon and labels, or the whole frame
 	Labels []string // text lines under an icon, or the frame's label
-	Depth  int      // nesting depth of a frame (0 = top level)
-	Counts Counts   // groups only
+	// NameLines is how many of Labels hold the name (more than 1 when
+	// wrapped); they are drawn bold.
+	NameLines int
+	Depth     int    // nesting depth of a frame (0 = top level)
+	Counts    Counts // groups only
 }
 
 // Measure returns the width and height of a text line in map units.
@@ -105,12 +108,16 @@ func (m *Model) Layout(view int64, measure Measure) []Node {
 		it := vm.Items[k]
 		l.children[l.parent(it)] = append(l.children[l.parent(it)], it)
 	}
+	if m.WrapNames {
+		l.room = roomPerItem(vm, l)
+	}
 	l.place(0, 0, map[int64]bool{})
 	slices.SortStableFunc(l.frames, func(a, b Node) int { return a.Depth - b.Depth })
 	return append(l.frames, l.icons...)
 }
 
 type layout struct {
+	room     map[Key]float64 // width a name may use before it wraps; absent: no limit
 	vm       *ViewMap
 	measure  Measure
 	children map[int64][]*apitypes.MapItem // by parent group id (0 = root)
@@ -160,6 +167,13 @@ func (l *layout) place(group int64, depth int, seen map[int64]bool) Rect {
 }
 
 func (l *layout) icon(it *apitypes.MapItem, k Kind, w, h float64, labels []string) Node {
+	nameLines := 1
+	if room, ok := l.room[Key{it.Type, it.ID}]; ok && len(labels) > 0 {
+		if lines := WrapName(labels[0], room, l.measure); len(lines) > 1 {
+			labels = append(lines, labels[1:]...)
+			nameLines = len(lines)
+		}
+	}
 	icon := Rect{it.X - w/2, it.Y - h/2, w, h}
 	b := icon
 	y := icon.Y + icon.H + LabelGap
@@ -168,7 +182,7 @@ func (l *layout) icon(it *apitypes.MapItem, k Kind, w, h float64, labels []strin
 		b = b.Union(Rect{it.X - tw/2, y, tw, th})
 		y += th
 	}
-	n := Node{Item: it, Kind: k, Icon: icon, Bounds: b, Labels: labels}
+	n := Node{Item: it, Kind: k, Icon: icon, Bounds: b, Labels: labels, NameLines: nameLines}
 	if it.Type == apitypes.TypeGroup {
 		n.Counts = l.counts[it.ID]
 	}
@@ -288,4 +302,169 @@ func sortedKeys(m map[Key]*apitypes.MapItem) []Key {
 		return cmp.Compare(a.ID, b.ID)
 	})
 	return keys
+}
+
+// Name wrapping (SPEC-722).
+const (
+	rowBand  = 40.0 // items whose y differs less than this share a row
+	labelGap = 8.0  // free space kept between neighbouring labels
+	minRoom  = 40.0 // a name never wraps narrower than this
+)
+
+// roomPerItem gives every visible host and collapsed group the width its
+// name may use: the distance to the nearest visible icon item on the same
+// row, minus a gap. An item alone on its row gets no limit.
+func roomPerItem(vm *ViewMap, l *layout) map[Key]float64 {
+	type icon struct {
+		k    Key
+		x, y float64
+	}
+	var icons []icon
+	for k, it := range vm.Items {
+		if !l.visible(it) || (it.Type == apitypes.TypeGroup && !it.Collapsed) {
+			continue
+		}
+		icons = append(icons, icon{k, it.X, it.Y})
+	}
+	slices.SortFunc(icons, func(a, b icon) int { return cmp.Or(cmp.Compare(a.y, b.y), cmp.Compare(a.x, b.x)) })
+	room := map[Key]float64{}
+	for i, a := range icons {
+		best := math.Inf(1)
+		for j := i - 1; j >= 0 && a.y-icons[j].y < rowBand; j-- {
+			best = math.Min(best, math.Abs(a.x-icons[j].x))
+		}
+		for j := i + 1; j < len(icons) && icons[j].y-a.y < rowBand; j++ {
+			best = math.Min(best, math.Abs(a.x-icons[j].x))
+		}
+		if !math.IsInf(best, 1) {
+			room[a.k] = math.Max(minRoom, best-labelGap)
+		}
+	}
+	return room
+}
+
+// visible reports whether no group above the item is collapsed.
+func (l *layout) visible(it *apitypes.MapItem) bool {
+	for p, n := it.ParentID, 0; p != nil && n <= len(l.vm.Items); n++ {
+		g := l.vm.Items[GroupKey(*p)]
+		if g == nil {
+			return true
+		}
+		if g.Collapsed {
+			return false
+		}
+		p = g.ParentID
+	}
+	return true
+}
+
+// WrapName breaks a name into lines no wider than room: after its dots
+// (DNS names) or colons (IPv6), and inside a part only if that part alone
+// is too wide. A name that fits stays one line.
+func WrapName(name string, room float64, measure Measure) []string {
+	if w, _ := measure(name); w <= room {
+		return []string{name}
+	}
+	var parts []string
+	start := 0
+	for i, r := range name {
+		if r == '.' || r == ':' {
+			parts = append(parts, name[start:i+1])
+			start = i + 1
+		}
+	}
+	if start < len(name) {
+		parts = append(parts, name[start:])
+	}
+	var lines []string
+	cur := ""
+	flush := func() {
+		if cur != "" {
+			lines = append(lines, cur)
+			cur = ""
+		}
+	}
+	for _, p := range parts {
+		if w, _ := measure(cur + p); w <= room {
+			cur += p
+			continue
+		}
+		flush()
+		for p != "" { // a part too wide by itself: split it by characters
+			if w, _ := measure(p); w <= room {
+				cur = p
+				break
+			}
+			n := len(p) - 1
+			for n > 1 {
+				if w, _ := measure(p[:n]); w <= room {
+					break
+				}
+				n--
+			}
+			lines = append(lines, p[:n])
+			p = p[n:]
+		}
+	}
+	flush()
+	return lines
+}
+
+// Reflow cell (SPEC-723).
+const (
+	reflowGapX = 24.0 // free space between cells
+	reflowGapY = 16.0
+	minCellW   = 60.0
+	minCellH   = 50.0
+	maxCell    = 5000.0
+)
+
+// ReflowCell returns the grid cell for "Reflow" of a group's direct
+// members (parent nil: the view's root): wide and high enough for the
+// biggest member with its full, unwrapped name (or its whole frame), plus
+// a gap. n is the number of members.
+func (m *Model) ReflowCell(view int64, parent *int64, measure Measure) (w, h float64, n int) {
+	vm := m.maps[view]
+	if vm == nil {
+		return 0, 0, 0
+	}
+	wrap := m.WrapNames
+	m.WrapNames = false
+	nodes := m.Layout(view, measure)
+	m.WrapNames = wrap
+	bounds := map[Key]Rect{}
+	for _, nd := range nodes {
+		bounds[Key{nd.Item.Type, nd.Item.ID}] = nd.Bounds
+	}
+	for k, it := range vm.Items {
+		if !sameParent(it.ParentID, parent) {
+			continue
+		}
+		n++
+		b, ok := bounds[k]
+		if !ok { // hidden in a collapsed group: estimate from its labels
+			iw, ih := HostSize, HostSize
+			labels := []string{it.Name, StatusWord(it.Status, it.Stale)}
+			if it.Type == apitypes.TypeGroup {
+				iw, ih = GroupW, GroupH
+				labels = append(labels, it.CIDR)
+			}
+			b = Rect{W: iw, H: ih + LabelGap}
+			for _, s := range labels {
+				tw, th := measure(s)
+				b.W, b.H = math.Max(b.W, tw), b.H+th
+			}
+		}
+		w, h = math.Max(w, b.W), math.Max(h, b.H)
+	}
+	w = math.Min(maxCell, math.Max(minCellW, w+reflowGapX))
+	h = math.Min(maxCell, math.Max(minCellH, h+reflowGapY))
+	return w, h, n
+}
+
+func sameParent(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }

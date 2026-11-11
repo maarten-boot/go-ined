@@ -293,6 +293,15 @@ func (e Event) Short() string {
 		if e.Decode(&d) == nil {
 			return fmt.Sprintf("%s %d", strings.TrimSuffix(e.Type, ".deleted"), d.ID)
 		}
+	case apitypes.EventMapArranged:
+		var a apitypes.MapArrangedEvent
+		if e.Decode(&a) == nil {
+			where := "the root"
+			if a.ParentID != nil {
+				where = fmt.Sprintf("group %d", *a.ParentID)
+			}
+			return fmt.Sprintf("view %d: %s arranged", a.ViewID, where)
+		}
 	case apitypes.EventGroupMoved:
 		var m apitypes.GroupMovedEvent
 		if e.Decode(&m) == nil {

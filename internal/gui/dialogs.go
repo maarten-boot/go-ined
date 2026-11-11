@@ -505,10 +505,13 @@ func (g *GUI) viewMenuItems() []*fyne.MenuItem {
 	del := fyne.NewMenuItem("Delete view…", func() { g.deleteViewDialog() })
 	left.Disabled, right.Disabled = i == 0, i >= len(views)-1
 	del.Disabled = cur.ID == mapmodel.NetworkView || cur.ID == 0
+	cur2 := cur.ID
 	return []*fyne.MenuItem{
 		fyne.NewMenuItem("New view…", func() { g.newViewDialog() }),
 		fyne.NewMenuItem("Rename view…", func() { g.renameViewDialog() }),
-		left, right, fyne.NewMenuItemSeparator(), del,
+		left, right,
+		fyne.NewMenuItem("Reflow view…", func() { g.reflowDialog(cur2, nil) }),
+		fyne.NewMenuItemSeparator(), del,
 	}
 }
 
@@ -585,4 +588,32 @@ func (g *GUI) deleteViewDialog() *formDialog {
 	l.Wrapping = fyne.TextWrapWord
 	return g.showForm("Delete view", "Delete", []*widget.FormItem{widget.NewFormItem("", l)},
 		func() error { return g.c.DeleteView(g.ctx, v.ID) })
+}
+
+// ---- reflow (SPEC-723) ----
+
+// reflowDialog asks before laying out a group's members (parent nil: the
+// view's root) on a grid where the longest full name fits; it changes the
+// positions for everyone.
+func (g *GUI) reflowDialog(view int64, parent *int64) *formDialog {
+	g.mu.Lock()
+	w, h, n := g.model.ReflowCell(view, parent, measure)
+	what := "the top level of this view"
+	if parent != nil {
+		if it := g.item(view, mapmodel.GroupKey(*parent)); it != nil {
+			what = "group " + it.Name
+		}
+	}
+	g.mu.Unlock()
+	if n == 0 {
+		g.status.message("nothing to reflow in " + what)
+		return nil
+	}
+	l := widget.NewLabel(fmt.Sprintf("Lay out the %s in %s on a grid of %.0f × %.0f map units, so the longest name fits? "+
+		"This changes their positions for everyone.", plural(n, "member"), what, w, h))
+	l.Wrapping = fyne.TextWrapWord
+	return g.showForm("Reflow", "Reflow", []*widget.FormItem{widget.NewFormItem("", l)}, func() error {
+		_, err := g.c.Arrange(g.ctx, view, apitypes.Arrange{ParentID: parent, CellWidth: w, CellHeight: h})
+		return err
+	})
 }

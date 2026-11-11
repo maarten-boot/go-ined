@@ -32,16 +32,29 @@ var (
 // values change: comments, other keys and their order stay. A missing
 // file or section is created. The file is replaced atomically.
 func SaveContrast(path, preset string, ratio float64) error {
-	old, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("config: %w", err)
-	}
 	r := strconv.FormatFloat(ratio, 'f', -1, 64)
 	if !strings.ContainsAny(r, ".eE") {
 		r += ".0" // a TOML float, not an integer
 	}
-	values := map[string]string{"preset": strconv.Quote(preset), "min_ratio": r}
-	out := setKeys(string(old), "contrast", []string{"preset", "min_ratio"}, values)
+	return saveKeys(path, "contrast", []string{"preset", "min_ratio"},
+		map[string]string{"preset": strconv.Quote(preset), "min_ratio": r})
+}
+
+// SaveWrapNames writes [map] wrap_names into the GUI config file, the
+// same way as SaveContrast (SPEC-722).
+func SaveWrapNames(path string, wrap bool) error {
+	return saveKeys(path, "map", []string{"wrap_names"}, map[string]string{"wrap_names": strconv.FormatBool(wrap)})
+}
+
+// saveKeys sets keys of one section in a TOML file, keeping comments and
+// the rest; a missing file or section is created; the file is replaced
+// atomically with its mode kept (0600 for a new file: it may hold a token).
+func saveKeys(path, section string, keys []string, values map[string]string) error {
+	old, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("config: %w", err)
+	}
+	out := setKeys(string(old), section, keys, values)
 
 	mode := fs.FileMode(0o600) // the file may hold a token
 	if st, err := os.Stat(path); err == nil {

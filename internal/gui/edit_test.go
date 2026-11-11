@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -584,4 +585,74 @@ func TestMenusAndNewHost(t *testing.T) {
 	if h := must(c.Host(ctx, h0.ID)); h.X != 1000 {
 		t.Errorf("host moved after Esc: %+v", h)
 	}
+}
+
+// TC-723, TC-724 (GUI): the "Wrap names" toggle redraws at once and is
+// saved; "Reflow…" on a group and "Reflow view…" lay out the members on
+// the server with room for the longest name.
+func TestWrapAndReflow(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	long := "web01.prod.example.org"
+	g := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "g", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	h1 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Name: long, ParentID: &g.ID, X: ptr(100.0), Y: ptr(220.0)}))
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", Name: long, ParentID: &g.ID, X: ptr(200.0), Y: ptr(220.0)}))
+	var savedMu sync.Mutex
+	var saved []bool
+	a := test.NewTempApp(t)
+	e.ui.Wait(func() {
+		e.g = New(a, Options{Client: c, Contrast: theme.Default, Do: e.ui.Do, WrapNames: true,
+			SaveWrapNames: func(on bool) error { savedMu.Lock(); defer savedMu.Unlock(); saved = append(saved, on); return nil }})
+	})
+	e.g.Start()
+	t.Cleanup(e.g.Stop)
+	gu := e.g
+	eventually(t, e.ui, "wrapped", func() bool {
+		n := find(e.nodes(1), "host", h1.ID)
+		return n != nil && n.NameLines > 1
+	})
+	e.ui.Wait(func() {
+		if !gu.wrapChk.Checked {
+			t.Error("toggle not checked")
+		}
+		gu.wrapChk.SetChecked(false)
+		if n := find(e.nodes(1), "host", h1.ID); n.NameLines != 1 {
+			t.Errorf("still wrapped: %q", n.Labels)
+		}
+	})
+	eventually(t, e.ui, "saved", func() bool {
+		savedMu.Lock()
+		defer savedMu.Unlock()
+		return len(saved) == 1 && !saved[0]
+	})
+
+	// Reflow the group: the two hosts move apart far enough.
+	var f *formDialog
+	e.ui.Wait(func() {
+		n := find(e.nodes(1), "group", g.ID)
+		menuItem(gu.menuItems(1, n, n.Icon.X+2, n.Icon.Y+2, nil), "Reflow…").Action()
+		f = gu.lastForm
+		if text := f.form.Items[0].Widget.(*fyneLabel).Text; !strings.Contains(text, "2 members in group g") {
+			t.Errorf("question: %q", text)
+		}
+		f.Submit()
+	})
+	eventually(t, e.ui, "reflowed", func() bool { return f.done })
+	a1, a2 := must(c.Host(ctx, h1.ID)), must(c.Host(ctx, h2.ID))
+	if w, _ := measure(long); a2.X-a1.X < w || a1.Y != a2.Y {
+		t.Errorf("hosts at %g,%g and %g,%g: not room for %g", a1.X, a1.Y, a2.X, a2.Y, w)
+	}
+	eventually(t, e.ui, "map follows", func() bool {
+		n := find(e.nodes(1), "host", h2.ID)
+		return n != nil && n.Item.X == a2.X
+	})
+	// Reflow view: offered in the View menu, for the root.
+	e.ui.Wait(func() {
+		menuItem(gu.viewMenuItems(), "Reflow view…").Action()
+		if f = gu.lastForm; f == nil || !strings.Contains(f.form.Items[0].Widget.(*fyneLabel).Text, "top level of this view") {
+			t.Fatalf("view reflow: %+v", f)
+		}
+		f.Submit()
+	})
+	eventually(t, e.ui, "view reflowed", func() bool { return f.done })
 }

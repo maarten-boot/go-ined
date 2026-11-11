@@ -306,6 +306,13 @@ func (c *Client) MoveGroup(ctx context.Context, groupID int64, dx, dy float64) (
 	return g, c.Do(ctx, http.MethodPost, "/groups/"+id(groupID)+"/move", apitypes.GroupMove{DX: dx, DY: dy}, &g)
 }
 
+// Arrange lays out the members of a group (in.ParentID nil: the view's
+// root) on a grid (SPEC-510).
+func (c *Client) Arrange(ctx context.Context, viewID int64, in apitypes.Arrange) (apitypes.ArrangeResult, error) {
+	var r apitypes.ArrangeResult
+	return r, c.Do(ctx, http.MethodPost, "/views/"+id(viewID)+"/arrange", in, &r)
+}
+
 // DeleteGroup removes a group. children is "" (the group must be empty),
 // apitypes.ChildrenReparent or apitypes.ChildrenCascade (SPEC-104).
 func (c *Client) DeleteGroup(ctx context.Context, groupID int64, children string) error {

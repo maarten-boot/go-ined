@@ -31,7 +31,7 @@ var commands = map[string]map[string]command{
 	"note": {"get": noteGet, "set": noteSet, "clear": noteClear},
 	"view": {
 		"list": viewList, "add": viewAdd, "show": viewShow, "rename": viewRename, "order": viewOrder,
-		"rm": viewRm, "place": viewPlace, "unplace": viewUnplace,
+		"rm": viewRm, "place": viewPlace, "unplace": viewUnplace, "arrange": viewArrange,
 	},
 	"discover": {
 		"start": discoverStart, "status": discoverStatus, "cancel": discoverCancel,
@@ -714,6 +714,34 @@ func viewUnplace(a *app, name string, args []string) error {
 		return err
 	}
 	return a.call(http.MethodDelete, client.PlacementPath(vid, hid), nil, nil, nil)
+}
+
+// viewArrange lays out a group's members (or the view's root) on a grid
+// (SPEC-510).
+func viewArrange(a *app, name string, args []string) error {
+	fs := a.flags(name)
+	grp := fs.Int64("group", 0, "group whose members are arranged (default: the view's root)")
+	w := fs.Float64("width", 0, "cell width in map units (default 100)")
+	h := fs.Float64("height", 0, "cell height in map units (default 80)")
+	pos, err := a.parse(fs, args, 1, 1)
+	if err != nil {
+		return err
+	}
+	vid, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	in := apitypes.Arrange{CellWidth: *w, CellHeight: *h}
+	if set(fs)["group"] {
+		if *grp < 1 {
+			return usagef("%s: --group must be a positive group id", name)
+		}
+		in.ParentID = grp
+	}
+	var r apitypes.ArrangeResult
+	return a.call(http.MethodPost, "/views/"+id(vid)+"/arrange", in, &r, func() {
+		fmt.Fprintf(a.out, "arranged %d members\n", r.Moved)
+	})
 }
 
 func twoIDs(pos []string) (int64, int64, error) {

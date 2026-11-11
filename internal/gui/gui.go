@@ -37,6 +37,10 @@ type Options struct {
 	// SaveContrast stores a changed contrast setting (SPEC-005); nil
 	// means it isn't saved.
 	SaveContrast func(theme.Contrast) error
+	// WrapNames is the start value of the "Wrap names" toggle (SPEC-722);
+	// SaveWrapNames, if set, stores a change.
+	WrapNames     bool
+	SaveWrapNames func(bool) error
 	// Warnings are shown in the status bar at start (config problems).
 	Warnings []string
 	// Title of the window; default "go-ined".
@@ -89,6 +93,7 @@ type GUI struct {
 	jobs     map[string]bool  // discovery jobs started here, still running
 	wantView int64            // a new view to select once its tab exists
 	viewBtn  *widget.Button
+	wrapChk  *widget.Check
 }
 
 // New builds the window. Call Start to connect, then ShowAndRun (or use
@@ -105,6 +110,7 @@ func New(a fyne.App, opt Options) *GUI {
 		g.do = fyne.Do
 	}
 	g.setContrast(opt.Contrast)
+	g.model.WrapNames = opt.WrapNames
 	g.reload = mapmodel.NewReloader(reloadDelay, g.loadMap)
 
 	title := opt.Title
@@ -520,8 +526,37 @@ func (g *GUI) toolbar() fyne.CanvasObject {
 		btn("Discover…", func() { g.openDiscovery("") }),
 		g.viewMenuButton(),
 		widget.NewSeparator(),
+		widget.NewSeparator(),
+		g.wrapToggle(),
 		widget.NewLabel("Contrast:"), g.bordered(g.contrSel),
 	)
+}
+
+// wrapToggle is the "Wrap names" check box (SPEC-722).
+func (g *GUI) wrapToggle() fyne.CanvasObject {
+	g.wrapChk = widget.NewCheck("Wrap names", nil)
+	g.wrapChk.SetChecked(g.model.WrapNames)
+	g.wrapChk.OnChanged = g.setWrap
+	return g.wrapChk
+}
+
+// setWrap turns name wrapping on or off at once, and saves the choice.
+func (g *GUI) setWrap(on bool) {
+	g.mu.Lock()
+	g.model.WrapNames = on
+	views := g.model.LoadedViews()
+	g.mu.Unlock()
+	for _, v := range views {
+		g.redraw(v)
+	}
+	if g.opt.SaveWrapNames == nil {
+		return
+	}
+	go func() {
+		if err := g.opt.SaveWrapNames(on); err != nil {
+			g.fail("wrap names not saved", err)
+		}
+	}()
 }
 
 // viewMenuButton opens the View menu below itself (SPEC-720).

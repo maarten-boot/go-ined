@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -149,6 +150,7 @@ func TestApply(t *testing.T) {
 		{apitypes.EventGroupDeleted, apitypes.DeletedEvent{ID: 5}, []int64{2}},
 		{apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: 5, ViewID: 2, DX: 1}, []int64{2}},
 		{apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: 8, ViewID: 3, DX: 1}, nil},
+		{apitypes.EventMapArranged, apitypes.MapArrangedEvent{ViewID: 2}, []int64{2}},
 		{apitypes.EventGroupDeleted, apitypes.DeletedEvent{ID: 99}, nil},
 		{apitypes.EventPlacementUpdated, apitypes.Placement{ViewID: 2, HostID: 4}, []int64{2}},
 		{apitypes.EventPlacementDeleted, apitypes.PlacementDeletedEvent{ViewID: 3, HostID: 4}, nil},
@@ -422,5 +424,116 @@ func TestSubtreeAndShift(t *testing.T) {
 	gs := m.Groups(1)
 	if len(gs) != 2 || gs[0].Name != "10.0.0.0/24" || gs[1].Name != "servers" || m.Groups(9) != nil {
 		t.Errorf("groups: %+v", gs)
+	}
+}
+
+// TC-723: names wrap after dots or colons, only where they would run into
+// the next item on their row; frames grow with the extra lines.
+func TestWrapNames(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		room float64
+		want []string
+	}{
+		{"web01", 92, []string{"web01"}},
+		{"web01.prod.example.org", 500, []string{"web01.prod.example.org"}},
+		{"web01.prod.example.org", 92, []string{"web01.prod.", "example.org"}}, // 7 px per char: 13 chars = 91
+		{"2001:db8:0:1::17", 60, []string{"2001:", "db8:0:1:", ":17"}},         // "2001:db8:" is 63 wide
+		{"averyveryverylonghostname.example.org", 92, []string{"averyveryvery", "longhostname.", "example.org"}},
+	} {
+		if got := WrapName(tc.name, tc.room, measure); !slices.Equal(got, tc.want) {
+			t.Errorf("WrapName(%q, %g) = %q, want %q", tc.name, tc.room, got, tc.want)
+		}
+	}
+	// Every line fits, and joining gives the name back.
+	for _, room := range []float64{40, 50, 92, 150} {
+		name := "web01.prod.example.org"
+		lines := WrapName(name, room, measure)
+		for _, l := range lines {
+			if w, _ := measure(l); w > room {
+				t.Errorf("room %g: line %q is %g wide", room, l, w)
+			}
+		}
+		if strings.Join(lines, "") != name {
+			t.Errorf("room %g: %q doesn't join back", room, lines)
+		}
+	}
+
+	long := "web01.prod.example.org"
+	m := New()
+	m.SetMap(apitypes.Map{ViewID: 1, Items: []apitypes.MapItem{
+		{Type: "group", ID: 1, Name: "g", X: 100, Y: 100, Status: "up"},
+		{Type: "host", ID: 1, ParentID: p(1), Name: long, X: 100, Y: 220, Status: "up", Monitored: true},
+		{Type: "host", ID: 2, ParentID: p(1), Name: long, X: 200, Y: 220, Status: "up", Monitored: true},
+		{Type: "host", ID: 3, ParentID: p(1), Name: long, X: 100, Y: 400, Status: "up", Monitored: true}, // alone on its row
+	}})
+	byKey := func(nodes []Node) map[Key]Node {
+		out := map[Key]Node{}
+		for _, n := range nodes {
+			out[Key{n.Item.Type, n.Item.ID}] = n
+		}
+		return out
+	}
+	off := byKey(m.Layout(1, measure))
+	if l := off[HostKey(1)].Labels; len(l) != 2 || l[0] != long || off[HostKey(1)].NameLines != 1 {
+		t.Errorf("wrap off: %q", l)
+	}
+	m.WrapNames = true
+	nodes := m.Layout(1, measure)
+	on := byKey(nodes)
+	h1 := on[HostKey(1)]
+	if h1.NameLines != 2 || !slices.Equal(h1.Labels, []string{"web01.prod.", "example.org", "up"}) {
+		t.Errorf("wrapped: %q (%d name lines)", h1.Labels, h1.NameLines)
+	}
+	if on[HostKey(3)].NameLines != 1 {
+		t.Errorf("alone on its row but wrapped: %q", on[HostKey(3)].Labels)
+	}
+	if b := h1.Bounds; b.W > 100 || b.H <= off[HostKey(1)].Bounds.H {
+		t.Errorf("wrapped bounds: %+v (unwrapped %+v)", b, off[HostKey(1)].Bounds)
+	}
+	frame := on[GroupKey(1)].Bounds
+	if lb := on[HostKey(3)].Bounds; !frame.Contains(lb.X, lb.Y+lb.H) {
+		t.Errorf("frame %+v doesn't contain the last label %+v", frame, lb)
+	}
+	// A host hidden in a collapsed group doesn't make room for others.
+	m.Map(1).Items[GroupKey(1)].Collapsed = true
+	m.SetMap(apitypes.Map{ViewID: 1, Items: append([]apitypes.MapItem{
+		{Type: "host", ID: 9, Name: long, X: 300, Y: 100, Status: "up", Monitored: true},
+	}, apitypes.MapItem{Type: "group", ID: 1, Name: "g", X: 100, Y: 100, Status: "up", Collapsed: true},
+		apitypes.MapItem{Type: "host", ID: 1, ParentID: p(1), Name: long, X: 300, Y: 110, Status: "up", Monitored: true})})
+	if n := byKey(m.Layout(1, measure))[HostKey(9)]; n.NameLines != 1 {
+		t.Errorf("wrapped because of a hidden host / far group: %q", n.Labels)
+	}
+}
+
+// TC-724 (model): the reflow cell fits the longest full name.
+func TestReflowCell(t *testing.T) {
+	long := "web01.prod.example.org" // 22 chars: 154 wide
+	m := New()
+	m.WrapNames = true
+	m.SetMap(apitypes.Map{ViewID: 1, Items: []apitypes.MapItem{
+		{Type: "group", ID: 1, Name: "g", X: 100, Y: 100, Status: "up"},
+		{Type: "host", ID: 1, ParentID: p(1), Name: long, X: 100, Y: 220, Status: "up", Monitored: true},
+		{Type: "host", ID: 2, ParentID: p(1), Name: "db", X: 200, Y: 220, Status: "up", Monitored: true},
+		{Type: "group", ID: 2, Name: "hidden", X: 400, Y: 100, Status: "up", Collapsed: true},
+		{Type: "host", ID: 3, ParentID: p(2), Name: "averyveryverylonghostname.example.org", X: 400, Y: 220, Status: "up"},
+	}})
+	w, h, n := m.ReflowCell(1, p(1), measure)
+	if n != 2 || w != 154+reflowGapX || h < HostSize+2*14 {
+		t.Errorf("group 1: %g × %g for %d", w, h, n)
+	}
+	if !m.WrapNames {
+		t.Error("WrapNames changed")
+	}
+	// Members hidden in a collapsed group are estimated from their labels.
+	if w, _, n := m.ReflowCell(1, p(2), measure); n != 1 || w != 37*7+reflowGapX {
+		t.Errorf("hidden members: %g for %d", w, n)
+	}
+	// The root holds group 1 (a frame) and group 2.
+	if w, h, n := m.ReflowCell(1, nil, measure); n != 2 || w < 154 || h < 100 {
+		t.Errorf("root: %g × %g for %d", w, h, n)
+	}
+	if _, _, n := m.ReflowCell(9, nil, measure); n != 0 {
+		t.Error("unloaded view")
 	}
 }

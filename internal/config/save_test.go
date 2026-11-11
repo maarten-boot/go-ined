@@ -94,3 +94,24 @@ func TestSaveContrastCreates(t *testing.T) {
 		t.Errorf("GUIPath default: %s", p)
 	}
 }
+
+// TC-723 (config): the wrap toggle is saved like the contrast; other
+// sections stay.
+func TestSaveWrapNames(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "gui.toml")
+	os.WriteFile(path, []byte("[contrast]\npreset = \"AAA\"  # mine\n"), 0o600)
+	if err := SaveWrapNames(path, false); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadGUI(path)
+	if err != nil || cfg.Map.WrapNames || cfg.Contrast.Preset != "AAA" {
+		t.Fatalf("after save: %+v %v", cfg, err)
+	}
+	if b, _ := os.ReadFile(path); !strings.Contains(string(b), "# mine") {
+		t.Errorf("comment lost:\n%s", b)
+	}
+	SaveWrapNames(path, true)
+	if cfg, _ := LoadGUI(path); !cfg.Map.WrapNames {
+		t.Error("not saved back to true")
+	}
+}

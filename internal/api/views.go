@@ -80,3 +80,17 @@ func (s *server) unplaceHost(w http.ResponseWriter, r *http.Request) {
 	}
 	s.respond(w, http.StatusNoContent, nil, s.svc.UnplaceHost(r.Context(), view, host))
 }
+
+// arrange serves POST /views/{id}/arrange (SPEC-510).
+func (s *server) arrange(w http.ResponseWriter, r *http.Request) {
+	view, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in apitypes.Arrange
+	if !decode(w, r, &in) {
+		return
+	}
+	n, err := s.svc.Arrange(r.Context(), view, in.ParentID, in.CellWidth, in.CellHeight)
+	s.respond(w, http.StatusOK, apitypes.ArrangeResult{ViewID: view, ParentID: in.ParentID, Moved: n}, err)
+}

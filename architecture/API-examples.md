@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "ae0d9a671ac88124"
+  "run_id": "bf58e81d160a9ceb"
 }
 ```
 
@@ -48,8 +48,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-11T19:33:06.867Z",
-  "updated_at": "2026-11-11T19:33:06.867Z"
+  "created_at": "2026-11-11T22:33:48.686Z",
+  "updated_at": "2026-11-11T22:33:48.686Z"
 }
 ```
 
@@ -74,8 +74,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-11T19:33:06.878Z",
-  "updated_at": "2026-11-11T19:33:06.878Z"
+  "created_at": "2026-11-11T22:33:48.695Z",
+  "updated_at": "2026-11-11T22:33:48.695Z"
 }
 ```
 
@@ -110,8 +110,8 @@ Response: `201`
   ],
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-11T19:33:06.888Z",
-  "updated_at": "2026-11-11T19:33:06.888Z"
+  "created_at": "2026-11-11T22:33:48.703Z",
+  "updated_at": "2026-11-11T22:33:48.703Z"
 }
 ```
 
@@ -146,8 +146,8 @@ Response: `200`
   ],
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-11T19:33:06.888Z",
-  "updated_at": "2026-11-11T19:33:06.898Z"
+  "created_at": "2026-11-11T22:33:48.703Z",
+  "updated_at": "2026-11-11T22:33:48.713Z"
 }
 ```
 
@@ -172,8 +172,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-11T19:33:06.867Z",
-  "updated_at": "2026-11-11T19:33:06.908Z"
+  "created_at": "2026-11-11T22:33:48.686Z",
+  "updated_at": "2026-11-11T22:33:48.722Z"
 }
 ```
 
@@ -334,11 +334,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: ae0d9a671ac88124-10
+id: bf58e81d160a9ceb-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-11T19:33:07.299Z","updated_at":"2026-11-11T19:33:07.299Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-11T22:33:49.118Z","updated_at":"2026-11-11T22:33:49.118Z"}
 
-id: ae0d9a671ac88124-11
+id: bf58e81d160a9ceb-11
 event: host.deleted
 data: {"id":2}
 
@@ -354,7 +354,7 @@ Response: `202`
 
 ```json
 {
-  "id": "ae0d9a671ac88124-1",
+  "id": "bf58e81d160a9ceb-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -363,7 +363,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-11T19:33:07.621Z",
+  "started_at": "2026-11-11T22:33:49.459Z",
   "finished_at": null
 }
 ```
@@ -371,14 +371,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/ae0d9a671ac88124-1
+curl -s $INED/api/v1/discovery/bf58e81d160a9ceb-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "ae0d9a671ac88124-1",
+  "id": "bf58e81d160a9ceb-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -387,8 +387,8 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-11T19:33:07.621Z",
-  "finished_at": "2026-11-11T19:33:07.627Z"
+  "started_at": "2026-11-11T22:33:49.459Z",
+  "finished_at": "2026-11-11T22:33:49.465Z"
 }
 ```
 
@@ -456,8 +456,8 @@ Parent:      root
 Status:      unknown
 Collapsed:   yes
 Position:    40, 40
-Created:     2026-11-11 20:33:09
-Updated:     2026-11-11 20:33:09
+Created:     2026-11-11 23:33:51
+Updated:     2026-11-11 23:33:51
 Note:        -
 ```
 
@@ -485,8 +485,8 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-11 20:33:09
-Updated:      2026-11-11 20:33:09
+Created:      2026-11-11 23:33:51
+Updated:      2026-11-11 23:33:51
 Note:         2nd floor
 ```
 
@@ -547,8 +547,8 @@ inedctl --json host show 5
   ],
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-11T19:33:09.689Z",
-  "updated_at": "2026-11-11T19:33:09.689Z"
+  "created_at": "2026-11-11T22:33:51.529Z",
+  "updated_at": "2026-11-11T22:33:51.529Z"
 }
 ```
 
@@ -583,8 +583,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job ae0d9a671ac88124-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job ae0d9a671ac88124-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job bf58e81d160a9ceb-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job bf58e81d160a9ceb-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -644,8 +644,8 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-11T19:33:09.741Z",
-  "updated_at": "2026-11-11T19:33:09.741Z"
+  "created_at": "2026-11-11T22:33:51.574Z",
+  "updated_at": "2026-11-11T22:33:51.574Z"
 }
 ```
 
@@ -670,8 +670,8 @@ Response: `201`
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-11T19:33:09.75Z",
-  "updated_at": "2026-11-11T19:33:09.75Z"
+  "created_at": "2026-11-11T22:33:51.583Z",
+  "updated_at": "2026-11-11T22:33:51.583Z"
 }
 ```
 
@@ -797,8 +797,8 @@ ID:      2
 Name:    Printers
 Kind:    custom
 Order:   1
-Created: 2026-11-11 20:33:09
-Updated: 2026-11-11 20:33:09
+Created: 2026-11-11 23:33:51
+Updated: 2026-11-11 23:33:51
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6
@@ -831,8 +831,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 40,
-  "created_at": "2026-11-11T19:33:09.75Z",
-  "updated_at": "2026-11-11T19:33:09.813Z"
+  "created_at": "2026-11-11T22:33:51.583Z",
+  "updated_at": "2026-11-11T22:33:51.634Z"
 }
 ```
 
@@ -852,8 +852,8 @@ Parent:      root
 Status:      unknown
 Collapsed:   no
 Position:    90, 80
-Created:     2026-11-11 20:33:09
-Updated:     2026-11-11 20:33:09
+Created:     2026-11-11 23:33:51
+Updated:     2026-11-11 23:33:51
 Note:        -
 ```
 
@@ -881,8 +881,8 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     240, 40
-Created:      2026-11-11 20:33:09
-Updated:      2026-11-11 20:33:09
+Created:      2026-11-11 23:33:51
+Updated:      2026-11-11 23:33:51
 Note:         Toner replaced 2026-11
 ```
 

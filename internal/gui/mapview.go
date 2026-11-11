@@ -626,7 +626,7 @@ func (d *drawer) icon(n *mapmodel.Node, selected bool) {
 	}
 	y := ic.Y + ic.H + mapmodel.LabelGap
 	for i, s := range n.Labels {
-		if !d.text(s, it.X, y, text, true, i == 0) {
+		if !d.text(s, it.X, y, text, true, i < max(1, n.NameLines)) {
 			break
 		}
 		_, h := measure(s)

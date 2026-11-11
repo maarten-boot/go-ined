@@ -465,3 +465,26 @@ func TestMoveGroupAPI(t *testing.T) {
 	e.wantErr(400, "invalid_argument", "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": 1.7e308, "dy": 0}`)
 	e.wantErr(405, "method_not_allowed", "GET", "/groups/"+itoa(g.ID)+"/move", nil)
 }
+
+// TC-724: POST /views/{id}/arrange.
+func TestArrangeAPI(t *testing.T) {
+	e := newEnv(t, "")
+	var g apitypes.Group
+	e.want(201, "POST", "/groups", apitypes.GroupCreate{Name: "g", X: ptr(100.0), Y: ptr(100.0)}, &g)
+	for _, ip := range []string{"192.0.2.1", "192.0.2.2"} {
+		e.want(201, "POST", "/hosts", apitypes.HostCreate{IP: ip, ParentID: &g.ID, X: ptr(500.0), Y: ptr(900.0)}, nil)
+	}
+	var r apitypes.ArrangeResult
+	e.want(200, "POST", "/views/1/arrange", apitypes.Arrange{ParentID: &g.ID, CellWidth: 300, CellHeight: 80}, &r)
+	if r.Moved != 2 || r.ViewID != 1 || *r.ParentID != g.ID {
+		t.Errorf("result: %+v", r)
+	}
+	var hs []apitypes.Host
+	e.want(200, "GET", "/hosts", nil, &hs)
+	if hs[0].X != 100 || hs[1].X != 400 || hs[0].Y != 220 {
+		t.Errorf("hosts: %+v %+v", hs[0], hs[1])
+	}
+	e.wantErr(404, "not_found", "POST", "/views/9/arrange", apitypes.Arrange{})
+	e.wantErr(400, "invalid_argument", "POST", "/views/1/arrange", apitypes.Arrange{CellWidth: 1})
+	e.wantErr(405, "method_not_allowed", "GET", "/views/1/arrange", nil)
+}

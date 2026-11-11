@@ -494,6 +494,8 @@ func TestEventShort(t *testing.T) {
 		{apitypes.EventGroupDeleted, `{"id":5}`, "group 5"},
 		{apitypes.EventGroupStatus, `{"id":5,"status":"down"}`, "group 5 down"},
 		{apitypes.EventGroupMoved, `{"id":5,"view_id":2,"dx":-10,"dy":2.5}`, "group 5 contents moved by -10,2.5 in view 2"},
+		{apitypes.EventMapArranged, `{"view_id":1,"parent_id":null}`, "view 1: the root arranged"},
+		{apitypes.EventMapArranged, `{"view_id":2,"parent_id":7}`, "view 2: group 7 arranged"},
 		{apitypes.EventDiscoveryProgress, `{"id":"r-1","cidr":"10.0.0.0/30","state":"running","probed":1,"total":2}`, "job r-1 10.0.0.0/30 running probed 1/2 found 0 added 0"},
 		{apitypes.EventDiscoveryFinished, `{"id":"r-1","cidr":"10.0.0.0/30","state":"failed","probed":2,"total":2,"errors":2,"error":"no route"}`, "job r-1 10.0.0.0/30 failed probed 2/2 found 0 added 0 errors 2: no route"},
 		{apitypes.EventResync, `{"reason":"client fell behind"}`, "reload: client fell behind"},

@@ -70,6 +70,8 @@ Commands:
   view place <view-id> <host-id> [--parent ID] [--x X --y Y]
                                                (without --parent: the view's root)
   view unplace <view-id> <host-id>
+  view arrange <view-id> [--group ID] [--width N] [--height N]
+                                               (lay out members on a grid; default 100 x 80)
   discover start <cidr> | --group ID [--parent ID] [--wait]
   discover status <job-id>
   discover cancel <job-id>

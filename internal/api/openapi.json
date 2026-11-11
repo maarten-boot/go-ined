@@ -113,7 +113,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "description": "Server-Sent Events (SPEC-502). Event types: host.created, host.updated, host.status (Host); host.deleted, group.deleted, view.deleted (DeletedEvent); group.created, group.updated (Group); group.status (GroupStatusEvent); group.moved (GroupMovedEvent); view.created, view.updated (View); placement.updated (Placement); placement.deleted (PlacementDeletedEvent); discovery.progress, discovery.finished (Discovery); resync (ResyncEvent). Event ids are <run>-<seq>; send Last-Event-ID to resume (SPEC-503).",
+        "description": "Server-Sent Events (SPEC-502). Event types: host.created, host.updated, host.status (Host); host.deleted, group.deleted, view.deleted (DeletedEvent); group.created, group.updated (Group); group.status (GroupStatusEvent); group.moved (GroupMovedEvent); map.arranged (MapArrangedEvent); view.created, view.updated (View); placement.updated (Placement); placement.deleted (PlacementDeletedEvent); discovery.progress, discovery.finished (Discovery); resync (ResyncEvent). Event ids are <run>-<seq>; send Last-Event-ID to resume (SPEC-503).",
         "parameters": [
           {
             "name": "Last-Event-ID",
@@ -788,6 +788,47 @@
             }
           }
         ]
+      }
+    },
+    "/views/{id}/arrange": {
+      "post": {
+        "summary": "Lay out a group's members (or the root) on a grid",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Arrange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrangeResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     }
   },
@@ -1692,6 +1733,83 @@
         "additionalProperties": false,
         "required": [
           "reason"
+        ]
+      },
+      "Arrange": {
+        "type": "object",
+        "description": "Body of POST /views/{id}/arrange (SPEC-510): lay out the direct members of a group (parent_id null: the view's root) on a grid; 0 sizes mean the normal grid (100 x 80).",
+        "properties": {
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "cell_width": {
+            "type": "number",
+            "format": "double",
+            "description": "20-5000, or 0"
+          },
+          "cell_height": {
+            "type": "number",
+            "format": "double",
+            "description": "20-5000, or 0"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "parent_id",
+          "cell_width",
+          "cell_height"
+        ]
+      },
+      "ArrangeResult": {
+        "type": "object",
+        "description": "Answer of POST /views/{id}/arrange.",
+        "properties": {
+          "view_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "moved": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "view_id",
+          "parent_id",
+          "moved"
+        ]
+      },
+      "MapArrangedEvent": {
+        "type": "object",
+        "description": "Payload of map.arranged: the members of a group (parent_id null: the root) were laid out again; reload the view (SPEC-510).",
+        "properties": {
+          "view_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "view_id",
+          "parent_id"
         ]
       }
     }

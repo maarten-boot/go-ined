@@ -50,7 +50,8 @@ const (
 	EventGroupUpdated = "group.updated"
 	EventGroupDeleted = "group.deleted"
 	EventGroupStatus  = "group.status"
-	EventGroupMoved   = "group.moved" // v0.21, SPEC-507
+	EventGroupMoved   = "group.moved"  // v0.21, SPEC-507
+	EventMapArranged  = "map.arranged" // v0.28, SPEC-510
 
 	EventViewCreated      = "view.created"
 	EventViewUpdated      = "view.updated"
@@ -83,6 +84,13 @@ type (
 		ViewID int64   `json:"view_id"`
 		DX     float64 `json:"dx"`
 		DY     float64 `json:"dy"`
+	}
+	// MapArrangedEvent is the payload of map.arranged: the members of a
+	// group (ParentID nil: the root) in a view were laid out again; clients
+	// reload the view (SPEC-510).
+	MapArrangedEvent struct {
+		ViewID   int64  `json:"view_id"`
+		ParentID *int64 `json:"parent_id"`
 	}
 	// PlacementDeletedEvent is the payload of placement.deleted.
 	PlacementDeletedEvent struct {
@@ -265,6 +273,22 @@ type GroupCreate struct {
 type GroupMove struct {
 	DX float64 `json:"dx"`
 	DY float64 `json:"dy"`
+}
+
+// Arrange is the body of POST /views/{id}/arrange (SPEC-510): lay out the
+// direct members of a group (ParentID nil: the view's root) on a grid of
+// CellWidth × CellHeight map units (0: the normal grid, 100 × 80).
+type Arrange struct {
+	ParentID   *int64  `json:"parent_id"`
+	CellWidth  float64 `json:"cell_width"`
+	CellHeight float64 `json:"cell_height"`
+}
+
+// ArrangeResult is the answer of POST /views/{id}/arrange.
+type ArrangeResult struct {
+	ViewID   int64  `json:"view_id"`
+	ParentID *int64 `json:"parent_id"`
+	Moved    int    `json:"moved"`
 }
 
 // GroupPatch is the body of PATCH /groups/{id}. "cidr": "" turns a network

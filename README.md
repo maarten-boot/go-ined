@@ -79,6 +79,7 @@ bin/ined-gui -url https://ined.example.org:8470 -token … -ca-cert ca.pem
 - Drag a host, a group icon or a frame (by its label) to move it; a group takes everything in it along. Drop onto a group icon or a frame label (marked "into") to move the item into that group. Esc cancels a drag.
 - Right-click empty space for "New group here…" and "New host here…"; right-click an item to edit, move ("Move to group…"), delete it, or, for a host, show it in another view ("Show in view") or remove it from the current custom view. Deleting always asks first and says what goes; the Delete key deletes the selected item.
 - "Discover…" in the toolbar (or "Scan this network" on a network group) finds the hosts that answer ping in an IPv4 range, with progress and a cancel button; closing the dialog leaves the job running, with its progress in the status bar.
+- Long names: "Wrap names" in the toolbar (on by default) breaks a name after its dots where it would run into the next item. "Reflow…" on a group (and "Reflow view…" in the View menu) lays out its members on a grid wide enough for the longest full name; this changes the positions for everyone. Without the GUI: `inedctl view arrange <view> [--group ID] [--width N] [--height N]`.
 - "View ▾" creates, renames, moves and deletes views (tabs). The network view can't be deleted.
 - The details panel shows the selected item's fields, the views a host is in, and lets you edit its note.
 - The contrast selector (AA, AAA, Max, custom) applies at once and is saved in `gui.toml`.

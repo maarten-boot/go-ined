@@ -159,6 +159,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		fyne.NewMenuItem("Edit…", func() { g.editGroupDialog(view, id) }),
 		fyne.NewMenuItem("Move to group…", func() { g.moveToDialog(view, k) }),
 	}
+	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }))
 	if cidr := n.Item.CIDR; cidr != "" {
 		scan := fyne.NewMenuItem("Scan this network", func() { g.openDiscovery(cidr) })
 		scan.Disabled = strings.Contains(cidr, ":") // IPv6 (SPEC-707)

@@ -515,3 +515,18 @@ func TestGroupShift(t *testing.T) {
 	// b (at 140,40) into a (at 0,100): next to a, one row below.
 	contains(t, ok(t, u, "group", "move", "2", "1"), "Parent:", "1", "Position:", "0, 220")
 }
+
+// TC-724 (CLI): view arrange.
+func TestViewArrange(t *testing.T) {
+	isolate(t)
+	s := testserver.Start(t, testserver.Options{})
+	u := "--url=" + s.URL()
+	ok(t, u, "group", "add", "--name", "g")
+	ok(t, u, "host", "add", "192.0.2.1", "--parent", "1")
+	ok(t, u, "host", "add", "192.0.2.2", "--parent", "1")
+	contains(t, ok(t, u, "view", "arrange", "1", "--group", "1", "--width", "300"), "arranged 1 members")
+	contains(t, ok(t, u, "host", "show", "2"), "Position:", "340, 160")
+	if r := ctl(t, u, "view", "arrange", "1", "--width", "3"); r.code != 1 {
+		t.Errorf("bad width: %+v", r)
+	}
+}

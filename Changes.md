@@ -4,6 +4,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- `ined-gui`: "Wrap names" (toolbar toggle, on by default, saved in `gui.toml`): a long DNS name breaks after its dots where it would run into the next item. "Reflow…" on a group and "Reflow view…" lay out the members on a grid wide enough for the longest full name.
+- API: `POST /views/{id}/arrange` lays out a group's members (or a view's top level) on a grid, with one `map.arranged` event; `inedctl view arrange`.
+
 ### Changed
 - When the server can't ping (no ICMP mode), it now checks again every minute and before each scan, so allowing ping (the sysctl or `setcap`) works without restarting it; the log says when ICMP is found. The GUI re-reads the server's health every 30 seconds, so its ping warning goes away by itself.
 

@@ -192,3 +192,14 @@
     **Claude**: a GitHub ruleset limits every push to 5 refs, including deletes. It split the delete into 4 pushes, and will keep every push command within 5 refs (saved to memory).
 27. **User**: verify now.
     **Claude**: GitHub has `main`, `docs/architecture`, the Dependabot branch and the tag `v0.1.0`; locally `main` and `docs/architecture`; `main` is the same commit on both sides (`0ea5ef2`).
+28. **User** pasted the copied error again: still no ICMP mode. Claude listed the likely causes: no restart after the change, a change on another machine, `setcap` lost by a rebuild, a restricted environment. It asked for four diagnostic commands and offered automatic re-checking.
+29. **User**: `1 0` / groups / "system ping works".
+    **Claude**: the ping group range was empty (nothing had been changed); `/usr/bin/ping` has its own capability. It gave the sysctl commands, and the alternative of allowing only group 1000.
+30. **User**: build it; scan works now.
+    **Claude** built `feature/icmp-recheck`, merged:
+    - `monitor.Rechecker` re-detects while a family is missing (at most every minute, or at once on Recheck), adopts only a better result and closes the old prober;
+    - the server always starts monitoring (hosts of a missing family are skipped), re-checks in the background, updates `/health` and logs "ICMP found again";
+    - discovery asks before each job (`Config.Ready`);
+    - the GUI reads `/health` every 30 s;
+    - README and Changes (Unreleased).
+    - Tests TC-315. `make all` and lint pass. Spec and Plan v0.27.

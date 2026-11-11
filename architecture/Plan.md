@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.26** (2026-11-11)
+Status: **draft v0.27** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -186,6 +186,10 @@ Process: a Dependabot update of the `toolchain` line in `go.mod` makes CI fail (
 | M5-10 | Which views a host is in (crosscheck 2026-11-11-01 I1) | Not in M5: no API change, and the details panel doesn't list views. Revisit in M6 | Add `views: [ids]` to host JSON now |
 
 Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit tests. The Fyne widgets are tested headless with `fyne.io/fyne/v2/test`. A manual script runs the GUI under Xvfb against a test server with generated hosts; Claude checks the screenshots, and the user does a final visual check.
+
+### After 0.1.0
+- [x] User request (2026-11-11): find ICMP again without a restart. `monitor.Rechecker` (tries again every minute while a family is missing, and before each discovery job); monitoring starts even without ICMP; `/health` and the log follow; the GUI reads `/health` every 30 s (SPEC-304, 717 v0.27; TC-315)
+- [ ] Release 0.1.1 when the user wants it
 
 ## Open questions
 - The log, OpenAPI and backup questions, and the `staticcheck` / `govulncheck` question, are in the M7 decisions (M7-3, M7-6..8).

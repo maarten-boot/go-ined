@@ -62,11 +62,10 @@ type Stream struct {
 	cancel context.CancelFunc
 	ready  chan struct{}
 
-	mu       sync.Mutex
-	lastID   string
-	err      error
-	isReady  bool
-	finished bool
+	mu      sync.Mutex
+	lastID  string
+	err     error
+	isReady bool
 }
 
 // Events opens the event stream. It returns at once; the connection is

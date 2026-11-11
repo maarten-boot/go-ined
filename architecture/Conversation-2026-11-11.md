@@ -117,3 +117,34 @@
     - **C6:** `group.moved` only with contents.
     - **Tests and examples:** new API and GUI tests (menus, Esc, the host pop-up); a "Moving groups" section in `API-examples.md`.
     - **Docs:** Spec and Plan v0.23, D18 recorded. `make all` passes.
+12. **User**: status?
+    **Claude**: M1–M6 done, including the crosscheck 08 fixes; 4 commits not yet pushed. Open: the user's visual check (TC-702 and others), and M7.
+13. **User**: pushed; start M7.
+    **Claude** looked up the current versions with `gh`: `actions/checkout` v7.0.1, `actions/setup-go` v7.0.0, `staticcheck` (module honnef.co/go/tools v0.8.2), `govulncheck` v1.9.0. It wrote the M7 draft, Spec and Plan v0.24:
+    - **New Spec items:** SPEC-007 (CI jobs: check, test, raw-icmp, build), SPEC-008 (release on a tag), SPEC-807 (server log level and format).
+    - **SPEC-505:** the OpenAPI document, hand-written, embedded and tested against the routes.
+    - **Tests:** TC-010..013 added; TC-505 and TC-309 extended.
+    - **Decisions:** proposed M7-1..10 (D19), which also settle the open questions on logging, OpenAPI, backup and lint tools.
+    - The code waits for the decisions.
+14. **User**: pushed; OK, defaults (M7 decisions 1–10).
+    **Claude** built M7 on `feature/m7-ci-release`:
+    - **Lint and vulnerability checks:**
+      - `staticcheck` v0.8.2 found one unused field (removed).
+      - `govulncheck` v1.9.0 found 15 reachable vulnerabilities: in the standard library of Go 1.26.8, fixed with the toolchain go1.26.11 in `go.mod`; and in `golang.org/x/image` v0.24.0 (via Fyne), upgraded to v0.48.0.
+      - Both are now clean.
+    - **SPEC-807:** `[log] level` / `format`, `-log-level`, and API requests logged at debug.
+    - **SPEC-505:** a hand-written OpenAPI 3.1 document, embedded and served without a token. A test checks that its paths and methods equal the registered routes, and that its schemas equal the `apitypes` fields. A formal validator from PyPI was blocked in this session; that check is left to the user.
+    - **Raw ICMP:** a test that forces raw sockets (`INED_TEST_RAW_ICMP=1`, root), run by the CI job raw-icmp.
+    - **Workflows:** `ci.yml` (check, test, raw-icmp, build), `release.yml` (runs CI, then builds and publishes on a tag), `dependabot.yml`. Actions are pinned to SHAs.
+    - **Scripts:** `scripts/build-release.sh` (dry run: 7 archives, checksums OK, `-version` prints the tag) and `scripts/release-notes.sh`. Repository tests in `internal/repocheck`.
+    - **Also:** README (log, backup, OpenAPI, CI), Changes, `make lint`, `make release-build`.
+    - **Docs:** Spec and Plan v0.25, D19 recorded. `make all` and `make lint` pass.
+    - **Next:** the user pushes `feature/m7-ci-release`, and Claude reads the first CI run.
+15. **User**: pushed; check the CI run.
+    **Claude** read run 43091727389. check, test and build failed: GLFW 3.4 (inside Fyne) builds Wayland support and needs `wayland-client-core.h`. Every other package's tests passed, including the GUI tests. raw-icmp passed.
+    Claude added `libwayland-dev libxkbcommon-dev` to both workflows and the README, plus a repository test that both workflows use the same package list.
+16. **User**: pushed; check the CI run.
+    **Claude**: run 43093370048 is green in all four jobs.
+    - raw-icmp ran as root in the raw ("privileged") mode: `TestICMPLoopback` and `TestICMPRawLoopback` passed for 127.0.0.1 and ::1. This is the first real raw-socket test, open since M2.
+    - The build job checked all 7 archives against `SHA256SUMS`.
+    - `feature/m7-ci-release` merged into `main`.

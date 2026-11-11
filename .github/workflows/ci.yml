@@ -15,7 +15,8 @@ env:
   GO_VERSION: "1.26.11" # = the toolchain line in go.mod (checked by TC-010)
   STATICCHECK: honnef.co/go/tools/cmd/staticcheck@v0.8.2
   GOVULNCHECK: golang.org/x/vuln/cmd/govulncheck@v1.9.0
-  GUI_PACKAGES: gcc libgl1-mesa-dev xorg-dev # cgo headers for Fyne (ined-gui)
+  # cgo headers for Fyne (ined-gui); GLFW 3.4 builds X11 and Wayland support.
+  GUI_PACKAGES: gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
 
 jobs:
   check:

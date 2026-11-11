@@ -20,7 +20,7 @@ See [`architecture/Plan.md`](architecture/Plan.md) for the roadmap.
 
 ## Build and run
 
-Requires Go 1.26 or later. The server and `inedctl` are pure Go (no cgo). `ined-gui` needs cgo and the X11/OpenGL development packages that [Fyne lists](https://docs.fyne.io/started/) (on Debian/Ubuntu: `gcc libgl1-mesa-dev xorg-dev`).
+Requires Go 1.26 or later. The server and `inedctl` are pure Go (no cgo). `ined-gui` needs cgo and the X11/OpenGL development packages that [Fyne lists](https://docs.fyne.io/started/) (on Debian/Ubuntu: `gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev`).
 
 ```bash
 make            # gofmt check, vet, tests (-race), build into bin/

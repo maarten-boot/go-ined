@@ -85,6 +85,12 @@ func TestCIWorkflow(t *testing.T) {
 			t.Errorf("%s doesn't use Go %s from go.mod", f, m[1])
 		}
 	}
+	// The GUI build needs the same packages in both workflows.
+	pk := regexp.MustCompile(`GUI_PACKAGES: (.+)`)
+	r := read(t, ".github/workflows/release.yml")
+	if a, b := pk.FindStringSubmatch(ci), pk.FindStringSubmatch(r); a == nil || b == nil || a[1] != b[1] || !strings.Contains(a[1], "libwayland-dev") {
+		t.Errorf("GUI_PACKAGES differ or lack Wayland: %q / %q", a, b)
+	}
 	dep := read(t, ".github/dependabot.yml")
 	for _, eco := range []string{"package-ecosystem: github-actions", "package-ecosystem: gomod"} {
 		if !strings.Contains(dep, eco) {

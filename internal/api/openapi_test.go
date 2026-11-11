@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -37,6 +39,16 @@ func TestOpenAPI(t *testing.T) {
 	}
 	if !strings.HasPrefix(doc.OpenAPI, "3.1") || doc.Info.Title == "" || doc.Info.Version == "" {
 		t.Errorf("header: %+v", doc)
+	}
+	// info.version is the newest release in Changes.md (crosscheck
+	// 2026-11-11-04 C2).
+	changes, err := os.ReadFile("../../Changes.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^## \[(\d+\.\d+\.\d+)\]`).FindSubmatch(changes)
+	if m == nil || string(m[1]) != doc.Info.Version {
+		t.Errorf("info.version %q, newest release in Changes.md %q", doc.Info.Version, m)
 	}
 
 	// Paths and methods equal the registered routes.

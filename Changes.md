@@ -4,7 +4,7 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
-## [0.1.0]
+## [0.1.0] - 2026-11-11
 
 The first release: a network monitor in the spirit of Tkined, with a server, a command-line client and a desktop GUI.
 

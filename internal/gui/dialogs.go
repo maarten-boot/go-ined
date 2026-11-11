@@ -162,17 +162,31 @@ func (g *GUI) editHostDialog(id int64) {
 
 // moveToDialog: "Move to group…" with the view's groups and "Root"
 // (SPEC-704). A group can't move into itself or below itself.
-func (g *GUI) moveToDialog(view int64, k mapmodel.Key) *formDialog {
+//
+// With several items (a multi-selection, SPEC-724) they all go into the
+// chosen group; items inside a selected group go with that group.
+func (g *GUI) moveToDialog(view int64, keys ...mapmodel.Key) *formDialog {
+	if len(keys) > 1 {
+		keys = g.topLevel(view, keys)
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	k := keys[0]
 	g.mu.Lock()
 	groups := g.model.Groups(view)
 	skip := map[mapmodel.Key]bool{}
-	if k.Type == apitypes.TypeGroup {
-		skip = g.model.Subtree(view, k.ID)
+	for _, mk := range keys {
+		if mk.Type == apitypes.TypeGroup {
+			for sk := range g.model.Subtree(view, mk.ID) {
+				skip[sk] = true
+			}
+		}
 	}
 	var current string
-	if it := g.item(view, k); it != nil && it.ParentID != nil {
-		if p := g.item(view, mapmodel.GroupKey(*it.ParentID)); p != nil {
-			current = groupOption(*p)
+	if p := g.commonParent(view, keys); p != nil {
+		if pg := g.item(view, mapmodel.GroupKey(*p)); pg != nil {
+			current = groupOption(*pg)
 		}
 	}
 	g.mu.Unlock()
@@ -191,8 +205,19 @@ func (g *GUI) moveToDialog(view int64, k mapmodel.Key) *formDialog {
 		current = "Root"
 	}
 	sel.SetSelected(current)
-	return g.showForm(fmt.Sprintf("Move %s %d", k.Type, k.ID), "Move", []*widget.FormItem{widget.NewFormItem("Into", sel)},
-		func() error { return g.setParent(view, k, ids[sel.Selected]) })
+	title := fmt.Sprintf("Move %s %d", k.Type, k.ID)
+	if len(keys) > 1 {
+		title = fmt.Sprintf("Move %d items", len(keys))
+	}
+	return g.showForm(title, "Move", []*widget.FormItem{widget.NewFormItem("Into", sel)},
+		func() error {
+			for _, mk := range keys {
+				if err := g.setParent(view, mk, ids[sel.Selected]); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
 }
 
 // plural writes a count with its noun: "no hosts", "1 host", "2 hosts".

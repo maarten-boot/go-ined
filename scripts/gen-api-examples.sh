@@ -140,7 +140,15 @@ ctl "A view and its hosts" "view show 2" view show 2
   echo 'A group moves with its contents in one request; one `group.moved` event tells clients about the contents. A new parent without a position puts the item next to the new parent.'; echo; } >>"$OUT"
 ex "Move group 6 (in view 2) and its hosts 50 units right" POST /groups/6/move '{"dx":50,"dy":0}'
 ctl "The same with inedctl" "group shift 6 --dy 40" group shift 6 --dy 40
+ex "Move only the contents of group 6, not the group itself" POST /groups/6/move '{"dx":0,"dy":30,"contents_only":true}'
 ctl "A new parent: the host moves next to it" "host move 5 root" host move 5 root
+
+# Arranging a group's members on a wider grid (SPEC-510, "Reflow" in the GUI).
+{ echo "## Arranging"; echo
+  echo 'Lays out the direct members of a group (or of the view'"'"'s root) on a grid, so long names have room. One `map.arranged` event; the response says how many members moved.'; echo; } >>"$OUT"
+ex "Arrange the root of the network view on 160 × 80 cells" POST /views/1/arrange '{"cell_width":160,"cell_height":80}'
+ex "Error: cell size out of range" POST /views/1/arrange '{"cell_width":5,"cell_height":80}'
+ctl "The same with inedctl, for one group" "view arrange 2 --group 6 --width 200" view arrange 2 --group 6 --width 200
 
 {
 cat <<'EOF'

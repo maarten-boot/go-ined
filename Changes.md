@@ -12,6 +12,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ### Changed
 - When the server can't ping (no ICMP mode), it now checks again every minute and before each scan, so allowing ping (the sysctl or `setcap`) works without restarting it; the log says when ICMP is found. The GUI re-reads the server's health every 30 seconds, so its ping warning goes away by itself.
+- `ined-gui`: a right-click on one of several selected items keeps the selection; the menu's "Move N items to group…" and "Delete N items…" act on all of them.
+- When a better ping mode is found, the old one is closed two minutes later instead of at once, so a check still running on it isn't cut short.
+- `inedctl view arrange` says "arranged 1 member" for one.
 
 ## [0.1.0] - 2026-11-11
 

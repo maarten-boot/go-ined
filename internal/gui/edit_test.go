@@ -772,6 +772,77 @@ func TestMultiSelectWidget(t *testing.T) {
 	if fmt.Sprint(moved) != "[{host 3}]" {
 		t.Errorf("single drag moved %v", moved)
 	}
+
+	// TC-727: a right-click on a selected item keeps the selection and
+	// makes it the primary; on another item it selects only that one.
+	mv.SetSelection([]mapmodel.Key{mapmodel.HostKey(1), mapmodel.HostKey(2)})
+	mv.TappedSecondary(at(100, 100))
+	if sel() != "[{host 1} {host 2}]" || *mv.Selected() != mapmodel.HostKey(1) {
+		t.Errorf("right-click on a selected host: %s", sel())
+	}
+	mv.TappedSecondary(at(500, 400))
+	if sel() != "[{host 3}]" {
+		t.Errorf("right-click on an unselected host: %s", sel())
+	}
+}
+
+// TC-727 (GUI): with several items selected, the context menu's "Move to
+// group…" and "Delete…" act on all of them.
+func TestMultiSelectMenu(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	lan := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "lan", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	dst := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "dst", Collapsed: ptr(false), X: ptr(600.0), Y: ptr(100.0)}))
+	h1 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &lan.ID, X: ptr(100.0), Y: ptr(220.0)}))
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", ParentID: &lan.ID, X: ptr(200.0), Y: ptr(220.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h2.ID) != nil })
+
+	var f *formDialog
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.HostKey(h1.ID), mapmodel.HostKey(h2.ID)})
+		items := g.menuItems(1, find(e.nodes(1), "host", h1.ID), 0, 0, &h1)
+		mi := menuItem(items, "Move 2 items to group…")
+		if mi == nil || menuItem(items, "Delete 2 items…") == nil {
+			t.Fatalf("menu: %v", labels(items))
+		}
+		g.lastForm = nil
+		mi.Action()
+		f = g.lastForm
+		s := f.form.Items[0].Widget.(*widget.Select)
+		if s.Selected != fmt.Sprintf("lan (%d)", lan.ID) {
+			t.Fatalf("move dialog preselects %q", s.Selected)
+		}
+		s.SetSelected(fmt.Sprintf("dst (%d)", dst.ID))
+		f.Submit()
+	})
+	eventually(t, e.ui, "moved", func() bool { return f.done })
+	for _, h := range []apitypes.Host{h1, h2} {
+		if got := must(c.Host(ctx, h.ID)); got.ParentID == nil || *got.ParentID != dst.ID {
+			t.Errorf("host %d not moved: %+v", h.ID, got)
+		}
+	}
+
+	// One item: the old labels.
+	eventually(t, e.ui, "hosts shown", func() bool { return find(e.nodes(1), "host", h1.ID) != nil })
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.HostKey(h1.ID)})
+		items := g.menuItems(1, find(e.nodes(1), "host", h1.ID), 0, 0, &h1)
+		if menuItem(items, "Move to group…") == nil || menuItem(items, "Delete host…") == nil {
+			t.Errorf("single menu: %v", labels(items))
+		}
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.HostKey(h1.ID), mapmodel.HostKey(h2.ID)})
+		items = g.menuItems(1, find(e.nodes(1), "host", h1.ID), 0, 0, &h1)
+		g.lastForm = nil
+		menuItem(items, "Delete 2 items…").Action()
+		f = g.lastForm
+		if f == nil || f.form.Items[0].Widget.(*fyneLabel).Text != "Delete 2 hosts? Hosts are removed from every view. This can't be undone." {
+			t.Fatalf("delete many: %+v", f)
+		}
+		f.Submit()
+	})
+	eventually(t, e.ui, "deleted", func() bool { return f.done && len(must(c.Hosts(ctx))) == 0 })
 }
 
 // TC-726 (GUI): g groups the selection, c and e collapse and expand the

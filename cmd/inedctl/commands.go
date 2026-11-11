@@ -740,7 +740,11 @@ func viewArrange(a *app, name string, args []string) error {
 	}
 	var r apitypes.ArrangeResult
 	return a.call(http.MethodPost, "/views/"+id(vid)+"/arrange", in, &r, func() {
-		fmt.Fprintf(a.out, "arranged %d members\n", r.Moved)
+		if r.Moved == 1 {
+			fmt.Fprintln(a.out, "arranged 1 member")
+		} else {
+			fmt.Fprintf(a.out, "arranged %d members\n", r.Moved)
+		}
 	})
 }
 

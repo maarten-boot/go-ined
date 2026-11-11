@@ -17,6 +17,10 @@ type Rechecker struct {
 	every    time.Duration
 	now      func() time.Time
 	onChange func(Status, error)
+	// later runs f after d; a replaced prober is closed only after
+	// retireAfter, so rounds still using it finish normally (crosscheck
+	// 2026-11-12-01 C1).
+	later func(d time.Duration, f func())
 
 	mu   sync.Mutex
 	p    Prober
@@ -25,11 +29,17 @@ type Rechecker struct {
 	last time.Time
 }
 
+// retireAfter is how long a replaced prober stays open: longer than any
+// ping round (count × timeout plus the gaps), so no round fails because
+// its prober was closed under it.
+const retireAfter = 2 * time.Minute
+
 // NewRechecker detects the modes once with open, then again at most every
 // interval (on Ping) while a family is missing, or at once on Recheck.
 // onChange, if set, is called with the new state whenever it improves.
 func NewRechecker(open func() (Prober, Status, error), every time.Duration, onChange func(Status, error)) *Rechecker {
-	r := &Rechecker{open: open, every: every, now: time.Now, onChange: onChange}
+	r := &Rechecker{open: open, every: every, now: time.Now, onChange: onChange,
+		later: func(d time.Duration, f func()) { time.AfterFunc(d, f) }}
 	r.p, r.st, r.err = open()
 	r.last = r.now()
 	return r
@@ -75,7 +85,7 @@ func (r *Rechecker) current(force bool) Prober {
 	r.mu.Unlock()
 	if improved {
 		if c, ok := old.(io.Closer); ok && old != nil {
-			c.Close()
+			r.later(retireAfter, func() { c.Close() })
 		}
 		if r.onChange != nil {
 			r.onChange(cst, cerr)

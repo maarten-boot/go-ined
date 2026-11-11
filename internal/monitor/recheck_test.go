@@ -36,6 +36,9 @@ func TestRechecker(t *testing.T) {
 	now := time.Unix(1000, 0)
 	r := NewRechecker(open, time.Minute, func(st Status, _ error) { changes = append(changes, st) })
 	r.now, r.last = func() time.Time { return now }, now
+	var retire []func() // closes scheduled for later
+	var retireAfterSeen time.Duration
+	r.later = func(d time.Duration, f func()) { retireAfterSeen = d; retire = append(retire, f) }
 	ip := netip.MustParseAddr("192.0.2.1")
 	ctx := context.Background()
 
@@ -80,8 +83,16 @@ func TestRechecker(t *testing.T) {
 	mu.Lock()
 	answer = func() (Prober, Status, error) { return both, Status{Mode: "unprivileged"}, nil }
 	mu.Unlock()
-	if st, _ := r.Recheck(); st.IPv6Error != "" || !v4only.closed || !r.Complete() || len(changes) != 2 {
-		t.Fatalf("recheck, better: %+v, old closed %v", st, v4only.closed)
+	if st, _ := r.Recheck(); st.IPv6Error != "" || v4only.closed || !r.Complete() || len(changes) != 2 {
+		t.Fatalf("recheck, better: %+v, old closed at once %v", st, v4only.closed)
+	}
+	// The replaced prober is closed later, so rounds on it can finish.
+	if len(retire) != 1 || retireAfterSeen != retireAfter {
+		t.Fatalf("retire: %d scheduled, after %v", len(retire), retireAfterSeen)
+	}
+	retire[0]()
+	if !v4only.closed {
+		t.Error("replaced prober never closed")
 	}
 	now = now.Add(time.Hour)
 	r.Ping(ctx, ip, 1, time.Second)

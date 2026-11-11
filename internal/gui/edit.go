@@ -144,10 +144,30 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		return newItems
 	}
 	k := mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}
+	// With several items selected and this one among them, "Move to
+	// group…" and "Delete…" act on all of them (SPEC-724).
+	targets := []mapmodel.Key{k}
+	if mv := g.maps[view]; mv != nil {
+		if sel := mv.Selection(); len(sel) > 1 && slices.Contains(sel, k) {
+			targets = sel
+		}
+	}
+	moveLabel, delLabel := "Move to group…", "Delete "+k.Type+"…"
+	if len(targets) > 1 {
+		moveLabel = fmt.Sprintf("Move %d items to group…", len(targets))
+		delLabel = fmt.Sprintf("Delete %d items…", len(targets))
+	}
+	deleteTargets := func() {
+		if len(targets) == 1 {
+			g.deleteDialog(view, k)
+			return
+		}
+		g.deleteManyDialog(view, g.topLevel(view, targets))
+	}
 	if n.Item.Type == apitypes.TypeHost {
 		items := []*fyne.MenuItem{
 			fyne.NewMenuItem("Edit…", func() { g.editHostDialog(k.ID) }),
-			fyne.NewMenuItem("Move to group…", func() { g.moveToDialog(view, k) }),
+			fyne.NewMenuItem(moveLabel, func() { g.moveToDialog(view, targets...) }),
 		}
 		if h != nil {
 			items = append(items, g.showInViewItem(h))
@@ -155,7 +175,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		if view != mapmodel.NetworkView {
 			items = append(items, fyne.NewMenuItem("Remove from this view", func() { g.unplace(view, k.ID) }))
 		}
-		return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem("Delete host…", func() { g.deleteDialog(view, k) }))
+		return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem(delLabel, deleteTargets))
 	}
 	id := n.Item.ID
 	expand := fyne.NewMenuItem("Expand", func() { g.setCollapsed(id, false) })
@@ -163,7 +183,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	expand.Disabled, collapse.Disabled = n.Kind == mapmodel.KindFrame, n.Kind != mapmodel.KindFrame
 	items := []*fyne.MenuItem{expand, collapse,
 		fyne.NewMenuItem("Edit…", func() { g.editGroupDialog(view, id) }),
-		fyne.NewMenuItem("Move to group…", func() { g.moveToDialog(view, k) }),
+		fyne.NewMenuItem(moveLabel, func() { g.moveToDialog(view, targets...) }),
 	}
 	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }))
 	if cidr := n.Item.CIDR; cidr != "" {
@@ -175,7 +195,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		items = append(items, fyne.NewMenuItemSeparator())
 		items = append(items, newItems...)
 	}
-	return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem("Delete group…", func() { g.deleteDialog(view, k) }))
+	return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem(delLabel, deleteTargets))
 }
 
 // showInViewItem is "Show in view ▸" with every custom view, marked where

@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "bf58e81d160a9ceb"
+  "run_id": "292a614e97f91218"
 }
 ```
 
@@ -48,8 +48,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-11T22:33:48.686Z",
-  "updated_at": "2026-11-11T22:33:48.686Z"
+  "created_at": "2026-11-11T23:43:26.146Z",
+  "updated_at": "2026-11-11T23:43:26.146Z"
 }
 ```
 
@@ -74,8 +74,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-11T22:33:48.695Z",
-  "updated_at": "2026-11-11T22:33:48.695Z"
+  "created_at": "2026-11-11T23:43:26.16Z",
+  "updated_at": "2026-11-11T23:43:26.16Z"
 }
 ```
 
@@ -110,8 +110,8 @@ Response: `201`
   ],
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-11T22:33:48.703Z",
-  "updated_at": "2026-11-11T22:33:48.703Z"
+  "created_at": "2026-11-11T23:43:26.169Z",
+  "updated_at": "2026-11-11T23:43:26.169Z"
 }
 ```
 
@@ -146,8 +146,8 @@ Response: `200`
   ],
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-11T22:33:48.703Z",
-  "updated_at": "2026-11-11T22:33:48.713Z"
+  "created_at": "2026-11-11T23:43:26.169Z",
+  "updated_at": "2026-11-11T23:43:26.183Z"
 }
 ```
 
@@ -172,8 +172,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-11T22:33:48.686Z",
-  "updated_at": "2026-11-11T22:33:48.722Z"
+  "created_at": "2026-11-11T23:43:26.146Z",
+  "updated_at": "2026-11-11T23:43:26.194Z"
 }
 ```
 
@@ -334,11 +334,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: bf58e81d160a9ceb-10
+id: 292a614e97f91218-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-11T22:33:49.118Z","updated_at":"2026-11-11T22:33:49.118Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-11T23:43:26.577Z","updated_at":"2026-11-11T23:43:26.577Z"}
 
-id: bf58e81d160a9ceb-11
+id: 292a614e97f91218-11
 event: host.deleted
 data: {"id":2}
 
@@ -354,7 +354,7 @@ Response: `202`
 
 ```json
 {
-  "id": "bf58e81d160a9ceb-1",
+  "id": "292a614e97f91218-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -363,7 +363,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-11T22:33:49.459Z",
+  "started_at": "2026-11-11T23:43:26.912Z",
   "finished_at": null
 }
 ```
@@ -371,14 +371,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/bf58e81d160a9ceb-1
+curl -s $INED/api/v1/discovery/292a614e97f91218-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "bf58e81d160a9ceb-1",
+  "id": "292a614e97f91218-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -387,8 +387,8 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-11T22:33:49.459Z",
-  "finished_at": "2026-11-11T22:33:49.465Z"
+  "started_at": "2026-11-11T23:43:26.912Z",
+  "finished_at": "2026-11-11T23:43:26.918Z"
 }
 ```
 
@@ -456,8 +456,8 @@ Parent:      root
 Status:      unknown
 Collapsed:   yes
 Position:    40, 40
-Created:     2026-11-11 23:33:51
-Updated:     2026-11-11 23:33:51
+Created:     2026-11-12 00:43:28
+Updated:     2026-11-12 00:43:28
 Note:        -
 ```
 
@@ -485,8 +485,8 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-11 23:33:51
-Updated:      2026-11-11 23:33:51
+Created:      2026-11-12 00:43:28
+Updated:      2026-11-12 00:43:28
 Note:         2nd floor
 ```
 
@@ -547,8 +547,8 @@ inedctl --json host show 5
   ],
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-11T22:33:51.529Z",
-  "updated_at": "2026-11-11T22:33:51.529Z"
+  "created_at": "2026-11-11T23:43:28.985Z",
+  "updated_at": "2026-11-11T23:43:28.985Z"
 }
 ```
 
@@ -583,8 +583,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job bf58e81d160a9ceb-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job bf58e81d160a9ceb-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job 292a614e97f91218-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job 292a614e97f91218-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -644,8 +644,8 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-11T22:33:51.574Z",
-  "updated_at": "2026-11-11T22:33:51.574Z"
+  "created_at": "2026-11-11T23:43:29.031Z",
+  "updated_at": "2026-11-11T23:43:29.031Z"
 }
 ```
 
@@ -670,8 +670,8 @@ Response: `201`
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-11T22:33:51.583Z",
-  "updated_at": "2026-11-11T22:33:51.583Z"
+  "created_at": "2026-11-11T23:43:29.04Z",
+  "updated_at": "2026-11-11T23:43:29.04Z"
 }
 ```
 
@@ -797,8 +797,8 @@ ID:      2
 Name:    Printers
 Kind:    custom
 Order:   1
-Created: 2026-11-11 23:33:51
-Updated: 2026-11-11 23:33:51
+Created: 2026-11-12 00:43:29
+Updated: 2026-11-12 00:43:29
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6
@@ -831,8 +831,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 40,
-  "created_at": "2026-11-11T22:33:51.583Z",
-  "updated_at": "2026-11-11T22:33:51.634Z"
+  "created_at": "2026-11-11T23:43:29.04Z",
+  "updated_at": "2026-11-11T23:43:29.095Z"
 }
 ```
 
@@ -852,12 +852,38 @@ Parent:      root
 Status:      unknown
 Collapsed:   no
 Position:    90, 80
-Created:     2026-11-11 23:33:51
-Updated:     2026-11-11 23:33:51
+Created:     2026-11-12 00:43:29
+Updated:     2026-11-12 00:43:29
 Note:        -
 ```
 
 Exit code: `0`
+
+### Move only the contents of group 6, not the group itself
+
+```bash
+curl -s -X POST $INED/api/v1/groups/6/move -d '{"dx":0,"dy":30,"contents_only":true}'
+```
+
+Response: `200`
+
+```json
+{
+  "id": 6,
+  "name": "2nd floor",
+  "description": "",
+  "note": "",
+  "cidr": "",
+  "view_id": 2,
+  "parent_id": null,
+  "collapsed": false,
+  "status": "unknown",
+  "x": 90,
+  "y": 80,
+  "created_at": "2026-11-11T23:43:29.04Z",
+  "updated_at": "2026-11-11T23:43:29.103Z"
+}
+```
 
 ### A new parent: the host moves next to it
 
@@ -881,9 +907,58 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     240, 40
-Created:      2026-11-11 23:33:51
-Updated:      2026-11-11 23:33:51
+Created:      2026-11-12 00:43:28
+Updated:      2026-11-12 00:43:29
 Note:         Toner replaced 2026-11
+```
+
+Exit code: `0`
+
+## Arranging
+
+Lays out the direct members of a group (or of the view's root) on a grid, so long names have room. One `map.arranged` event; the response says how many members moved.
+
+### Arrange the root of the network view on 160 × 80 cells
+
+```bash
+curl -s -X POST $INED/api/v1/views/1/arrange -d '{"cell_width":160,"cell_height":80}'
+```
+
+Response: `200`
+
+```json
+{
+  "view_id": 1,
+  "parent_id": null,
+  "moved": 2
+}
+```
+
+### Error: cell size out of range
+
+```bash
+curl -s -X POST $INED/api/v1/views/1/arrange -d '{"cell_width":5,"cell_height":80}'
+```
+
+Response: `400`
+
+```json
+{
+  "error": {
+    "code": "invalid_argument",
+    "message": "cell_width and cell_height must be between 20 and 5000"
+  }
+}
+```
+
+### The same with inedctl, for one group
+
+```bash
+inedctl view arrange 2 --group 6 --width 200
+```
+
+```text
+arranged 1 member
 ```
 
 Exit code: `0`

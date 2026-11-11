@@ -264,7 +264,12 @@ func (mv *MapView) TappedSecondary(ev *fyne.PointEvent) {
 	n := mv.hit(ev.Position)
 	if n != nil {
 		k := mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}
-		mv.Select(&k)
+		if mv.sels[k] { // part of the selection: keep it (SPEC-724)
+			mv.sel = &k
+			mv.Refresh()
+		} else {
+			mv.Select(&k)
+		}
 		if mv.OnSelect != nil {
 			mv.OnSelect(&k)
 		}

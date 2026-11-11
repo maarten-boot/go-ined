@@ -74,3 +74,10 @@
    - **D1, I1:** black button borders in Max; the toolbar shows the zoom.
    - **C5:** new tests for find, the context menu, toolbar zoom, the details panel, and the custom-contrast dialog. `internal/gui` coverage is now 91 %.
    - **Docs:** Spec and Plan v0.20, D16 recorded, TC-714 added. `make all` passes.
+8. **User**: pushed; start M6.
+   **Claude** wrote the M6 draft, Spec and Plan v0.21:
+   - **API (SPEC-507..509):** moving a group with its subtree (`POST /groups/{id}/move`, one `group.moved` event); a new parent gives a free position, with the subtree moving along; `views` in host JSON.
+   - **GUI:** SPEC-704 (drag and drop), 706 (create, edit, delete) and 707 (discovery dialog) in detail; SPEC-719 (deleting), 720 (View menu), 721 (hosts in custom views).
+   - **Tests:** TC-715..722 added.
+   - **Decisions:** proposed M6-1..10 (D17) with defaults. M6-3 changes how `inedctl host move` and `group move` position items.
+   - The code waits for the decisions.

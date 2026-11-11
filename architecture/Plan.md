@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.20** (2026-11-11)
+Status: **draft v0.21** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -19,6 +19,7 @@ Status: **draft v0.20** (2026-11-11)
 | D12 | ICMP: own small prober on `golang.org/x/net/icmp` (BSD-3), not `pro-bing` (Apache-2.0, would need a licence notice in binaries) | 2026-11-10 |
 | D13 | Views (one tab per view, per-view host placements, network view fixed as view 1) as milestone M4b before the GUI; integer ids. See `Design-views.md` | 2026-11-10 |
 | D14 | M4b details (user OK 2026-11-10): hosts keep their network placement in `hosts`, a `placements` table holds custom-view placements only (no `hosts` rebuild); one `view.deleted` per view; per-item events for cascade/reparent in a custom view; only `host.deleted` when a host goes; unique view names, new views last; `GET /groups?view=`; `inedctl view …`; the GUI tabs are specified in M5 | 2026-11-10 |
+| D17 | M6 details (**proposed, waiting for the user's OK**): M6-1..10 below | — |
 | D16 | Crosscheck 2026-11-11-02 decisions (user OK 2026-11-11): black button borders in Max contrast (D1 a); overlapping frames are handled by dragging in M6, no tidy-up action (D2 a); rows of a group grow with its size, 10–50 per row (D3 a); the toolbar shows the zoom (I1) | 2026-11-11 |
 | D15 | M5 details (user OK 2026-11-11, all defaults): Fyne v2.8.2 in the same module with a cgo-free check for server and CLI; canvas-object map with culling; status and names in place, other changes reload the view; M5 changes only expand/collapse, notes and contrast; tabs not saved; find over all hosts; contrast saved line by line in `gui.toml`; derived palettes; shapes as in M5-9; no host-views API in M5. See the M5 decisions table | 2026-11-11 |
 
@@ -111,7 +112,30 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] The user's visual check of the GUI (TC-005, 702 partly, 705, 708 manual part)
 
 ### M6: GUI editing
-- [ ] Drag and drop, moving items into groups, managing groups and hosts, discovery dialog (SPEC-704, 706, 707)
+- [x] Spec items (draft v0.21): SPEC-507..509 (API), SPEC-704/706/707 detailed, SPEC-719..721; test cases TC-715..722
+- [ ] Decisions M6-1..10 (D17)
+- [ ] API: `POST /groups/{id}/move` and `group.moved`; new parent → free position with the subtree; `views` in host JSON; `pkg/client` and `inedctl group shift` (M6-2)
+- [ ] GUI: drag (hosts, groups with their contents), drop into a group, "Move to group…"
+- [ ] GUI: create, edit and delete groups and hosts; confirmations; Delete key
+- [ ] GUI: discovery dialog with progress and cancel
+- [ ] GUI: View menu; hosts in custom views
+- [ ] TC-702 manual script; the user's visual check of M5 and M6
+
+### M6 decisions (proposed; defaults recommended)
+| # | Question | Recommended default | Alternative |
+|---|----------|---------------------|-------------|
+| M6-1 | What dragging a group moves | The group **with its whole subtree**, by one offset (SPEC-704), for a collapsed icon and an expanded frame alike, so expanding later shows the members next to the group | Only the group's own position (members stay; an expanded frame then jumps back to them) |
+| M6-2 | How a subtree move reaches the server | New `POST /groups/{id}/move {dx, dy}`: one transaction and one `group.moved` event (SPEC-507). Also `inedctl group shift <id> <dx> <dy>` | The GUI sends one PATCH per item: up to thousands of requests and events for a big group, and no atomicity |
+| M6-3 | Position after a change of parent | A free position near the new parent; a group's subtree moves along (SPEC-508). Changes `inedctl host move` / `group move`, which kept the old position | Keep the old position (the item may sit far from its new group, and the frame stretches to it) |
+| M6-4 | Dropping onto empty space | Only moves the item; the parent stays and the frame grows. Moving to the root: "Move to group… → Root" | Dropping outside the parent's frame moves the item to the root (easy to do by accident) |
+| M6-5 | Which views a host is in (M5-10) | `views` in host JSON (SPEC-509), used by "Show in view ▸" and the details panel | Load every custom view's map to find out |
+| M6-6 | Managing views | A "View" menu button in the toolbar acting on the current tab (SPEC-720); order changes swap `order` with the neighbour (two PATCHes) | A context menu on the tabs (Fyne's tabs have none, so it would need a custom tab bar) |
+| M6-7 | Discovery dialog | From the toolbar and "Scan this network"; closing it leaves the job running with progress in the status bar (SPEC-707) | A modal dialog that stays open until the job ends |
+| M6-8 | Deleting | Always confirm, naming what goes; reparent or cascade for non-empty groups; Delete key; no undo (SPEC-719) | Undo for the last delete (needs server support: soft delete) |
+| M6-9 | Selection and dragging | One item at a time; drag starts after 4 pixels of movement, so a click stays a click; Esc cancels | Multi-select with rubber band (LATER) |
+| M6-10 | Dialog errors | The API's message under the input; the dialog stays open (SPEC-706) | Close the dialog and show the error in the status bar |
+
+Testing: the API additions get unit and API tests as before. GUI actions are tested headless (`fyne.io/fyne/v2/test`: Drag, Tap, Type) against the test server; dialogs are built by functions that tests can drive, as in M5. A manual script (TC-702) and the user's visual check close the milestone.
 
 ### M7: CI + release 0.1.0
 - [ ] GitHub Actions (pinned to commit SHAs, SPEC-006): `go vet`, `staticcheck`, `go test -race`, builds

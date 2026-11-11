@@ -145,7 +145,7 @@ Testing: the API additions get unit and API tests as before. GUI actions are tes
 - [x] Decisions M7-1..10 (D19)
 - [x] Run `staticcheck` and `govulncheck` locally first and fix what they find: one unused field; 15 reachable vulnerabilities, fixed with toolchain go1.26.11 (standard library) and `golang.org/x/image` v0.48.0 (via Fyne)
 - [x] `.github/workflows/ci.yml` and `release.yml` (pinned SHAs), `.github/dependabot.yml`; `scripts/build-release.sh` (dry run: 7 archives and SHA256SUMS) and `scripts/release-notes.sh`; repository tests in `internal/repocheck`
-- [ ] First CI run on GitHub green (after the user's push; read with `gh run view`)
+- [x] First CI run on GitHub green: run 43091727389 failed (GLFW 3.4 needs the Wayland and xkbcommon headers); after adding them, run 43093370048 passed all four jobs. raw-icmp ran as root in raw mode (127.0.0.1 and ::1); all 7 archives checked
 - [x] OpenAPI document with its tests (SPEC-505). Not yet checked by a formal OpenAPI validator: installing one from PyPI was blocked in this session
 - [x] `[log]` config (SPEC-807)
 - [ ] The user's visual check and TC-702 (open since M5/M6)

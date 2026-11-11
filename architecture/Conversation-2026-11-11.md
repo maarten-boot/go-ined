@@ -140,3 +140,11 @@
     - **Also:** README (log, backup, OpenAPI, CI), Changes, `make lint`, `make release-build`.
     - **Docs:** Spec and Plan v0.25, D19 recorded. `make all` and `make lint` pass.
     - **Next:** the user pushes `feature/m7-ci-release`, and Claude reads the first CI run.
+15. **User**: pushed; check the CI run.
+    **Claude** read run 43091727389. check, test and build failed: GLFW 3.4 (inside Fyne) builds Wayland support and needs `wayland-client-core.h`. Every other package's tests passed, including the GUI tests. raw-icmp passed.
+    Claude added `libwayland-dev libxkbcommon-dev` to both workflows and the README, plus a repository test that both workflows use the same package list.
+16. **User**: pushed; check the CI run.
+    **Claude**: run 43093370048 is green in all four jobs.
+    - raw-icmp ran as root in the raw ("privileged") mode: `TestICMPLoopback` and `TestICMPRawLoopback` passed for 127.0.0.1 and ::1. This is the first real raw-socket test, open since M2.
+    - The build job checked all 7 archives against `SHA256SUMS`.
+    - `feature/m7-ci-release` merged into `main`.

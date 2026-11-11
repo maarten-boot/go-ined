@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.24** (2026-11-11)
+Status: **draft v0.25** (2026-11-11)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -29,13 +29,13 @@ go-ined is a network monitor loosely modelled on Tkined (Scotty). It splits Tkin
 
 ### Build / CI
 - **SPEC-006** MUST: Every CI action (GitHub Actions or similar) is pinned to a full 40-character commit SHA, with the version in a trailing comment, using the latest workable release. Any exception has its reason documented inline.
-- **SPEC-007** MUST (draft v0.24): **CI.** On every push and pull request, GitHub Actions runs:
+- **SPEC-007** MUST (v0.24): **CI.** On every push and pull request, GitHub Actions runs:
   - *check*: `gofmt`, `go vet`, `staticcheck`, `govulncheck`, the cgo-free check (`make nogui-check`) and `go mod verify`;
   - *test*: `go test -race ./...` on Linux with the GUI libraries installed, so the GUI tests run headless;
   - *raw-icmp*: the ICMP tests run as root, so the raw-socket mode is exercised against 127.0.0.1 and ::1;
   - *build*: `ined-server` and `inedctl` without cgo for linux, darwin and windows on amd64 and arm64; `ined-gui` for linux/amd64.
-  Tools run at pinned versions (`go run tool@version`), not through third-party actions. Dependabot proposes updates of the actions and the Go modules weekly.
-- **SPEC-008** MUST (draft v0.24): **Release.** Pushing a tag `vX.Y.Z` runs a release workflow. It runs the same checks, builds the binaries of SPEC-007 with the version from the tag (`-version` prints it), packs each as `.tar.gz` (`.zip` for windows) together with `LICENSE`, `README.md`, `Changes.md` and `examples/`, writes `SHA256SUMS`, and publishes a GitHub release with the tag's section of `Changes.md` as its text. The token is the workflow's own `GITHUB_TOKEN` with `contents: write`, and only in the release job.
+  Tools run at pinned versions (`go run tool@version`), not through third-party actions. The Go version is the `toolchain` of `go.mod` (1.26.11, v0.25), so CI, the release and local builds use the same standard library. Dependabot proposes updates of the actions and the Go modules weekly.
+- **SPEC-008** MUST (v0.24): **Release.** Pushing a tag `vX.Y.Z` runs a release workflow. It runs the same checks, builds the binaries of SPEC-007 with the version from the tag (`-version` prints it), packs each as `.tar.gz` (`.zip` for windows) together with `LICENSE`, `README.md`, `Changes.md` and `examples/`, writes `SHA256SUMS`, and publishes a GitHub release with the tag's section of `Changes.md` as its text. The token is the workflow's own `GITHUB_TOKEN` with `contents: write`, and only in the release job.
 
 ## 4. Inventory and data model
 There are two kinds of **items**: host and group. A group with a `cidr` is a **network group**. Items form a tree, and all items share one map.
@@ -121,7 +121,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   | 413 | `too_large` | Note over 64 KiB, request body too large |
   | 503 | `unavailable` | The server is shutting down (for example, a new `GET /events` during shutdown) (v0.9) |
   | 500 | `internal` | Unexpected server error |
-- **SPEC-505** SHOULD: The server serves an OpenAPI document at `/api/v1/openapi.json`. Details (draft v0.24): an OpenAPI 3.1 document, written by hand in `internal/api/openapi.json` and embedded in the binary. It is served without a token, like the reduced `/health` (it holds no data). Tests check that it is valid JSON with the required OpenAPI fields, that its paths and methods are exactly the routes the server registers, and that every JSON field of `pkg/apitypes` appears in its schemas.
+- **SPEC-505** SHOULD: The server serves an OpenAPI document at `/api/v1/openapi.json`. Details (v0.24): an OpenAPI 3.1 document, written by hand in `internal/api/openapi.json` and embedded in the binary. It is served without a token, like the reduced `/health` (it holds no data). Tests check that it is valid JSON with the required OpenAPI fields, that its paths and methods are exactly the routes the server registers, and that every JSON field of `pkg/apitypes` appears in its schemas.
 - **SPEC-506** MUST: A Go client package (`pkg/client`) wraps the REST and SSE API. The GUI and the CLI both use it. The JSON types live in `pkg/apitypes` and are shared by the server and all clients. API errors are returned as a typed `*client.APIError` with the HTTP status, `code` and message. The event stream reconnects automatically (waiting 1 s at first, doubling up to 30 s), resumes with `Last-Event-ID`, and passes `resync` on to the caller (v0.13). It stops for good on a 4xx answer (for example 401) and retries 5xx answers and connection errors. A connection that sends nothing, not even a keepalive, for 75 s is dropped and reopened. Optionally the first connection attempt may fail at once instead of being retried; `inedctl` uses this to report an unreachable server (v0.15).
 - **SPEC-507** MUST (v0.21): **Moving a group with everything in it.** `POST /groups/{id}/move` with `{"dx": …, "dy": …}` moves the group and every item in its subtree, in the group's view, by the same offset in one transaction. In the network view that changes the hosts' `x`/`y`; in a custom view their placements. It emits `group.updated` for the group itself and one `group.moved` event `{"id", "view_id", "dx", "dy"}` for everything inside it, instead of one event per item (SPEC-502); clients that keep positions apply the offset or reload the view (v0.22). `group.moved` is emitted only when the group has contents (v0.23). The offset must be finite (400).
 - **SPEC-508** MUST (v0.21): **A new parent gives a new position.** When `PATCH` changes an item's `parent_id` (or `PUT` a placement's parent) without giving `x` and `y`, the item gets a free position near its new parent (SPEC-106), as new items do; a group's subtree moves along by the same offset, announced with `group.moved` when the group isn't empty (v0.22). With `x` and `y` given, they are used, and the contents still move along with the group. A `PATCH` of `x`/`y` alone (same parent) moves only the group; `POST …/move` moves it with its contents (v0.23). This changes `inedctl host move` and `group move`, which so far kept the old position.
@@ -185,7 +185,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   | gui | `contrast.preset` | `AA` (`AA`, `AAA`, `Max` or `custom`) |
   | gui | `contrast.min_ratio` | `4.5` (used only when `preset = "custom"`, range 4.5–21) |
 - **SPEC-806** SHOULD: Every binary supports `-version`, which prints the version (set at build time) and exits.
-- **SPEC-807** SHOULD (draft v0.24): **Server log.** `[log] level` (`debug`, `info`, `warn`, `error`; default `info`) and `format` (`text` or `json`; default `text`) in `server.toml`, and `-log-level` on the command line. The log goes to stderr.
+- **SPEC-807** SHOULD (v0.24): **Server log.** `[log] level` (`debug`, `info`, `warn`, `error`; default `info`) and `format` (`text` or `json`; default `text`) in `server.toml`, and `-log-level` on the command line. The log goes to stderr. At `debug`, every API request is logged with method, path and duration (v0.25).
 
 ## 12. CLI (`inedctl`)
 - **SPEC-901** MUST: Subcommands:

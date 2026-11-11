@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.24** (2026-11-11)
+Status: **draft v0.25** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -19,7 +19,7 @@ Status: **draft v0.24** (2026-11-11)
 | D12 | ICMP: own small prober on `golang.org/x/net/icmp` (BSD-3), not `pro-bing` (Apache-2.0, would need a licence notice in binaries) | 2026-11-10 |
 | D13 | Views (one tab per view, per-view host placements, network view fixed as view 1) as milestone M4b before the GUI; integer ids. See `Design-views.md` | 2026-11-10 |
 | D14 | M4b details (user OK 2026-11-10): hosts keep their network placement in `hosts`, a `placements` table holds custom-view placements only (no `hosts` rebuild); one `view.deleted` per view; per-item events for cascade/reparent in a custom view; only `host.deleted` when a host goes; unique view names, new views last; `GET /groups?view=`; `inedctl view …`; the GUI tabs are specified in M5 | 2026-11-10 |
-| D19 | M7 details (**proposed, waiting for the user's OK**): M7-1..10 below | — |
+| D19 | M7 details (user OK 2026-11-11, all defaults): GitHub Actions with jobs check, test, raw-icmp, build; only `actions/checkout` v7.0.1 and `actions/setup-go` v7.0.0, SHA-pinned; staticcheck v0.8.2 and govulncheck v1.9.0 via `go run`; raw ICMP as root in CI; GUI built for linux/amd64 only; hand-written OpenAPI with tests; `[log]` settings; backup LATER (README note); a tag workflow with `gh release`; Dependabot weekly | 2026-11-11 |
 | D18 | Crosscheck 2026-11-11-03 decisions (user OK 2026-11-11): a `PATCH` of a group's position moves only the group, a new parent takes the contents along (D1 a); "New host here…" on empty space puts the host next to the network group the server picks (D2 a) | 2026-11-11 |
 | D17 | M6 details (user OK 2026-11-11, all defaults): dragging a group moves its subtree; `POST /groups/{id}/move` with one `group.moved`, and `inedctl group shift`; a new parent gives a free position; dropping onto empty space keeps the parent; `views` in host JSON; a View menu button; the discovery dialog can close while the job runs; always confirm deletes, Delete key, no undo; single-item drag with a 4-pixel threshold and Esc; dialog errors stay in the dialog. See the M6 decisions table | 2026-11-11 |
 | D16 | Crosscheck 2026-11-11-02 decisions (user OK 2026-11-11): black button borders in Max contrast (D1 a); overlapping frames are handled by dragging in M6, no tidy-up action (D2 a); rows of a group grow with its size, 10–50 per row (D3 a); the toolbar shows the zoom (I1) | 2026-11-11 |
@@ -142,11 +142,12 @@ Testing: the API additions get unit and API tests as before. GUI actions are tes
 
 ### M7: CI + release 0.1.0
 - [x] Spec items (draft v0.24): SPEC-007 (CI), SPEC-008 (release), SPEC-505 detailed, SPEC-807 (server log); test cases TC-010..013, TC-505 and TC-309 extended
-- [ ] Decisions M7-1..10 (D19)
-- [ ] Run `staticcheck` and `govulncheck` locally first and fix what they find
-- [ ] `.github/workflows/ci.yml` and `release.yml` (pinned SHAs), `.github/dependabot.yml`
-- [ ] OpenAPI document with its tests (SPEC-505)
-- [ ] `[log]` config (SPEC-807)
+- [x] Decisions M7-1..10 (D19)
+- [x] Run `staticcheck` and `govulncheck` locally first and fix what they find: one unused field; 15 reachable vulnerabilities, fixed with toolchain go1.26.11 (standard library) and `golang.org/x/image` v0.48.0 (via Fyne)
+- [x] `.github/workflows/ci.yml` and `release.yml` (pinned SHAs), `.github/dependabot.yml`; `scripts/build-release.sh` (dry run: 7 archives and SHA256SUMS) and `scripts/release-notes.sh`; repository tests in `internal/repocheck`
+- [ ] First CI run on GitHub green (after the user's push; read with `gh run view`)
+- [x] OpenAPI document with its tests (SPEC-505). Not yet checked by a formal OpenAPI validator: installing one from PyPI was blocked in this session
+- [x] `[log]` config (SPEC-807)
 - [ ] The user's visual check and TC-702 (open since M5/M6)
 - [ ] `Changes.md` → `[0.1.0]`; the user pushes the tag `v0.1.0`; check the release
 

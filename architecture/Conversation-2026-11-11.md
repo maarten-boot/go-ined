@@ -126,3 +126,17 @@
     - **Tests:** TC-010..013 added; TC-505 and TC-309 extended.
     - **Decisions:** proposed M7-1..10 (D19), which also settle the open questions on logging, OpenAPI, backup and lint tools.
     - The code waits for the decisions.
+14. **User**: pushed; OK, defaults (M7 decisions 1–10).
+    **Claude** built M7 on `feature/m7-ci-release`:
+    - **Lint and vulnerability checks:**
+      - `staticcheck` v0.8.2 found one unused field (removed).
+      - `govulncheck` v1.9.0 found 15 reachable vulnerabilities: in the standard library of Go 1.26.8, fixed with the toolchain go1.26.11 in `go.mod`; and in `golang.org/x/image` v0.24.0 (via Fyne), upgraded to v0.48.0.
+      - Both are now clean.
+    - **SPEC-807:** `[log] level` / `format`, `-log-level`, and API requests logged at debug.
+    - **SPEC-505:** a hand-written OpenAPI 3.1 document, embedded and served without a token. A test checks that its paths and methods equal the registered routes, and that its schemas equal the `apitypes` fields. A formal validator from PyPI was blocked in this session; that check is left to the user.
+    - **Raw ICMP:** a test that forces raw sockets (`INED_TEST_RAW_ICMP=1`, root), run by the CI job raw-icmp.
+    - **Workflows:** `ci.yml` (check, test, raw-icmp, build), `release.yml` (runs CI, then builds and publishes on a tag), `dependabot.yml`. Actions are pinned to SHAs.
+    - **Scripts:** `scripts/build-release.sh` (dry run: 7 archives, checksums OK, `-version` prints the tag) and `scripts/release-notes.sh`. Repository tests in `internal/repocheck`.
+    - **Also:** README (log, backup, OpenAPI, CI), Changes, `make lint`, `make release-build`.
+    - **Docs:** Spec and Plan v0.25, D19 recorded. `make all` and `make lint` pass.
+    - **Next:** the user pushes `feature/m7-ci-release`, and Claude reads the first CI run.

@@ -332,7 +332,7 @@ func (s *Service) MapOf(view int64) (apitypes.Map, error) {
 		items = append(items, apitypes.MapItem{
 			Type: apitypes.TypeHost, ID: h.ID, ParentID: parentPtr(h.ParentID),
 			X: h.X, Y: h.Y, Name: h.DisplayName(), Status: h.Status, Stale: h.Stale,
-			HasNote: h.Note != "", IP: h.IP.String(), OutsideCIDR: view == NetworkView && s.m.OutsideCIDR(h),
+			HasNote: h.Note != "", Monitored: h.Monitored, IP: h.IP.String(), OutsideCIDR: view == NetworkView && s.m.OutsideCIDR(h),
 		})
 	}
 	return apitypes.Map{ViewID: view, Items: items}, nil

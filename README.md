@@ -3,7 +3,7 @@
 A network monitor loosely modelled on [Tkined](https://github.com/flightaware/scotty) (Scotty), split into three parts:
 
 - **`ined-server`**: a daemon that keeps the inventory in SQLite and serves it over a REST + Server-Sent Events API. It pings every monitored host in the background (IPv4 and IPv6), discovers hosts in IPv4 ranges, and keeps their reverse-DNS names up to date.
-- **`ined-gui`** (planned): a desktop client ([Fyne](https://fyne.io)) that shows hosts and groups on one shared map with live status. Groups can be collapsed and expanded, as in Tkined.
+- **`ined-gui`**: a desktop client ([Fyne](https://fyne.io)) that shows hosts and groups on a map per view, with live status. Groups can be collapsed and expanded, as in Tkined. Editing on the map (drag and drop, adding and deleting) follows in milestone M6.
 - **`inedctl`**: a command-line client, built on the Go client package `pkg/client`.
 
 Hosts and groups form a tree. A group with a CIDR is a **network group**: discovery fills it, and a host added by hand goes into the most specific network group that contains its IP address. Every host and group can have a note.
@@ -14,16 +14,17 @@ Besides this **network view**, you can make **custom views**: extra maps (tabs i
 
 ## Status
 
-Early development. **Milestones 1–4b are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, and custom views.
-Next up: the GUI (M5–M6).
+Early development. **Milestones 1–5 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, custom views, and a read-only GUI.
+Next up: editing in the GUI (M6).
 See [`architecture/Plan.md`](architecture/Plan.md) for the roadmap.
 
 ## Build and run
 
-Requires Go 1.26 or later. The server is pure Go (no cgo).
+Requires Go 1.26 or later. The server and `inedctl` are pure Go (no cgo). `ined-gui` needs cgo and the X11/OpenGL development packages that [Fyne lists](https://docs.fyne.io/started/) (on Debian/Ubuntu: `gcc libgl1-mesa-dev xorg-dev`).
 
 ```bash
 make            # gofmt check, vet, tests (-race), build into bin/
+make build-nogui   # only ined-server and inedctl, without cgo
 # or: go build -o bin/ ./cmd/...
 
 bin/ined-server                         # listens on 127.0.0.1:8470
@@ -60,6 +61,25 @@ bin/inedctl -h                                      # all commands
 ```
 
 `inedctl` exits with 0 on success, 1 for an API error (or a failed discovery job), 2 for a usage error, and 3 when it can't reach the server or the token is wrong. The server URL, token and CA certificate come from `--url`, `--token` and `--ca-cert`, then `INED_URL` / `INED_TOKEN`, then `$XDG_CONFIG_HOME/go-ined/ctl.toml`.
+
+### The GUI
+
+```bash
+bin/ined-gui                             # connects to http://127.0.0.1:8470
+bin/ined-gui -url https://ined.example.org:8470 -token … -ca-cert ca.pem
+```
+
+![ined-gui: a toolbar, the Networks tab with the expanded network group 10.1.0.0/16 and its subnet 10.1.2.0/24 drawn as dashed frames around their hosts, a details panel and a status bar](architecture/gui.png)
+
+- One tab per view. Each host shows its status as a shape **and** a word: ● up, ✕ down, ? unknown, a dash for unmonitored hosts; a hollow sign plus "(stale)" until the first ping after a restart.
+- Network groups have a double-bordered folder icon and a dashed frame; ordinary groups a plain folder and a solid frame. A folded corner marks a note.
+- Double-click a collapsed group to expand it, or the label of a frame to collapse it (also in the right-click menu). This changes the shared state on the server.
+- Drag on empty space or use the scroll bars to pan; mouse wheel or Ctrl+= / Ctrl+- to zoom, Ctrl+0 for 100 %, Ctrl+1 to fit all, Ctrl+F to find a host.
+- The details panel shows the selected item's fields and lets you edit its note.
+- The contrast selector (AA, AAA, Max, custom) applies at once and is saved in `gui.toml`.
+- The status bar shows the connection state and errors.
+
+Settings come from `-url`, `-token` and `-ca-cert`, then `INED_URL` / `INED_TOKEN`, then `$XDG_CONFIG_HOME/go-ined/gui.toml`.
 
 Go programs can use [`pkg/client`](pkg/client): typed calls for every endpoint, `*client.APIError` for API errors, and an event stream that reconnects by itself and resumes where it left off.
 

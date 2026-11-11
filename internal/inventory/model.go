@@ -400,6 +400,10 @@ const (
 	minDistance = 50.0
 	rootOriginX = 40.0
 	rootOriginY = 40.0
+	// childDY is the distance from a group to its first row of members:
+	// room for the group's labels and, when it is expanded, the label strip
+	// of its frame in the GUI (v0.18).
+	childDY = 120.0
 )
 
 // FreePosition returns a position near the parent (or the root origin) that
@@ -407,7 +411,7 @@ const (
 func (m *Model) FreePosition(parentID int64) (float64, float64) {
 	bx, by := rootOriginX, rootOriginY
 	if p := m.Parent(parentID); p != nil {
-		bx, by = p.X, p.Y+gridDY
+		bx, by = p.X, p.Y+childDY
 	}
 	type pt struct{ x, y float64 }
 	var sib []pt

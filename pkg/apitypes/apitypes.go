@@ -196,6 +196,7 @@ type MapItem struct {
 	Status      string  `json:"status"`
 	Stale       bool    `json:"stale"`
 	HasNote     bool    `json:"has_note"`
+	Monitored   bool    `json:"monitored"`      // hosts only, false for groups (v0.18, SPEC-712)
 	IP          string  `json:"ip,omitempty"`   // hosts only
 	OutsideCIDR bool    `json:"outside_cidr"`   // hosts only, false for groups
 	Collapsed   bool    `json:"collapsed"`      // groups only, false for hosts

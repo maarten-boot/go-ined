@@ -269,6 +269,10 @@ func TestFreePosition(t *testing.T) {
 		if h.Y < 300 || h.X < 500 {
 			t.Errorf("host %d at %v, expected below/right of parent (500,300)", i, p)
 		}
+		// The first row leaves room for the group's labels and frame label.
+		if i == 0 && (h.X != 500 || h.Y != 300+childDY) {
+			t.Errorf("first member at %v, want (500,%g)", p, 300+childDY)
+		}
 	}
 	h := mustHost(t, s, apitypes.HostCreate{IP: "198.51.100.1", X: ptr(1.5), Y: ptr(2.5)})
 	if h.X != 1.5 || h.Y != 2.5 {

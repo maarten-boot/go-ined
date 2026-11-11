@@ -282,7 +282,7 @@ func TestMap(t *testing.T) {
 	if len(raw.Items) != 3 {
 		t.Fatalf("map has %d items, want 3", len(raw.Items))
 	}
-	common := []string{"type", "id", "parent_id", "x", "y", "name", "status", "stale", "has_note", "outside_cidr", "collapsed"}
+	common := []string{"type", "id", "parent_id", "x", "y", "name", "status", "stale", "has_note", "outside_cidr", "collapsed", "monitored"}
 	for _, it := range raw.Items {
 		for _, k := range common {
 			if _, ok := it[k]; !ok {
@@ -297,7 +297,7 @@ func TestMap(t *testing.T) {
 		byKey[it.Type+"/"+itoa(it.ID)] = it
 	}
 	gn := byKey["group/"+itoa(net.ID)]
-	if gn.CIDR != "10.0.0.0/24" || !gn.HasNote || !gn.Collapsed || gn.ParentID != nil {
+	if gn.CIDR != "10.0.0.0/24" || !gn.HasNote || !gn.Collapsed || gn.ParentID != nil || gn.Monitored {
 		t.Errorf("network group item: %+v", gn)
 	}
 	gp := byKey["group/"+itoa(plain.ID)]
@@ -305,7 +305,7 @@ func TestMap(t *testing.T) {
 		t.Errorf("plain group item: %+v", gp)
 	}
 	hi := byKey["host/"+itoa(h.ID)]
-	if hi.IP != "192.0.2.1" || !hi.OutsideCIDR || hi.Name != "192.0.2.1" || hi.Status != "unknown" {
+	if hi.IP != "192.0.2.1" || !hi.OutsideCIDR || hi.Name != "192.0.2.1" || hi.Status != "unknown" || !hi.Monitored {
 		t.Errorf("host item: %+v", hi)
 	}
 }

@@ -27,8 +27,15 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - `inedctl`: hosts, groups, notes, discovery (`--wait` follows a job), events and health; tables or `--json`; exit codes 0–3.
 - Client config key `server.ca_cert` (and `inedctl --ca-cert`) to trust a self-signed server certificate.
 - Views: custom maps with their own groups, where hosts can be placed in addition to the network view (`/views`, `GET /map?view=`, `PUT|DELETE /views/{id}/hosts/{host_id}`, `GET /groups?view=`, `view.*` and `placement.*` events); database migration 3; `pkg/client` view calls; `inedctl view …` and `--view`.
+- `ined-gui` (milestone M5, read-only): one tab per view; hosts and groups with status shown as shape plus word; network groups with their own icon and dashed frames; expand/collapse; pan, zoom, fit all and find host; a details panel with note editing; live updates over the event stream with automatic reconnect; a status bar with the connection state; contrast presets AA, AAA, Max and custom, applied at once and saved in `gui.toml`. Flags `-url`, `-token`, `-ca-cert`, `-config`, `-version`.
+- `internal/theme`: WCAG contrast math and the palettes of the contrast presets.
+- `make build-nogui` (server and CLI without cgo) and a check that they stay free of Fyne and cgo.
+- API: map items have `monitored` (for the "· n off" counts of collapsed groups).
 - Spec: a Hosts tab for the GUI (sortable list by IP and DNS name, with find) listed as a future enhancement.
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
+
+### Changed
+- New members of a group are placed 120 map units below it instead of 80, so an expanded group's frame in the GUI doesn't cover the labels next to it. Existing positions don't change.
 
 ### Fixed
 - API: `null` in a PATCH body is rejected (400) for every field except `parent_id`; before, it silently set the zero value (for example, `"monitored": null` turned monitoring off).

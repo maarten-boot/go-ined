@@ -18,3 +18,11 @@
    - **Decisions:** D1 (what the right-click menu does with a multi-selection) and D2 (0.2.0 or 0.1.1 next).
    - **Process note:** display `:93` belonged to another Xvfb; the probe now checks for a free display first.
    - The fixes wait for the user's OK.
+3. **User**: pushed; OK, all.
+   **Claude** applied the crosscheck fixes on `fix/crosscheck-10` (merged):
+   - **C1:** a replaced prober is closed two minutes later, not at once.
+   - **C2 / D1 (b):** a right-click on a selected item keeps the selection; "Move N items to group…" and "Delete N items…" act on all selected.
+   - **S1:** "Cmd+click on macOS" in SPEC-724.
+   - **E1:** examples for arrange, `inedctl view arrange` and `contents_only`; on the way, "arranged 1 member".
+   - Spec v0.30 (SPEC-304, 724), TC-727, the crosscheck's resolution. `make all` and `make lint` pass.
+   - Then prepared release 0.2.0 (D2 a): see the next entry.

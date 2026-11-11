@@ -140,7 +140,7 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 
 Testing: the API additions get unit and API tests as before. GUI actions are tested headless (`fyne.io/fyne/v2/test`: Drag, Tap, Type) against the test server; dialogs are built by functions that tests can drive, as in M5. A manual script (TC-702) and the user's visual check close the milestone.
 
-### M7: CI + release 0.1.0
+### M7: CI + release 0.1.0 ✅ (released 2026-11-11)
 - [x] Spec items (draft v0.24): SPEC-007 (CI), SPEC-008 (release), SPEC-505 detailed, SPEC-807 (server log); test cases TC-010..013, TC-505 and TC-309 extended
 - [x] Decisions M7-1..10 (D19)
 - [x] Run `staticcheck` and `govulncheck` locally first and fix what they find: one unused field; 15 reachable vulnerabilities, fixed with toolchain go1.26.11 (standard library) and `golang.org/x/image` v0.48.0 (via Fyne)
@@ -153,7 +153,7 @@ Testing: the API additions get unit and API tests as before. GUI actions are tes
 - [x] CI on `main` green: run 43099982463 (commit `a871677`) passed all four jobs after the GitHub Actions outage; the earlier run 43096857026, queued during the outage, was superseded
 - [ ] The user's visual check and TC-702 (open since M5/M6). The user chose to release 0.1.0 without reporting it (2026-11-11); it stays open for 0.1.x
 - [x] `## [0.1.0] - 2026-11-11` in `Changes.md`; annotated tag `v0.1.0` made locally (tagger: the GitHub noreply address)
-- [ ] The user pushes `main` and the tag; the release workflow publishes; Claude checks the release (TC-011)
+- [x] Release run 43102899949 green (CI's four jobs, then release); https://github.com/maarten-boot/go-ined/releases/tag/v0.1.0 has 7 archives and SHA256SUMS. Downloaded: every checksum OK; `ined-server`, `inedctl` and `ined-gui` print `v0.1.0`; built with go1.26.11; the release text equals the `[0.1.0]` section (TC-011)
 
 ### M7 decisions (proposed; defaults recommended)
 | # | Question | Recommended default | Alternative |

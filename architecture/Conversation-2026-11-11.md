@@ -179,3 +179,8 @@
     - Dated `## [0.1.0] - 2026-11-11` on `feature/release-0.1.0` and merged it; the release notes extract correctly.
     - Created the annotated tag `v0.1.0` on `main`, with the GitHub noreply address as tagger.
     - Gave the push commands, then follows the release workflow.
+23. **User**: pushed; check the release run.
+    **Claude**: the tag arrived a little after the branches. Release run 43102899949 passed: CI's check, test, raw-icmp and build, then the release job.
+    - The published release https://github.com/maarten-boot/go-ined/releases/tag/v0.1.0 has 7 archives and `SHA256SUMS`; it is neither a draft nor a pre-release.
+    - Claude downloaded everything: all checksums OK; `ined-server`, `inedctl` and `ined-gui` print `v0.1.0`; the binaries are built with go1.26.11; the release text equals the `[0.1.0]` section of `Changes.md`.
+    - TC-011 passing; M7 done.

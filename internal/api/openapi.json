@@ -1,0 +1,1699 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "go-ined API",
+    "version": "0.1.0",
+    "description": "REST and Server-Sent Events API of ined-server. Specification: architecture/Spec.md (SPEC-501..509).",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Server health",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "description": "Works without a token; details only with a valid token.",
+        "security": []
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "This document",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": []
+      }
+    },
+    "/map": {
+      "get": {
+        "summary": "The items of one view",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Map"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "a view id; default the network view (1)"
+          }
+        ]
+      }
+    },
+    "/events": {
+      "get": {
+        "summary": "Live event stream",
+        "responses": {
+          "200": {
+            "description": "text/event-stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "description": "Server-Sent Events (SPEC-502). Event types: host.created, host.updated, host.status (Host); host.deleted, group.deleted, view.deleted (DeletedEvent); group.created, group.updated (Group); group.status (GroupStatusEvent); group.moved (GroupMovedEvent); view.created, view.updated (View); placement.updated (Placement); placement.deleted (PlacementDeletedEvent); discovery.progress, discovery.finished (Discovery); resync (ResyncEvent). Event ids are <run>-<seq>; send Last-Event-ID to resume (SPEC-503).",
+        "parameters": [
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/discovery": {
+      "post": {
+        "summary": "Start a discovery job",
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Discovery"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/discovery/{id}": {
+      "get": {
+        "summary": "A discovery job",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Discovery"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Cancel a discovery job",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Discovery"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/hosts": {
+      "get": {
+        "summary": "All hosts",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Host"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a host",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Host"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hosts/{id}": {
+      "get": {
+        "summary": "A host",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Host"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Change a host",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Host"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a host (from every view)",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      }
+    },
+    "/groups": {
+      "get": {
+        "summary": "Groups: all, or one view's",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Group"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "a view id; default the network view (1)"
+          }
+        ]
+      },
+      "post": {
+        "summary": "Add a group",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups/{id}": {
+      "get": {
+        "summary": "A group",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Change a group",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a group",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "children",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "reparent",
+                "cascade"
+              ]
+            },
+            "description": "required when the group isn't empty (SPEC-104, 120)"
+          }
+        ]
+      }
+    },
+    "/groups/{id}/move": {
+      "post": {
+        "summary": "Move a group with everything in it",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupMove"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/views": {
+      "get": {
+        "summary": "All views in tab order",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/View"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a custom view",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/views/{id}": {
+      "get": {
+        "summary": "A view",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Rename or reorder a view",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a custom view with its groups and placements",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      }
+    },
+    "/views/{id}/hosts/{host_id}": {
+      "put": {
+        "summary": "Place a host in a custom view",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Placement"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "host_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlacementSet"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a host from a custom view",
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "host_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Required when the server has a token (SPEC-802)."
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "An error (SPEC-504)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorBody"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Host": {
+        "type": "object",
+        "description": "A host (SPEC-101). parent_id, x and y are its place in the network view.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ip": {
+            "type": "string",
+            "description": "IPv4 or IPv6 address"
+          },
+          "ptr_name": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "manual name"
+          },
+          "display_name": {
+            "type": "string",
+            "description": "manual name, else PTR name, else IP (SPEC-402)"
+          },
+          "description": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "monitored": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          },
+          "rtt_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "loss_pct": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "last_seen": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_change": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "outside_cidr": {
+            "type": "boolean"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "views the host is placed in, network view first (SPEC-509)"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "ip",
+          "ptr_name",
+          "name",
+          "display_name",
+          "description",
+          "note",
+          "parent_id",
+          "monitored",
+          "status",
+          "rtt_ms",
+          "loss_pct",
+          "last_seen",
+          "last_change",
+          "stale",
+          "outside_cidr",
+          "views",
+          "x",
+          "y",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "Group": {
+        "type": "object",
+        "description": "A group; with a cidr it is a network group (SPEC-102).",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "cidr": {
+            "type": "string",
+            "description": "empty for an ordinary group"
+          },
+          "view_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "collapsed": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "note",
+          "cidr",
+          "view_id",
+          "parent_id",
+          "collapsed",
+          "status",
+          "x",
+          "y",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "MapItem": {
+        "type": "object",
+        "description": "One item of a map (SPEC-501, 122).",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "host",
+              "group"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          },
+          "name": {
+            "type": "string",
+            "description": "display name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "has_note": {
+            "type": "boolean"
+          },
+          "monitored": {
+            "type": "boolean",
+            "description": "hosts only; false for groups"
+          },
+          "ip": {
+            "type": "string",
+            "description": "hosts only"
+          },
+          "outside_cidr": {
+            "type": "boolean",
+            "description": "hosts only; false for groups"
+          },
+          "collapsed": {
+            "type": "boolean",
+            "description": "groups only; false for hosts"
+          },
+          "cidr": {
+            "type": "string",
+            "description": "network groups only"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id",
+          "parent_id",
+          "x",
+          "y",
+          "name",
+          "status",
+          "stale",
+          "has_note",
+          "monitored",
+          "outside_cidr",
+          "collapsed"
+        ]
+      },
+      "Map": {
+        "type": "object",
+        "description": "The items of one view.",
+        "properties": {
+          "view_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapItem"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "view_id",
+          "items"
+        ]
+      },
+      "HostCreate": {
+        "type": "object",
+        "description": "Body of POST /hosts. Without parent_id the host goes into the most specific network group (SPEC-107).",
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "monitored": {
+            "type": "boolean"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ip"
+        ]
+      },
+      "HostPatch": {
+        "type": "object",
+        "description": "Body of PATCH /hosts/{id}: only the fields present change. null is allowed only for parent_id (the root). A new parent without x/y puts the host next to it (SPEC-508).",
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "monitored": {
+            "type": "boolean"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GroupCreate": {
+        "type": "object",
+        "description": "Body of POST /groups. Name defaults to the CIDR.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "cidr": {
+            "type": "string",
+            "description": "network view only"
+          },
+          "view_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "default: the network view (1)"
+          },
+          "parent_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "collapsed": {
+            "type": "boolean",
+            "description": "default true"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GroupPatch": {
+        "type": "object",
+        "description": "Body of PATCH /groups/{id}: only the fields present change; \"cidr\": \"\" clears the CIDR; null only for parent_id. A new parent takes the group's contents along (SPEC-508); x/y alone move only the group.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "cidr": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "collapsed": {
+            "type": "boolean"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GroupMove": {
+        "type": "object",
+        "description": "Body of POST /groups/{id}/move (SPEC-507).",
+        "properties": {
+          "dx": {
+            "type": "number",
+            "format": "double"
+          },
+          "dy": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "dx",
+          "dy"
+        ]
+      },
+      "View": {
+        "type": "object",
+        "description": "A view: one map, one GUI tab (SPEC-117).",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "network",
+              "custom"
+            ]
+          },
+          "order": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "order",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "ViewCreate": {
+        "type": "object",
+        "description": "Body of POST /views. Without order the view goes last.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      },
+      "ViewPatch": {
+        "type": "object",
+        "description": "Body of PATCH /views/{id}.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Placement": {
+        "type": "object",
+        "description": "A host's place in a custom view (SPEC-119).",
+        "properties": {
+          "view_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "host_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "view_id",
+          "host_id",
+          "parent_id",
+          "x",
+          "y"
+        ]
+      },
+      "PlacementSet": {
+        "type": "object",
+        "description": "Body of PUT /views/{id}/hosts/{host_id}. Without parent_id: the view's root. Without x/y: a free position for a new placement or a new parent.",
+        "properties": {
+          "parent_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DiscoveryCreate": {
+        "type": "object",
+        "description": "Body of POST /discovery: a cidr or the group_id of an IPv4 network group; parent_id is the group a new network group goes under (SPEC-201).",
+        "properties": {
+          "cidr": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parent_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Discovery": {
+        "type": "object",
+        "description": "A discovery job (SPEC-205); also the payload of discovery.progress and discovery.finished.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cidr": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "cancelled",
+              "failed"
+            ]
+          },
+          "probed": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "found": {
+            "type": "integer",
+            "description": "addresses that answered"
+          },
+          "added": {
+            "type": "integer",
+            "description": "new hosts"
+          },
+          "errors": {
+            "type": "integer",
+            "description": "probes that failed with an error"
+          },
+          "error": {
+            "type": "string",
+            "description": "the first error"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "cidr",
+          "group_id",
+          "state",
+          "probed",
+          "total",
+          "found",
+          "added",
+          "errors",
+          "started_at",
+          "finished_at"
+        ]
+      },
+      "Health": {
+        "type": "object",
+        "description": "GET /health. Without a valid token only status and version (SPEC-501, 802).",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "icmp_mode": {
+            "type": "string",
+            "enum": [
+              "unprivileged",
+              "privileged",
+              "unavailable",
+              "disabled"
+            ]
+          },
+          "icmp_error": {
+            "type": "string"
+          },
+          "icmp6_error": {
+            "type": "string"
+          },
+          "db": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "version"
+        ]
+      },
+      "ErrorBody": {
+        "type": "object",
+        "description": "Every error response (SPEC-504).",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ]
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_argument",
+              "unauthenticated",
+              "not_found",
+              "method_not_allowed",
+              "conflict",
+              "too_large",
+              "unavailable",
+              "internal"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "DeletedEvent": {
+        "type": "object",
+        "description": "Payload of host.deleted, group.deleted and view.deleted.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ]
+      },
+      "GroupStatusEvent": {
+        "type": "object",
+        "description": "Payload of group.status.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status"
+        ]
+      },
+      "GroupMovedEvent": {
+        "type": "object",
+        "description": "Payload of group.moved: everything inside the group moved by dx, dy (SPEC-507).",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "view_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dx": {
+            "type": "number",
+            "format": "double"
+          },
+          "dy": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "view_id",
+          "dx",
+          "dy"
+        ]
+      },
+      "PlacementDeletedEvent": {
+        "type": "object",
+        "description": "Payload of placement.deleted.",
+        "properties": {
+          "view_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "host_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "view_id",
+          "host_id"
+        ]
+      },
+      "ResyncEvent": {
+        "type": "object",
+        "description": "Payload of resync: reload the full state (SPEC-503).",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ]
+      }
+    }
+  }
+}

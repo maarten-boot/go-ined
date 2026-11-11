@@ -454,3 +454,55 @@ func TestDNSEnabled(t *testing.T) {
 		}
 	}
 }
+
+// TC-013: the log level and format (SPEC-807).
+func TestLogConfig(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "ined.db")
+	cfg := filepath.Join(t.TempDir(), "server.toml")
+	os.WriteFile(cfg, []byte("[log]\nformat = \"json\"\n[monitor]\nenabled = false\n[dns]\nenabled = false\n"), 0o600)
+
+	// JSON at debug (flag over file default): one JSON object per line,
+	// and the request line.
+	addr, stop, log := startServer(t, "-listen", "127.0.0.1:0", "-db", db, "-config", cfg, "-log-level", "debug")
+	resp, err := http.Get("http://" + addr + "/api/v1/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	stop()
+	found := false
+	for _, line := range strings.Split(strings.TrimSpace(log.String()), "\n") {
+		var m map[string]any
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			t.Fatalf("not JSON: %q", line)
+		}
+		if m["msg"] == "request" && m["level"] == "DEBUG" && m["path"] == "/api/v1/health" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no debug request line:\n%s", log)
+	}
+
+	// The default info level has no debug lines.
+	_, stop, log = startServer(t, "-listen", "127.0.0.1:0", "-db", filepath.Join(t.TempDir(), "x.db"), "-config", cfg)
+	stop()
+	if strings.Contains(log.String(), "DEBUG") {
+		t.Errorf("debug line at info:\n%s", log)
+	}
+
+	// Bad values are config errors.
+	for _, args := range [][]string{
+		{"-log-level", "loud"},
+		{"-log-level", "info+2"},
+	} {
+		err := run(context.Background(), append([]string{"-db", db, "-config", cfg}, args...), io.Discard, io.Discard, nil)
+		if err == nil || !strings.Contains(err.Error(), "log.level") {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	os.WriteFile(cfg, []byte("[log]\nformat = \"xml\"\n"), 0o600)
+	if err := run(context.Background(), []string{"-db", db, "-config", cfg}, io.Discard, io.Discard, nil); err == nil || !strings.Contains(err.Error(), "log.format") {
+		t.Errorf("bad format: %v", err)
+	}
+}

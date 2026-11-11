@@ -1,0 +1,36 @@
+# Release (SPEC-008): on a tag vX.Y.Z, run the CI checks, build the
+# archives and publish a GitHub release with the tag's section of
+# Changes.md. Actions pinned to full commit SHAs (SPEC-006).
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml # local reusable workflow: no SHA to pin (same commit)
+
+  release:
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the release; only this job
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.11" # = the toolchain line in go.mod
+      - name: GUI build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc libgl1-mesa-dev xorg-dev
+      - name: release notes from Changes.md
+        run: scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+      - name: build
+        run: scripts/build-release.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/dist"
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/dist/* --title "go-ined $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag

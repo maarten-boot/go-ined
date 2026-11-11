@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,6 +31,7 @@ type Server struct {
 	Discovery DiscoverySection `toml:"discovery"`
 	DNS       DNSSection       `toml:"dns"`
 	Events    EventsSection    `toml:"events"`
+	Log       LogSection       `toml:"log"`
 }
 
 // ServerSection holds the listener settings.
@@ -74,6 +76,21 @@ type EventsSection struct {
 	Buffer int `toml:"buffer"`
 }
 
+// LogSection holds the server log settings (SPEC-807).
+type LogSection struct {
+	Level  string `toml:"level"`  // debug, info, warn, error
+	Format string `toml:"format"` // text or json
+}
+
+// SlogLevel returns the slog level of Level.
+func (l LogSection) SlogLevel() (slog.Level, error) {
+	var lv slog.Level
+	if err := lv.UnmarshalText([]byte(l.Level)); err != nil || strings.ContainsAny(l.Level, "+-") {
+		return 0, fmt.Errorf("log.level %q: want debug, info, warn or error", l.Level)
+	}
+	return lv, nil
+}
+
 // Client is the configuration of inedctl (and the [server] part of the GUI).
 type Client struct {
 	Server ClientServer `toml:"server"`
@@ -108,6 +125,7 @@ func DefaultServer() Server {
 		Discovery: DiscoverySection{MaxPrefix: 16, Rate: 200, Concurrency: 64},
 		DNS:       DNSSection{Enabled: true, Refresh: time.Hour, Concurrency: 20},
 		Events:    EventsSection{Buffer: 1000},
+		Log:       LogSection{Level: "info", Format: "text"},
 	}
 }
 
@@ -268,6 +286,12 @@ func (c Server) Validate() error {
 	}
 	if c.Events.Buffer < 1 {
 		errs = append(errs, errors.New("events.buffer must be at least 1"))
+	}
+	if _, err := c.Log.SlogLevel(); err != nil {
+		errs = append(errs, err)
+	}
+	if c.Log.Format != "text" && c.Log.Format != "json" {
+		errs = append(errs, fmt.Errorf("log.format %q: want text or json", c.Log.Format))
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("config: %w", errors.Join(errs...))

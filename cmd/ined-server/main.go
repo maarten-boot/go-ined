@@ -61,6 +61,17 @@ var newProber = func() (monitor.Prober, monitor.Status, error) {
 	return p, p.Status(), nil
 }
 
+// newLogger builds the server log from [log] (SPEC-807); Validate has
+// checked the values.
+func newLogger(c config.LogSection, w io.Writer) *slog.Logger {
+	lv, _ := c.SlogLevel()
+	opts := &slog.HandlerOptions{Level: lv}
+	if c.Format == "json" {
+		return slog.New(slog.NewJSONHandler(w, opts))
+	}
+	return slog.New(slog.NewTextHandler(w, opts))
+}
+
 // newResolver returns the reverse-DNS resolver; tests replace it.
 var newResolver = func() dnsname.Resolver { return net.DefaultResolver }
 
@@ -73,6 +84,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	listen := fs.String("listen", "", "listen address, overrides server.listen")
 	dbPath := fs.String("db", "", "database file, overrides storage.db_path")
 	token := fs.String("token", "", "bearer token, overrides server.token")
+	logLevel := fs.String("log-level", "", "debug, info, warn or error; overrides log.level")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -81,14 +93,14 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 		fmt.Fprintln(stdout, "ined-server", version.Version)
 		return nil
 	}
-	log := slog.New(slog.NewTextHandler(stderr, nil))
-
 	cfg, err := config.LoadServer(*cfgPath)
 	if err != nil {
 		return err
 	}
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
+		case "log-level":
+			cfg.Log.Level = *logLevel
 		case "listen":
 			cfg.Server.Listen = *listen
 		case "db":
@@ -100,6 +112,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
+	log := newLogger(cfg.Log, stderr)
 	if err := config.CheckListenSecurity(cfg); err != nil {
 		return err
 	}

@@ -27,6 +27,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - `inedctl`: hosts, groups, notes, discovery (`--wait` follows a job), events and health; tables or `--json`; exit codes 0–3.
 - Client config key `server.ca_cert` (and `inedctl --ca-cert`) to trust a self-signed server certificate.
 - Views: custom maps with their own groups, where hosts can be placed in addition to the network view (`/views`, `GET /map?view=`, `PUT|DELETE /views/{id}/hosts/{host_id}`, `GET /groups?view=`, `view.*` and `placement.*` events); database migration 3; `pkg/client` view calls; `inedctl view …` and `--view`.
+- CI (GitHub Actions, actions pinned to commit SHAs): gofmt, vet, staticcheck, govulncheck, the race tests, raw-socket ICMP as root, builds for linux, darwin and windows (amd64, arm64); a release workflow for tags `vX.Y.Z` with archives and `SHA256SUMS`; Dependabot.
+- `GET /api/v1/openapi.json`: the OpenAPI 3.1 description of the API.
+- Server log settings: `[log] level` and `format`, `-log-level`; API requests are logged at debug level.
+- `make lint`, `make release-build`.
 - `ined-gui` editing (milestone M6): drag and drop of hosts and groups (a group moves with its contents), dropping into a group, "Move to group…", creating, editing and deleting groups and hosts with confirmations, the Delete key, a discovery dialog with progress and cancel, a View menu (new, rename, move, delete), "Show in view" and "Remove from this view" for hosts.
 - API: `POST /groups/{id}/move` moves a group with everything in it, with one `group.moved` event; host JSON has `views`; `pkg/client` `MoveGroup`; `inedctl group shift`.
 - `ined-gui` (milestone M5, read-only): one tab per view; hosts and groups with status shown as shape plus word; network groups with their own icon and dashed frames; expand/collapse; pan, zoom, fit all and find host; a details panel with note editing; live updates over the event stream with automatic reconnect; a status bar with the connection state; contrast presets AA, AAA, Max and custom, applied at once and saved in `gui.toml`. Flags `-url`, `-token`, `-ca-cert`, `-config`, `-version`.
@@ -43,6 +47,7 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - New members of a group are placed 120 map units below it instead of 80, so an expanded group's frame in the GUI doesn't cover the labels next to it. Existing positions don't change.
 
 ### Fixed
+- Go toolchain 1.26.11 and `golang.org/x/image` v0.48.0, for the vulnerabilities `govulncheck` reported in the standard library (`net/http`, `crypto/x509`, `crypto/tls`, `mime/multipart`) and in `golang.org/x/image/tiff`.
 - `ined-gui`: the discovery dialog could miss the end of a small job and stay at "0 of n probed"; its progress bar (Fyne's, white text on a translucent colour) failed the contrast rules and is now drawn in palette colours; the range field has the focus; "New host here…" on empty space puts the host next to its network group instead of at the clicked spot.
 - API: `PATCH /groups/{id}` with only `x`/`y` moved the group's contents too (since M6); now only a new parent takes the contents along. An empty group's move no longer emits `group.moved`.
 - `ined-gui` kept up badly with many changes at once: every status change re-laid out and redrew the whole map. Redraws are now combined (at most every 100 ms per view) and the drawing objects are reused, so 1,000 changes on a 5,000-host map take milliseconds instead of seconds, and memory stays flat.

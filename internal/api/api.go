@@ -7,6 +7,7 @@ package api
 import (
 	"context"
 	"crypto/subtle"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,13 +64,33 @@ type ICMPInfo struct {
 }
 
 type server struct {
-	svc  *inventory.Service
-	opts Options
-	log  *slog.Logger
+	svc    *inventory.Service
+	opts   Options
+	log    *slog.Logger
+	routes []string // "METHOD /path" as registered, for the OpenAPI test
+}
+
+// openAPI is the API description served at /openapi.json (SPEC-505).
+//
+//go:embed openapi.json
+var openAPIDoc []byte
+
+// logged logs every request at debug level (SPEC-807).
+func (s *server) logged(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		h(w, r)
+		s.log.Debug("request", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start).Round(time.Microsecond))
+	}
 }
 
 // New returns the API handler.
 func New(svc *inventory.Service, opts Options) http.Handler {
+	_, h := newServer(svc, opts)
+	return h
+}
+
+func newServer(svc *inventory.Service, opts Options) (*server, http.Handler) {
 	if opts.Keepalive <= 0 {
 		opts.Keepalive = 30 * time.Second
 	}
@@ -84,7 +105,8 @@ func New(svc *inventory.Service, opts Options) http.Handler {
 	route := func(path string, methods map[string]http.HandlerFunc) {
 		allowed := make([]string, 0, len(methods))
 		for m, h := range methods {
-			mux.HandleFunc(m+" "+Prefix+path, h)
+			mux.HandleFunc(m+" "+Prefix+path, s.logged(h))
+			s.routes = append(s.routes, m+" "+path)
 			allowed = append(allowed, m)
 		}
 		// Method-less fallback: JSON 405 instead of the mux's plain-text one.
@@ -95,6 +117,7 @@ func New(svc *inventory.Service, opts Options) http.Handler {
 		})
 	}
 	route("/health", map[string]http.HandlerFunc{"GET": s.health})
+	route("/openapi.json", map[string]http.HandlerFunc{"GET": s.openAPI})
 	route("/map", map[string]http.HandlerFunc{"GET": s.getMap})
 	if opts.Events != nil {
 		route("/events", map[string]http.HandlerFunc{"GET": s.events})
@@ -114,7 +137,13 @@ func New(svc *inventory.Service, opts Options) http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, apitypes.CodeNotFound, "no such endpoint: "+r.URL.Path)
 	})
-	return s.auth(mux)
+	return s, s.auth(mux)
+}
+
+// openAPI serves the API description; it needs no token (SPEC-505).
+func (s *server) openAPI(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(openAPIDoc)
 }
 
 // ---- middleware ----
@@ -130,7 +159,7 @@ func isAuthed(r *http.Request) bool { v, _ := r.Context().Value(authedKey).(bool
 func (s *server) auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ok := s.opts.Token == "" || tokenMatches(r.Header.Get("Authorization"), s.opts.Token)
-		if !ok && r.URL.Path != Prefix+"/health" {
+		if !ok && r.URL.Path != Prefix+"/health" && r.URL.Path != Prefix+"/openapi.json" {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="go-ined"`)
 			writeError(w, http.StatusUnauthorized, apitypes.CodeUnauthenticated, "missing or invalid bearer token")
 			return

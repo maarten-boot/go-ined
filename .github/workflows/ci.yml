@@ -1,0 +1,84 @@
+# CI (SPEC-007). Every action is pinned to a full commit SHA with its
+# version in a comment (SPEC-006); Dependabot keeps them current.
+name: CI
+
+on:
+  push:
+    branches: ["**"] # tags run this through the release workflow
+  pull_request:
+  workflow_call: # the release workflow runs the same checks first
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.26.11" # = the toolchain line in go.mod (checked by TC-010)
+  STATICCHECK: honnef.co/go/tools/cmd/staticcheck@v0.8.2
+  GOVULNCHECK: golang.org/x/vuln/cmd/govulncheck@v1.9.0
+  GUI_PACKAGES: gcc libgl1-mesa-dev xorg-dev # cgo headers for Fyne (ined-gui)
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: GUI build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $GUI_PACKAGES
+      - name: gofmt
+        run: make fmt-check
+      - name: go vet
+        run: go vet ./...
+      - name: staticcheck
+        run: go run $STATICCHECK ./...
+      - name: govulncheck
+        run: go run $GOVULNCHECK ./...
+      - name: server and CLI without cgo or Fyne
+        run: make nogui-check
+      - name: go mod verify
+        run: go mod verify
+
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: GUI build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $GUI_PACKAGES
+      - name: go test -race (the GUI tests run headless)
+        run: go test -race -count=1 ./...
+
+  raw-icmp:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: build the monitor tests
+        run: go test -c -o "$RUNNER_TEMP/monitor.test" ./internal/monitor
+      - name: ICMP tests as root, raw sockets forced (TC-309)
+        run: sudo INED_TEST_RAW_ICMP=1 "$RUNNER_TEMP/monitor.test" -test.run 'TestICMP' -test.v
+        working-directory: internal/monitor
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: GUI build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $GUI_PACKAGES
+      - name: build every target (SPEC-007)
+        run: scripts/build-release.sh "dev-${GITHUB_SHA::12}" "$RUNNER_TEMP/dist"
+      - name: check the archives
+        run: |
+          cd "$RUNNER_TEMP/dist"
+          sha256sum -c SHA256SUMS
+          tar -xzf go-ined-dev-*-linux-amd64.tar.gz --wildcards '*/ined-server'
+          ./go-ined-dev-*-linux-amd64/ined-server -version | grep -q "dev-${GITHUB_SHA::12}"

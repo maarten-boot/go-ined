@@ -30,3 +30,7 @@ concurrency = 20             # Lookups running at the same time.
 
 [events]                     # SPEC-503
 buffer = 1000                # Events kept for Last-Event-ID replay.
+
+[log]                        # SPEC-807
+level  = "info"              # debug | info | warn | error. Flag: -log-level.
+format = "text"              # text | json. The log goes to stderr.

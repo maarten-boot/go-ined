@@ -99,6 +99,10 @@ Files follow XDG:
 
 Every key, with its default, is in [`examples/server.toml`](examples/server.toml) (and `gui.toml` / `ctl.toml` for the clients). Command-line flags override the file.
 
+The server logs to stderr; `[log] level` (`debug`, `info`, `warn`, `error`) and `format` (`text`, `json`) set the detail and format, and `-log-level debug` also logs every API request.
+
+Backup: the database is one SQLite file. While the server runs, copy it with `sqlite3 ined.db ".backup ined-copy.db"` (a consistent copy); with the server stopped, a plain file copy is fine.
+
 Security: by default the server listens on loopback only. To listen on any other address you must set `server.token`; clients then send `Authorization: Bearer <token>`. Set `server.tls_cert` and `server.tls_key` to turn on TLS. For a self-signed certificate, point the clients' `server.ca_cert` (or `inedctl --ca-cert`) at the certificate's PEM file.
 
 Only one `ined-server` can use a database at a time; a second one refuses to start.
@@ -115,6 +119,10 @@ All design documents live in [`architecture/`](architecture/):
 - [`Plan.md`](architecture/Plan.md): decisions and milestones
 - [`Tests.md`](architecture/Tests.md): test cases traced to the Spec, with the Go test that covers each one
 - `Crosscheck-*.md`: periodic checks of code against the docs
+
+The server describes its API itself: `GET /api/v1/openapi.json` (OpenAPI 3.1, no token needed).
+
+CI runs on every push (`.github/workflows/ci.yml`): gofmt, vet, `staticcheck`, `govulncheck`, the tests with the race detector, raw-socket ICMP as root, and builds for every target. A tag `vX.Y.Z` builds and publishes a release with archives and `SHA256SUMS` (`release.yml`). Locally: `make lint` and `make release-build`.
 
 Changes between releases are listed in [`Changes.md`](Changes.md).
 

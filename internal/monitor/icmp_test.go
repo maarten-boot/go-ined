@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -77,4 +79,43 @@ func hasIPv6Loopback() bool {
 	}
 	c.Close()
 	return true
+}
+
+// TC-309 (raw mode, SPEC-007): with INED_TEST_RAW_ICMP=1 and root or
+// CAP_NET_RAW (the CI job "raw-icmp"), the raw-socket mode is forced and
+// must answer for 127.0.0.1 and ::1, with concurrent rounds on the shared
+// socket each getting their own replies.
+func TestICMPRawLoopback(t *testing.T) {
+	if os.Getenv("INED_TEST_RAW_ICMP") == "" {
+		t.Skip("set INED_TEST_RAW_ICMP=1 and run as root to test raw ICMP")
+	}
+	p, err := newICMPProber(true)
+	if err != nil {
+		t.Fatalf("raw ICMP unavailable: %v", err)
+	}
+	defer p.Close()
+	if p.Mode() != apitypes.ICMPPrivileged {
+		t.Fatalf("mode = %q", p.Mode())
+	}
+	addrs := []string{"127.0.0.1"}
+	if hasIPv6Loopback() {
+		if e := p.Status().IPv6Error; e != "" {
+			t.Fatalf("raw ICMPv6 unavailable: %s", e)
+		}
+		addrs = append(addrs, "::1")
+	}
+	var wg sync.WaitGroup
+	for _, a := range addrs {
+		for range 3 { // concurrent rounds per family
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				res, err := p.Ping(context.Background(), netip.MustParseAddr(a), 3, time.Second)
+				if err != nil || res.Sent != 3 || res.Received != 3 {
+					t.Errorf("%s: %+v %v", a, res, err)
+				}
+			}()
+		}
+	}
+	wg.Wait()
 }

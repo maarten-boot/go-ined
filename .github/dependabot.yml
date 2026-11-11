@@ -1,0 +1,12 @@
+# Weekly updates of the pinned actions (SHA plus version comment) and the
+# Go modules (decision M7-10).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly

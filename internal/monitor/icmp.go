@@ -67,18 +67,26 @@ type ICMPProber struct {
 // NewICMPProber finds a working ICMP mode for each address family:
 // unprivileged ("ping") sockets first, then raw sockets. It fails only when
 // neither family has a working mode.
-func NewICMPProber() (*ICMPProber, error) {
-	p := &ICMPProber{v4: detect(true), v6: detect(false), gap: MinGap}
+func NewICMPProber() (*ICMPProber, error) { return newICMPProber(false) }
+
+// newICMPProber is NewICMPProber; rawOnly skips the unprivileged mode, so
+// tests can exercise raw sockets where both work (SPEC-007, TC-309).
+func newICMPProber(rawOnly bool) (*ICMPProber, error) {
+	p := &ICMPProber{v4: detect(true, rawOnly), v6: detect(false, rawOnly), gap: MinGap}
 	if p.v4.mode == "" && p.v6.mode == "" {
 		return nil, fmt.Errorf("no ICMP mode available (IPv4: %v; IPv6: %v); allow unprivileged ICMP with sysctl net.ipv4.ping_group_range, or run with CAP_NET_RAW", p.v4.err, p.v6.err)
 	}
 	return p, nil
 }
 
-func detect(v4 bool) *family {
+func detect(v4, rawOnly bool) *family {
 	f := &family{v4: v4}
 	var errs []error
-	for _, priv := range []bool{false, true} {
+	modes := []bool{false, true}
+	if rawOnly {
+		modes = []bool{true}
+	}
+	for _, priv := range modes {
 		c, err := icmp.ListenPacket(network(priv, v4), anyAddr(v4))
 		if err == nil {
 			c.Close()

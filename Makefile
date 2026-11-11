@@ -3,7 +3,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/maarten-boot/go-ined/internal/version.Version=$(VERSION)
 
-.PHONY: all build build-nogui nogui-check test vet fmt-check examples clean
+.PHONY: all build build-nogui nogui-check test vet fmt-check lint release-build examples clean
 
 all: fmt-check vet nogui-check test build
 
@@ -29,6 +29,15 @@ vet:
 
 fmt-check:
 	@out=$$(gofmt -l .); if [ -n "$$out" ]; then echo "not gofmt-ed:"; echo "$$out"; exit 1; fi
+
+# The CI tools, at the versions CI uses (SPEC-007).
+lint:
+	go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+# The release archives into dist/ (SPEC-008).
+release-build:
+	scripts/build-release.sh $(VERSION) dist
 
 examples:
 	scripts/gen-api-examples.sh

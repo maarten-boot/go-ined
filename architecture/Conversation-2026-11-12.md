@@ -7,3 +7,14 @@
    - **`feature/anchored-expand`** (merged): the API move takes `contents_only`. The GUI keeps a group's top-left corner on collapse (icon to the frame's corner) and on expand (contents shifted first); empty frames start at the icon's corner. Checked under Xvfb, also after dragging the collapsed icon elsewhere. On the way, it fixed a racy test (`TestDiscoveryDialog`, 2 of 10 runs): it released the probes before the cancel had reached the server.
    - **`feature/multi-select`** (merged): a selection set in the map widget (modifier keys from the mouse press); the rubber band; multi-drag and drop; keys g (group the selection: name dialog, common parent, positions kept, corner rule), c/e, Delete (one question), Esc. Checked under Xvfb: Ctrl+click, g, c, the rubber band, Delete.
    - Spec and Plan v0.29 (SPEC-507, 703, 724), TC-725/726. `make all`, staticcheck and govulncheck pass.
+2. **User**: pushed; do a crosscheck.
+   **Claude** ran crosscheck `Crosscheck-2026-11-12-01.md` (the tenth) on everything since 0.1.0:
+   - 219 tests pass, and CI on `main` is green.
+   - **Probes:**
+     - Wrapping costs about 7 ms per layout of 5,000 long names, and a 1,000-event burst stays at 0.15 s.
+     - Keyboard focus is fine: Delete after editing the note asks to delete the host; the note is untouched.
+     - Reading the code showed that the Rechecker closes the old prober at once, so a ping round in flight can fail falsely.
+   - **Findings:** 0 H, 1 M (C1: delay closing the old prober), 4 L.
+   - **Decisions:** D1 (what the right-click menu does with a multi-selection) and D2 (0.2.0 or 0.1.1 next).
+   - **Process note:** display `:93` belonged to another Xvfb; the probe now checks for a free display first.
+   - The fixes wait for the user's OK.

@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.27** (2026-11-11)
+Status: **draft v0.28** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -189,6 +189,9 @@ Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit test
 
 ### After 0.1.0
 - [x] User request (2026-11-11): find ICMP again without a restart. `monitor.Rechecker` (tries again every minute while a family is missing, and before each discovery job); monitoring starts even without ICMP; `/health` and the log follow; the GUI reads `/health` every 30 s (SPEC-304, 717 v0.27; TC-315)
+- [x] User request (2026-11-11): long DNS names. The user chose both options: "Wrap names" (display) and "Reflow" (positions). Defaults taken by Claude: wrap only where a name would run into its row neighbour; break after dots/colons; the GUI computes the cell from the longest full name; `POST /views/{id}/arrange` with one `map.arranged` event; `inedctl view arrange` (SPEC-510, 722, 723; TC-723, 724). Checked under Xvfb: wrapped names, then Reflow gives room and the names unwrap
+- [ ] User request: keep a group's top-left corner in place on expand/collapse (approach told to the user: the GUI aligns on collapse by moving the group, on expand by first moving its contents; needs a contents-only move in the API)
+- [ ] User request: multi-select hosts; key g makes a group of the selection; on a group c collapses, e expands (Tkined style). Details to propose before building
 - [ ] Release 0.1.1 when the user wants it
 
 ## Open questions

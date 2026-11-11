@@ -203,3 +203,16 @@
     - the GUI reads `/health` every 30 s;
     - README and Changes (Unreleased).
     - Tests TC-315. `make all` and lint pass. Spec and Plan v0.27.
+31. **User**: "sometimmes the host dns names are longer then the space between hosts, allow a reflow option to make the full dns name vizible."
+    **Claude** suggested the corrections (sometimes, than, visible). It asked what "reflow" should do: wrap the names (display), re-space the members (positions), both, or short names.
+    **User**: Both.
+    **Claude** built `feature/reflow`, merged:
+    - wrapping where a name would run into its row neighbour; the "Wrap names" toggle saved in `gui.toml`;
+    - `POST /views/{id}/arrange` with `map.arranged`; `inedctl view arrange`;
+    - "Reflow…" on groups and "Reflow view…" with the cell computed from the longest full name;
+    - checked under Xvfb;
+    - Spec v0.28 (SPEC-510, 722, 723), TC-723/724.
+32. **User** (during the work): "when a group expands or collapses the top left corner stouls [should] stay in the same place, is that doable?"
+    **Claude**: yes. On collapse, move the group's icon to the frame's top-left; on expand, first shift the contents so the frame starts at the icon; this needs a contents-only move in the API, and is done by the GUI only (the CLI can't measure labels). Queued after reflow.
+33. **User** (during the work): multi-select hosts; key g creates a group; on a group c collapses, e expands (like Tkined/Scotty).
+    **Claude**: queued as the third item; details to be proposed before building.

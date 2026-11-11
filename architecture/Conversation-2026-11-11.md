@@ -107,3 +107,13 @@
     - **Findings:** 0 H, 3 M (C1 discovery race, C2 progress-bar contrast, C3 `PATCH` moves contents), 7 L.
     - **Decisions:** D1 (what a position `PATCH` moves) and D2 (where "New host here…" puts a host).
     - The fixes wait for the user's OK.
+11. **User**: pushed; OK, all.
+    **Claude** applied the crosscheck 2026-11-11-03 fixes on `fix/crosscheck-08`:
+    - **C1:** the discovery dialog asks for the job's state once more after starting it, so an early end is seen (20 of 20 in the test).
+    - **C2:** our own progress bar in palette colours.
+    - **C5:** focus on the range field.
+    - **D1:** a `PATCH` of a group's position moves only the group.
+    - **D2:** "New host here…" on empty space puts the host next to its network group.
+    - **C6:** `group.moved` only with contents.
+    - **Tests and examples:** new API and GUI tests (menus, Esc, the host pop-up); a "Moving groups" section in `API-examples.md`.
+    - **Docs:** Spec and Plan v0.23, D18 recorded. `make all` passes.

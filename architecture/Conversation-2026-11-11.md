@@ -74,3 +74,26 @@
    - **D1, I1:** black button borders in Max; the toolbar shows the zoom.
    - **C5:** new tests for find, the context menu, toolbar zoom, the details panel, and the custom-contrast dialog. `internal/gui` coverage is now 91 %.
    - **Docs:** Spec and Plan v0.20, D16 recorded, TC-714 added. `make all` passes.
+8. **User**: pushed; start M6.
+   **Claude** wrote the M6 draft, Spec and Plan v0.21:
+   - **API (SPEC-507..509):** moving a group with its subtree (`POST /groups/{id}/move`, one `group.moved` event); a new parent gives a free position, with the subtree moving along; `views` in host JSON.
+   - **GUI:** SPEC-704 (drag and drop), 706 (create, edit, delete) and 707 (discovery dialog) in detail; SPEC-719 (deleting), 720 (View menu), 721 (hosts in custom views).
+   - **Tests:** TC-715..722 added.
+   - **Decisions:** proposed M6-1..10 (D17) with defaults. M6-3 changes how `inedctl host move` and `group move` position items.
+   - The code waits for the decisions.
+9. **User**: pushed; OK, defaults (M6 decisions 1–10).
+   **Claude** built M6 on `feature/m6-gui-editing`:
+   - **API:**
+     - `POST /groups/{id}/move` (one transaction, `group.updated` plus one `group.moved`);
+     - a new parent without a position puts the item next to it, with a group's contents moving along (`inedctl host move` and `group move` too);
+     - `views` in host JSON;
+     - `client.MoveGroup`, `inedctl group shift`.
+   - **GUI:**
+     - drag with a 4-pixel threshold and Esc; a group moves with its contents; drop targets marked "into"; dropped items stay put while the server confirms;
+     - context menus for empty space, frames, groups and hosts;
+     - forms that keep API errors in the dialog;
+     - delete confirmations with reparent/cascade wording per view, and the Delete key;
+     - the discovery dialog (progress, cancel, status bar when closed);
+     - the View menu; "Show in view" and "Remove from this view"; views in the details.
+   - **Smoke test of the real binary:** under Xvfb with `xdotool`. It found three small issues, now fixed: dragged items were drawn under others, a new form had no focus, and the delete question had wrong plurals.
+   - **Docs:** Spec and Plan v0.22, D17 recorded, TC-715..722 passing. TC-702 waits for the manual script and the user's check. `make all` passes.

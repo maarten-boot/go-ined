@@ -450,9 +450,39 @@ func (g *GUI) currentMap() *MapView { return g.maps[g.current] }
 
 // setCollapsed expands or collapses a group on the server. The map shows
 // the change when the server's event arrives.
+//
+// The group's top-left corner stays where it is (v0.29): on collapse the
+// icon goes to the frame's top-left corner; on expand the contents move
+// first so that the frame starts at the icon's top-left corner. UI
+// goroutine only.
 func (g *GUI) setCollapsed(group int64, collapsed bool) {
+	patch := apitypes.GroupPatch{Collapsed: apitypes.Some(collapsed)}
+	var dx, dy float64
+	g.mu.Lock()
+	view, ok := g.model.GroupView(group)
+	it := g.item(view, mapmodel.GroupKey(group))
+	if ok && it != nil {
+		if collapsed {
+			for _, n := range g.maps[view].Nodes() {
+				if n.Kind == mapmodel.KindFrame && n.Item.ID == group {
+					x, y := mapmodel.CenterForCorner(n.Bounds.X, n.Bounds.Y)
+					patch.X, patch.Y = apitypes.Some(x), apitypes.Some(y)
+				}
+			}
+		} else if fr, visible := g.model.FrameIfExpanded(view, group, measure); visible {
+			ax, ay := mapmodel.IconCorner(it)
+			dx, dy = ax-fr.X, ay-fr.Y
+		}
+	}
+	g.mu.Unlock()
 	go func() {
-		if _, err := g.c.UpdateGroup(g.ctx, group, apitypes.GroupPatch{Collapsed: apitypes.Some(collapsed)}); err != nil {
+		if dx != 0 || dy != 0 {
+			if _, err := g.c.MoveGroupContents(g.ctx, group, dx, dy); err != nil {
+				g.fail(fmt.Sprintf("group %d", group), err)
+				return
+			}
+		}
+		if _, err := g.c.UpdateGroup(g.ctx, group, patch); err != nil {
 			g.fail(fmt.Sprintf("group %d", group), err)
 		}
 	}()

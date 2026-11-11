@@ -458,6 +458,12 @@ func TestMoveGroupAPI(t *testing.T) {
 	if h.X != 15 || h.Y != 45 {
 		t.Errorf("host after move: %+v", h)
 	}
+	// Contents only: the group stays, its host moves.
+	e.want(200, "POST", "/groups/"+itoa(g.ID)+"/move", apitypes.GroupMove{DX: 1, DY: 1, ContentsOnly: true}, &moved)
+	e.want(200, "GET", "/hosts/"+itoa(h.ID), nil, &h)
+	if moved.X != 15 || h.X != 16 || h.Y != 46 {
+		t.Errorf("contents only: group %+v host %+v", moved, h)
+	}
 	e.wantErr(404, "not_found", "POST", "/groups/999/move", apitypes.GroupMove{DX: 1})
 	e.wantErr(400, "invalid_argument", "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": "far"}`)
 	// A position that overflows to infinity is refused.

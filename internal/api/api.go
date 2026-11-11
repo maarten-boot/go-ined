@@ -311,7 +311,11 @@ func (s *server) moveGroup(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	g, err := s.svc.MoveGroup(r.Context(), id, in.DX, in.DY)
+	move := s.svc.MoveGroup
+	if in.ContentsOnly {
+		move = s.svc.MoveGroupContents
+	}
+	g, err := move(r.Context(), id, in.DX, in.DY)
 	s.respond(w, http.StatusOK, g, err)
 }
 

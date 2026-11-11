@@ -273,6 +273,10 @@ type GroupCreate struct {
 type GroupMove struct {
 	DX float64 `json:"dx"`
 	DY float64 `json:"dy"`
+	// ContentsOnly moves everything inside the group but not the group
+	// itself (v0.29): the GUI uses it to expand a group with its frame
+	// starting where its icon was.
+	ContentsOnly bool `json:"contents_only,omitempty"`
 }
 
 // Arrange is the body of POST /views/{id}/arrange (SPEC-510): lay out the

@@ -313,6 +313,13 @@ func (c *Client) Arrange(ctx context.Context, viewID int64, in apitypes.Arrange)
 	return r, c.Do(ctx, http.MethodPost, "/views/"+id(viewID)+"/arrange", in, &r)
 }
 
+// MoveGroupContents moves everything inside a group by (dx, dy), but not
+// the group itself (v0.29).
+func (c *Client) MoveGroupContents(ctx context.Context, groupID int64, dx, dy float64) (apitypes.Group, error) {
+	var g apitypes.Group
+	return g, c.Do(ctx, http.MethodPost, "/groups/"+id(groupID)+"/move", apitypes.GroupMove{DX: dx, DY: dy, ContentsOnly: true}, &g)
+}
+
 // DeleteGroup removes a group. children is "" (the group must be empty),
 // apitypes.ChildrenReparent or apitypes.ChildrenCascade (SPEC-104).
 func (c *Client) DeleteGroup(ctx context.Context, groupID int64, children string) error {

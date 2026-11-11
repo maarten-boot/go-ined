@@ -609,7 +609,7 @@ func (d *drawer) icon(n *mapmodel.Node, selected bool) {
 	} else {
 		fc := d.frameColor(it)
 		// A folder: the body and a tab on its top left.
-		tabH := ic.H * 0.22
+		tabH := mapmodel.GroupTabH
 		d.rect(mapmodel.Rect{X: ic.X, Y: ic.Y - tabH, W: ic.W * 0.42, H: tabH}, bg, fc, 1.5)
 		d.rect(ic, bg, fc, 1.5)
 		if it.CIDR != "" { // a network group: double border

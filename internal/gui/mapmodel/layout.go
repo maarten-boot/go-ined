@@ -21,6 +21,7 @@ const (
 	FrameLabelH = 24.0 // the label strip at the top of a frame
 	EmptyFrameW = 140.0
 	EmptyFrameH = 60.0
+	GroupTabH   = GroupH * 0.22 // the folder tab above a collapsed group's icon
 )
 
 // Kind is how an item is drawn.
@@ -148,7 +149,9 @@ func (l *layout) place(group int64, depth int, seen map[int64]bool) Rect {
 		default:
 			seen[it.ID] = true
 			inner := l.place(it.ID, depth+1, seen)
-			r := Rect{it.X - EmptyFrameW/2, it.Y - EmptyFrameH/2, EmptyFrameW, EmptyFrameH}
+			// An empty frame starts where the icon starts (v0.29).
+			ax, ay := IconCorner(it)
+			r := Rect{ax, ay, EmptyFrameW, EmptyFrameH}
 			if inner != (Rect{}) {
 				r = Rect{inner.X - FramePad, inner.Y - FramePad - FrameLabelH, inner.W + 2*FramePad, inner.H + 2*FramePad + FrameLabelH}
 			}
@@ -467,4 +470,39 @@ func sameParent(a, b *int64) bool {
 		return a == nil && b == nil
 	}
 	return *a == *b
+}
+
+// IconCorner is the top-left corner of a collapsed group's icon, its
+// folder tab included. Expanding and collapsing keep a group's top-left
+// corner here (v0.29).
+func IconCorner(it *apitypes.MapItem) (x, y float64) {
+	return it.X - GroupW/2, it.Y - GroupH/2 - GroupTabH
+}
+
+// CenterForCorner is the group position whose icon starts at (x, y).
+func CenterForCorner(x, y float64) (cx, cy float64) {
+	return x + GroupW/2, y + GroupTabH + GroupH/2
+}
+
+// FrameIfExpanded returns the frame a group would have if it were
+// expanded now, and whether it would be visible.
+func (m *Model) FrameIfExpanded(view, group int64, measure Measure) (Rect, bool) {
+	vm := m.maps[view]
+	if vm == nil {
+		return Rect{}, false
+	}
+	it := vm.Items[GroupKey(group)]
+	if it == nil {
+		return Rect{}, false
+	}
+	was := it.Collapsed
+	it.Collapsed = false
+	nodes := m.Layout(view, measure)
+	it.Collapsed = was
+	for _, n := range nodes {
+		if n.Kind == KindFrame && n.Item.ID == group {
+			return n.Bounds, true
+		}
+	}
+	return Rect{}, false
 }

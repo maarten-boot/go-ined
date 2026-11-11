@@ -2,10 +2,12 @@ package gui
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -335,7 +337,17 @@ func TestDiscoveryDialog(t *testing.T) {
 		g.startDiscovery(g.disc)
 	})
 	eventually(t, e.ui, "job running", func() bool { return g.disc.job != "" && !g.disc.cancel.Disabled() })
-	e.ui.Wait(func() { g.disc.cancel.OnTapped() })
+	var job string
+	e.ui.Wait(func() { job = g.disc.job; g.disc.cancel.OnTapped() })
+	// The cancel request runs in the background: release the held probes
+	// only once the server has the job cancelled, or it may finish first.
+	deadline := time.Now().Add(5 * time.Second)
+	for must(c.Discovery(ctx, job)).State == apitypes.DiscoveryRunning {
+		if time.Now().After(deadline) {
+			t.Fatal("job not cancelled on the server")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	close(gate)
 	eventually(t, e.ui, "cancelled", func() bool {
 		return strings.Contains(g.disc.info.Text, "cancelled") && strings.Contains(g.status.Text(), "discovery 10.9.0.0/30 cancelled")
@@ -655,4 +667,46 @@ func TestWrapAndReflow(t *testing.T) {
 		f.Submit()
 	})
 	eventually(t, e.ui, "view reflowed", func() bool { return f.done })
+}
+
+// TC-725 (GUI): collapsing and expanding keep the group's top-left corner.
+func TestCornerStays(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	// The members sit far from the group's own position.
+	g := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "g", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Name: "web", ParentID: &g.ID, X: ptr(500.0), Y: ptr(400.0)}))
+	must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", Name: "db", ParentID: &g.ID, X: ptr(600.0), Y: ptr(400.0)}))
+	e.open()
+	gu := e.g
+	frameOf := func() *mapmodel.Node {
+		n := find(e.nodes(1), "group", g.ID)
+		if n == nil || n.Kind != mapmodel.KindFrame {
+			return nil
+		}
+		return n
+	}
+	eventually(t, e.ui, "frame", func() bool { return frameOf() != nil })
+	var fx, fy float64
+	e.ui.Wait(func() { f := frameOf(); fx, fy = f.Bounds.X, f.Bounds.Y; gu.maps[1].OnToggle(g.ID, false) })
+	eventually(t, e.ui, "collapsed", func() bool {
+		n := find(e.nodes(1), "group", g.ID)
+		return n != nil && n.Kind == mapmodel.KindGroup
+	})
+	e.ui.Wait(func() {
+		x, y := mapmodel.IconCorner(find(e.nodes(1), "group", g.ID).Item)
+		if math.Abs(x-fx) > 0.01 || math.Abs(y-fy) > 0.01 {
+			t.Errorf("icon corner %g,%g, frame corner was %g,%g", x, y, fx, fy)
+		}
+		fx, fy = x, y
+		gu.maps[1].OnToggle(g.ID, true)
+	})
+	eventually(t, e.ui, "expanded at the icon's corner", func() bool {
+		f := frameOf()
+		return f != nil && math.Abs(f.Bounds.X-fx) < 0.01 && math.Abs(f.Bounds.Y-fy) < 0.01
+	})
+	// The group's own position didn't move on expand; its contents did.
+	if gg := must(c.Group(ctx, g.ID)); gg.Collapsed {
+		t.Error("still collapsed")
+	}
 }

@@ -167,3 +167,28 @@ func TestPatchPositionMovesOnlyTheGroup(t *testing.T) {
 		t.Errorf("contents didn't follow a new parent: %g", hh.X)
 	}
 }
+
+// TC-725: moving only the contents leaves the group where it is.
+func TestMoveGroupContents(t *testing.T) {
+	s, _ := newSvc(t)
+	rec := &recorder{}
+	g := mustGroup(t, s, apitypes.GroupCreate{Name: "g", X: ptr(100.0), Y: ptr(100.0)})
+	h := mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &g.ID, X: ptr(100.0), Y: ptr(220.0)})
+	empty := mustGroup(t, s, apitypes.GroupCreate{Name: "e", X: ptr(5.0), Y: ptr(5.0)})
+	s.SetNotifier(rec)
+	got, err := s.MoveGroupContents(ctx, g.ID, -30, 10)
+	if err != nil || got.X != 100 || got.Y != 100 {
+		t.Fatalf("group moved: %+v %v", got, err)
+	}
+	if hh, _ := s.Host(h.ID); hh.X != 70 || hh.Y != 230 {
+		t.Errorf("contents at %g,%g", hh.X, hh.Y)
+	}
+	if ev := rec.take(); ev != "group.moved apitypes.GroupMovedEvent" {
+		t.Errorf("events: %s", ev)
+	}
+	if _, err := s.MoveGroupContents(ctx, empty.ID, 1, 1); err != nil || rec.take() != "" {
+		t.Errorf("empty group: %v", err)
+	}
+	_, err = s.MoveGroupContents(ctx, 99, 1, 1)
+	wantKind(t, err, NotFound)
+}

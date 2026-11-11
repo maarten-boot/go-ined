@@ -264,6 +264,14 @@ func (m *Model) ifLoaded(view int64) []int64 {
 	return nil
 }
 
+// GroupView returns the loaded view that holds a group.
+func (m *Model) GroupView(id int64) (int64, bool) {
+	if vm, _ := m.findGroup(id); vm != nil {
+		return vm.ID, true
+	}
+	return 0, false
+}
+
 // findGroup returns the loaded view that holds group id (groups belong to
 // exactly one view).
 func (m *Model) findGroup(id int64) (*ViewMap, *apitypes.MapItem) {

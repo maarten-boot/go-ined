@@ -240,7 +240,7 @@ func TestLayout(t *testing.T) {
 		{Type: "host", ID: 1, ParentID: p(77), Name: "web", X: 500, Y: 500},
 	}})
 	nodes = m.Layout(3, measure)
-	if len(nodes) != 2 || nodes[0].Bounds != (Rect{-70, -30, 140, 60}) || nodes[1].Icon.X != 486 {
+	if len(nodes) != 2 || nodes[0].Bounds != (Rect{-GroupW / 2, -GroupH/2 - GroupTabH, EmptyFrameW, EmptyFrameH}) || nodes[1].Icon.X != 486 {
 		t.Errorf("empty frame / orphan: %+v", nodes)
 	}
 	if m.Layout(99, measure) != nil {

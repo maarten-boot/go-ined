@@ -6,6 +6,7 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ### Added
 - `ined-gui`: "Wrap names" (toolbar toggle, on by default, saved in `gui.toml`): a long DNS name breaks after its dots where it would run into the next item. "Reflow…" on a group and "Reflow view…" lay out the members on a grid wide enough for the longest full name.
+- `ined-gui`: expanding and collapsing a group keep its top-left corner in place: the frame opens where the icon was, and the icon appears where the frame started. API: `POST /groups/{id}/move` takes `"contents_only": true`.
 - API: `POST /views/{id}/arrange` lays out a group's members (or a view's top level) on a grid, with one `map.arranged` event; `inedctl view arrange`.
 
 ### Changed

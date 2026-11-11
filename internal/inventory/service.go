@@ -677,6 +677,17 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 // transaction (SPEC-507). It emits group.updated for the group and one
 // group.moved for its contents.
 func (s *Service) MoveGroup(ctx context.Context, id int64, dx, dy float64) (apitypes.Group, error) {
+	return s.moveGroup(ctx, id, dx, dy, false)
+}
+
+// MoveGroupContents moves everything inside a group by (dx, dy), but not
+// the group itself (v0.29). It emits only group.moved, and nothing when
+// the group is empty.
+func (s *Service) MoveGroupContents(ctx context.Context, id int64, dx, dy float64) (apitypes.Group, error) {
+	return s.moveGroup(ctx, id, dx, dy, true)
+}
+
+func (s *Service) moveGroup(ctx context.Context, id int64, dx, dy float64, contentsOnly bool) (apitypes.Group, error) {
 	if err := checkPos(dx, dy); err != nil {
 		return apitypes.Group{}, err
 	}
@@ -687,19 +698,30 @@ func (s *Service) MoveGroup(ctx context.Context, id int64, dx, dy float64) (apit
 		return apitypes.Group{}, notFoundf("group %d not found", id)
 	}
 	g := *cur
-	g.X, g.Y, g.UpdatedAt = g.X+dx, g.Y+dy, s.stamp()
-	if err := checkPos(g.X, g.Y); err != nil {
-		return apitypes.Group{}, err
+	now := s.stamp()
+	if !contentsOnly {
+		g.X, g.Y, g.UpdatedAt = g.X+dx, g.Y+dy, now
+		if err := checkPos(g.X, g.Y); err != nil {
+			return apitypes.Group{}, err
+		}
 	}
-	ch := s.subtreeShift(cur, dx, dy, g.UpdatedAt)
-	ch.Groups = append([]Group{g}, ch.Groups...)
+	ch := s.subtreeShift(cur, dx, dy, now)
+	contents := len(ch.Groups) > 0 || len(ch.Hosts) > 0 || len(ch.Placements) > 0
+	if !contentsOnly {
+		ch.Groups = append([]Group{g}, ch.Groups...)
+	}
+	if !contents && contentsOnly {
+		return groupView(cur, s.m.In(cur.ViewID).Aggregate()[id]), nil
+	}
 	if err := s.repo.Apply(ctx, ch); err != nil {
 		return apitypes.Group{}, err
 	}
 	s.applyShift(ch, g.ViewID)
 	v := groupView(cur, s.m.In(cur.ViewID).Aggregate()[id])
-	s.notify.Publish(apitypes.EventGroupUpdated, v)
-	if len(ch.Groups) > 1 || len(ch.Hosts) > 0 || len(ch.Placements) > 0 { // only with contents (C6)
+	if !contentsOnly {
+		s.notify.Publish(apitypes.EventGroupUpdated, v)
+	}
+	if contents { // only with contents (C6)
 		s.notify.Publish(apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: id, ViewID: cur.ViewID, DX: dx, DY: dy})
 	}
 	return v, nil

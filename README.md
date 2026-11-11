@@ -74,7 +74,7 @@ bin/ined-gui -url https://ined.example.org:8470 -token … -ca-cert ca.pem
 
 - One tab per view. Each host shows its status as a shape **and** a word: ● up, ✕ down, ? unknown, a dash for unmonitored hosts; a hollow sign plus "(stale)" until the first ping after a restart.
 - Network groups have a double-bordered folder icon and a dashed frame; ordinary groups a plain folder and a solid frame. A folded corner marks a note.
-- Double-click a collapsed group to expand it, or the label of a frame to collapse it (also in the right-click menu). This changes the shared state on the server.
+- Double-click a collapsed group to expand it, or the label of a frame to collapse it (also in the right-click menu). This changes the shared state on the server. The group's top-left corner stays in place: the frame opens where the icon was, and the icon appears where the frame started.
 - Drag on empty space or use the scroll bars to pan; mouse wheel or Ctrl+= / Ctrl+- to zoom, Ctrl+0 for 100 %, Ctrl+1 to fit all, Ctrl+F to find a host.
 - Drag a host, a group icon or a frame (by its label) to move it; a group takes everything in it along. Drop onto a group icon or a frame label (marked "into") to move the item into that group. Esc cancels a drag.
 - Right-click empty space for "New group here…" and "New host here…"; right-click an item to edit, move ("Move to group…"), delete it, or, for a host, show it in another view ("Show in view") or remove it from the current custom view. Deleting always asks first and says what goes; the Delete key deletes the selected item.

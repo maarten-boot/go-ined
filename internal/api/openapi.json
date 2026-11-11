@@ -1330,6 +1330,10 @@
           "dy": {
             "type": "number",
             "format": "double"
+          },
+          "contents_only": {
+            "type": "boolean",
+            "description": "move only what is inside the group, not the group (v0.29)"
           }
         },
         "additionalProperties": false,

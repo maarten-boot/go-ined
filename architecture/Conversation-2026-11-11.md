@@ -148,3 +148,18 @@
     - raw-icmp ran as root in the raw ("privileged") mode: `TestICMPLoopback` and `TestICMPRawLoopback` passed for 127.0.0.1 and ::1. This is the first real raw-socket test, open since M2.
     - The build job checked all 7 archives against `SHA256SUMS`.
     - `feature/m7-ci-release` merged into `main`.
+17. **User**: pushed; do a crosscheck.
+    **Claude** started crosscheck `Crosscheck-2026-11-11-04.md` (the ninth). The CI run on `main` stayed queued: GitHub reports a major outage of Actions.
+18. **User** (during the crosscheck): "when errors or other messages appear in the scan network they should be copyable with copy to be pasted later somewhere"; "network scan as ordinary user does not work i get errors (but as i cannot copy the errors i cant show you)". Then the user pasted the inedctl message: no ICMP mode (ping sockets "permission denied", raw sockets "operation not permitted").
+    **Claude**:
+    - Reproduced the scan as an ordinary user here: it works, because this machine allows ping sockets for all groups.
+    - Explained the two fixes for the user's machine: the sysctl `net.ipv4.ping_group_range`, or `setcap cap_net_raw+ep`.
+    - Built `fix/copyable-messages`, merged as `fd0f436`:
+      - the discovery dialog's message wraps, can be selected, and has a "Copy" button (with the job's details);
+      - the status bar's messages can be selected, and its "Copy" copies the last 50;
+      - a ping warning from `/health` on connect;
+      - the server's no-ICMP message names the exact commands;
+      - README "Ping permissions"; tests.
+19. **User**: "explain: (plus the tee line to persist it)".
+    **Claude**: `sysctl -w` changes only the running kernel. `echo … | sudo tee /etc/sysctl.d/60-ined-ping.conf` writes a file that `systemd-sysctl` applies at every boot; `tee` because a `>` after `sudo echo` would run without root. `sudo sysctl --system` applies the files at once. The range 0 to 2147483647 allows ping sockets (not raw sockets) for all groups.
+    **Claude** finished the crosscheck: 0 H, 2 M (C1: `Changes.md` isn't yet a good 0.1.0 release text; C5: CI on `main` unverified because of the outage, and Dependabot PR #1 is obsolete), 5 L, one decision (D1: curate the 0.1.0 notes). The fixes wait for the user's OK.

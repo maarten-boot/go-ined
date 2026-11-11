@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.16** (2026-11-10)
+Status: **draft v0.17** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -86,7 +86,7 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] Exit 130 on interrupt, relative `ca_cert`, empty flags override, raw JSON with `--wait`, RTT format, token-over-HTTP warning, `inedctl` examples (SPEC-506, 802, 805, 903)
 
 ### M4b: Views ✅ (branch `feature/m4b-views`; design in `Design-views.md`)
-- [x] Spec items (SPEC-117..124, draft) and test cases (TC-120..129) for views and placements (V1–V6 as recommended); D1 becomes "at most one parent per view"
+- [x] Spec items (SPEC-117..124) and test cases (TC-120..129) for views and placements (V1–V6 as recommended); D1 becomes "at most one parent per view"
 - [x] Decisions M4b-1..8 (D14)
 - [x] Migration 3 (`views`, `placements`, `groups.view_id`) with a tested upgrade from schema 2
 - [x] `inventory` per view: aggregation, visibility, free positions, move/cycle checks; network rules only in view 1
@@ -98,6 +98,8 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] `ined-gui -version` (SPEC-806)
 - [ ] Shared map, icons, network-group style, collapse/expand, details and notes panel, live updates (SPEC-701..703, 705, 708, 709, 711, 712)
 - [ ] Pan/zoom and find host (SPEC-713, 714)
+- [ ] View tabs: Spec items written at the start of M5 (D14-8); decide whether host JSON lists the views a host is in (crosscheck 2026-11-11-01 I1)
+- [ ] Benchmark of the per-view status calculation (`AggregateAll`) with 5,000 hosts and several views, next to TC-708 (crosscheck 2026-11-11-01 I3)
 
 ### M6: GUI editing
 - [ ] Drag and drop, moving items into groups, managing groups and hosts, discovery dialog (SPEC-704, 706, 707)

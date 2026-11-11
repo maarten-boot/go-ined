@@ -462,6 +462,19 @@ func TestViewCommands(t *testing.T) {
 	if out := ok(t, u, "group", "list", "--view", "2"); strings.Count(out, "\n") != 2 || !strings.Contains(out, "app") {
 		t.Fatalf("group list --view:\n%s", out)
 	}
+	// Without --view, every group with its view (crosscheck 2026-11-11-01 C3).
+	all := ok(t, u, "group", "list")
+	contains(t, all, "COLLAPSED  VIEW")
+	for _, line := range strings.Split(strings.TrimSpace(all), "\n")[1:] {
+		f := strings.Fields(line)
+		if want := map[string]string{"1": "2", "2": "1"}[f[0]]; f[len(f)-1] != want {
+			t.Errorf("group list: view of group %s is %s, want %s", f[0], f[len(f)-1], want)
+		}
+	}
+	contains(t, ok(t, u, "group", "show", "1"), "View:", "2")
+	if r := ctl(t, u, "view", "show", "99"); r.code != 1 || r.out != "" {
+		t.Fatalf("view show of a missing view: %+v", r)
+	}
 	ok(t, u, "host", "add", "10.0.0.5", "--name", "web")
 	contains(t, ok(t, u, "view", "place", "2", "1", "--parent", "1"), "View:", "2", "Host:", "1", "Parent:", "1")
 	contains(t, ok(t, u, "view", "place", "2", "1", "--x", "5", "--y", "6"), "Parent:   root", "Position: 5, 6")

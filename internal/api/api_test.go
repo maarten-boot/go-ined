@@ -168,6 +168,12 @@ func TestCRUD(t *testing.T) {
 	if got.ParentID != nil {
 		t.Errorf("parent_id null: %+v", got.ParentID)
 	}
+	// null on a field that can't be null is rejected, not a zero value.
+	e.wantErr(400, "invalid_argument", "PATCH", "/hosts/"+itoa(h.ID), `{"monitored": null}`)
+	e.want(200, "GET", "/hosts/"+itoa(h.ID), nil, &got)
+	if !got.Monitored {
+		t.Error("monitored: null turned monitoring off")
+	}
 
 	var hosts []apitypes.Host
 	e.want(200, "GET", "/hosts", nil, &hosts)

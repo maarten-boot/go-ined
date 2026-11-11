@@ -590,16 +590,21 @@ func viewShow(a *app, name string, args []string) error {
 		return err
 	}
 	var v apitypes.View
-	return a.call(http.MethodGet, "/views/"+id(vid), nil, &v, func() {
-		a.viewDetails(v)
-		m, err := a.c.ViewMap(a.ctx, vid)
-		if err != nil {
-			fmt.Fprintf(a.errOut, "inedctl: %v\n", err)
-			return
-		}
-		fmt.Fprintln(a.out)
-		a.viewHosts(m)
-	})
+	if a.g.json {
+		return a.call(http.MethodGet, "/views/"+id(vid), nil, &v, nil)
+	}
+	if v, err = a.c.View(a.ctx, vid); err != nil {
+		return err
+	}
+	// Both requests must succeed, or the exit code says otherwise (SPEC-903).
+	m, err := a.c.ViewMap(a.ctx, vid)
+	if err != nil {
+		return err
+	}
+	a.viewDetails(v)
+	fmt.Fprintln(a.out)
+	a.viewHosts(m)
+	return nil
 }
 
 func viewRename(a *app, name string, args []string) error {
@@ -646,7 +651,7 @@ func viewRm(a *app, name string, args []string) error {
 // [--parent G] [--x X --y Y].
 func viewPlace(a *app, name string, args []string) error {
 	fs := a.flags(name)
-	grp := fs.Int64("parent", 0, "group in the view (default: the view's root)")
+	grp := fs.Int64("parent", 0, "group in the view (default: the view's root, also when moving)")
 	x := fs.Float64("x", 0, "x position")
 	y := fs.Float64("y", 0, "y position")
 	args2, err := a.parse(fs, args, 2, 2)

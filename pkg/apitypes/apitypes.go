@@ -5,6 +5,7 @@ package apitypes
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"time"
 )
 
@@ -320,7 +321,9 @@ type ErrorDetail struct {
 }
 
 // Opt is an optional PATCH field. Set is false when the field is absent
-// from the JSON; a JSON null sets it to the zero value of T.
+// from the JSON. A JSON null is accepted only when T is a pointer (for
+// example "parent_id": null, the root); for any other T it is an error, so
+// a null can't silently set a zero value (SPEC-504).
 type Opt[T any] struct {
 	Set   bool
 	Value T
@@ -336,6 +339,11 @@ func (o Opt[T]) IsZero() bool { return !o.Set }
 func (o *Opt[T]) UnmarshalJSON(b []byte) error {
 	o.Set = true
 	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
+		t := reflect.TypeFor[T]()
+		if t.Kind() != reflect.Pointer {
+			// The decoder adds the field name to this error.
+			return &json.UnmarshalTypeError{Value: "null", Type: t}
+		}
 		var zero T
 		o.Value = zero
 		return nil

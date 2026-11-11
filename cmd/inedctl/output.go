@@ -37,9 +37,9 @@ func (a *app) groupTable(gs []apitypes.Group) {
 	slices.SortFunc(gs, func(x, y apitypes.Group) int { return cmp.Compare(x.ID, y.ID) })
 	rows := make([][]string, len(gs))
 	for i, g := range gs {
-		rows[i] = []string{id(g.ID), g.Name, dash(g.CIDR), g.Status, parent(g.ParentID), yesNo(g.Collapsed)}
+		rows[i] = []string{id(g.ID), g.Name, dash(g.CIDR), g.Status, parent(g.ParentID), yesNo(g.Collapsed), id(g.ViewID)}
 	}
-	a.table("ID\tNAME\tCIDR\tSTATUS\tPARENT\tCOLLAPSED", rows)
+	a.table("ID\tNAME\tCIDR\tSTATUS\tPARENT\tCOLLAPSED\tVIEW", rows)
 }
 
 func (a *app) hostDetails(h apitypes.Host) {
@@ -62,7 +62,7 @@ func (a *app) hostDetails(h apitypes.Host) {
 func (a *app) groupDetails(g apitypes.Group) {
 	a.details([][2]string{
 		{"ID", id(g.ID)}, {"Name", g.Name}, {"CIDR", dash(g.CIDR)}, {"Description", g.Description},
-		{"Parent", parent(g.ParentID)}, {"Status", g.Status}, {"Collapsed", yesNo(g.Collapsed)},
+		{"View", id(g.ViewID)}, {"Parent", parent(g.ParentID)}, {"Status", g.Status}, {"Collapsed", yesNo(g.Collapsed)},
 		{"Position", pos(g.X, g.Y)},
 		{"Created", g.CreatedAt.Local().Format(time.DateTime)}, {"Updated", g.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(g.Note)},

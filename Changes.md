@@ -31,6 +31,8 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - Spec: MAC address collection (ping/ARP over SSH, or an agent on the target network) listed as a future enhancement.
 
 ### Fixed
+- API: `null` in a PATCH body is rejected (400) for every field except `parent_id`; before, it silently set the zero value (for example, `"monitored": null` turned monitoring off).
+- `inedctl`: `group list` has a VIEW column and `group show` a `View:` row; `view show` exits non-zero when it can't read the view's hosts; the usage text says that `view place` without `--parent` puts the host at the view's root.
 - `inedctl`: Ctrl-C exits 130 and, for `discover start --wait`, says the job keeps running on the server; a relative `ca_cert` is read from the config file's folder; `--token ""` clears a token from the config or environment; `--json --wait` prints the API's response unchanged; round-trip times below 1 ms get two decimals.
 - `inedctl` warns when it sends a token unencrypted to a host that isn't loopback.
 - `architecture/API-examples.md` has generated `inedctl` examples.

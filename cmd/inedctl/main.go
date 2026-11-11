@@ -67,6 +67,7 @@ Commands:
   view order <id> <n>
   view rm <id>                                 (its groups and placements go; hosts stay)
   view place <view-id> <host-id> [--parent ID] [--x X --y Y]
+                                               (without --parent: the view's root)
   view unplace <view-id> <host-id>
   discover start <cidr> | --group ID [--parent ID] [--wait]
   discover status <job-id>

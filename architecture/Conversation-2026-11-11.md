@@ -25,3 +25,9 @@
    - **C4:** the usage text says that `view place` without `--parent` puts the host at the view's root.
    - **Docs:** Spec and Plan v0.17 (SPEC-122/124 clarified; SPEC-501/502/504/702/901/902 updated; Plan M5 has the view-tabs and benchmark items).
    - Two new test checks and `make all` passes.
+4. **User**: pushed; start M5.
+   **Claude** checked the build environment for Fyne: gcc, pkg-config and the X11/OpenGL/Wayland dev packages are present, Xvfb is available, and the latest Fyne is v2.8.2 (2026-10-07). It wrote the M5 draft, Spec and Plan v0.18:
+   - **New Spec items:** SPEC-715 (view tabs), SPEC-716 (how the GUI keeps up with the server), SPEC-717 (window layout and status bar), SPEC-718 (what the GUI may change in M5: expand/collapse, note, contrast).
+   - **Amended:** SPEC-708 (the parent shown is the one in the current view), SPEC-713 (zoom and pan per tab), SPEC-714 (find over all hosts).
+   - **Tests:** TC-710..713 added, and TC-709 extended.
+   - **Decisions:** proposed M5-1..10 (D15) with defaults. The code waits for the decisions.

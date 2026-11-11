@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.17** (2026-11-11)
+Status: **draft v0.18** (2026-11-11)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -132,13 +132,17 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
 - **SPEC-705** MUST: The GUI updates live from SSE events. It reconnects automatically and shows the connection state.
 - **SPEC-706** MUST: From the GUI, the user can create, rename and delete groups (setting or clearing the CIDR) and hosts.
 - **SPEC-707** MUST: A discovery dialog takes a CIDR range and a target group. It shows the job's progress and lets the user cancel it. "Scan this network" is available from the context menu of an IPv4 network group, and disabled for IPv6 network groups.
-- **SPEC-708** MUST: A details panel shows every field of the selected host or group: for a host, its IP address, PTR name, manual name, status, round-trip time, packet loss, `last_seen`, `last_change` and whether the status is stale. The panel includes an editable **note**. A stale host is marked on the map with a shape and text marker as well.
+- **SPEC-708** MUST: A details panel shows every field of the selected host or group: for a host, its IP address, PTR name, manual name, status, round-trip time, packet loss, `last_seen`, `last_change` and whether the status is stale. The panel includes an editable **note**. A stale host is marked on the map with a shape and text marker as well. The parent shown is the item's parent in the current view (v0.18).
 - **SPEC-709** MUST: SPEC-001 to SPEC-005 apply to the GUI. A contrast preset selector is available in the GUI.
 - **SPEC-710** ~~withdrawn~~ (v0.4: no network link lines)
 - **SPEC-711** SHOULD: An item that has a note shows a small note marker. The marker is a shape, not a colour.
 - **SPEC-712** SHOULD: A collapsed group's icon shows its counts of monitored hosts, for example `3 down · 1 ? · 40 up`, followed by `· 2 off` when unmonitored hosts are present.
-- **SPEC-713** MUST: The map supports pan (drag on empty space, scroll bars) and zoom (keyboard and mouse wheel, 10 %–400 %, plus "fit all"). Zoom and pan are kept per GUI and not stored on the server. Positions are stored in map units at zoom 100 %.
-- **SPEC-714** SHOULD: "Find host" by display name, PTR name or IP address (substring match). Selecting a result expands the groups above that host and centres the map on it. Expanding groups this way changes the shared `collapsed` state, like any other expand.
+- **SPEC-713** MUST: The map supports pan (drag on empty space, scroll bars) and zoom (keyboard and mouse wheel, 10 %–400 %, plus "fit all"). Zoom and pan are kept per GUI and per view tab, and not stored on the server. Positions are stored in map units at zoom 100 %.
+- **SPEC-714** SHOULD: "Find host" by display name, PTR name or IP address (substring match), over all hosts. Selecting a result shows the host in the current tab if it is placed in that view, otherwise in the network view's tab (v0.18). It expands the groups above that host and centres the map on it. Expanding groups this way changes the shared `collapsed` state, like any other expand.
+- **SPEC-715** MUST (draft v0.18): **View tabs.** The map area has one tab per view, in the order of `GET /views` (`order`, then id), labelled with the view's name. Tabs follow `view.created|updated|deleted` live. The network view's tab is selected at start. If the view of the selected tab is deleted, the GUI switches to the network view's tab and says so in the status bar. Creating, renaming, reordering and deleting views from the GUI is M6.
+- **SPEC-716** MUST (draft v0.18): **Keeping up with the server.** The GUI loads `GET /views` at start and a view's map (`GET /map?view=`) when its tab is first shown. It then follows the event stream (SPEC-705): `host.status`, `host.updated` and `group.status` change items in place in every loaded view; any other change to a view's items (`*.created`, `*.deleted`, `group.updated`, `placement.*`) reloads that view's map, at most once per 250 ms per view; `resync` reloads the views and every loaded map. Selecting a host or group loads its full record for the details panel (`GET /hosts/{id}`, `GET /groups/{id}`).
+- **SPEC-717** MUST (draft v0.18): **Window.** A toolbar (zoom out, zoom in, 100 %, fit all, find host, contrast preset selector), the view tabs with the map, a details panel beside the map, and a status bar. The status bar shows the server URL, the connection state in words (`connected`, `reconnecting in N s`, or `stopped: <reason>`), and the warning when the token is sent unencrypted (SPEC-802).
+- **SPEC-718** MUST (draft v0.18): **What the GUI changes in M5.** Only expand and collapse (SPEC-703), the note (SPEC-708) and the contrast preset (SPEC-005). An API error on such a change is shown in the status bar and the map keeps the server's state. Dragging, moving, creating, deleting, discovery and view management follow in M6 (SPEC-704, 706, 707).
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.

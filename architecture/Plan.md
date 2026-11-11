@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.17** (2026-11-11)
+Status: **draft v0.18** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -19,6 +19,7 @@ Status: **draft v0.17** (2026-11-11)
 | D12 | ICMP: own small prober on `golang.org/x/net/icmp` (BSD-3), not `pro-bing` (Apache-2.0, would need a licence notice in binaries) | 2026-11-10 |
 | D13 | Views (one tab per view, per-view host placements, network view fixed as view 1) as milestone M4b before the GUI; integer ids. See `Design-views.md` | 2026-11-10 |
 | D14 | M4b details (user OK 2026-11-10): hosts keep their network placement in `hosts`, a `placements` table holds custom-view placements only (no `hosts` rebuild); one `view.deleted` per view; per-item events for cascade/reparent in a custom view; only `host.deleted` when a host goes; unique view names, new views last; `GET /groups?view=`; `inedctl view …`; the GUI tabs are specified in M5 | 2026-11-10 |
+| D15 | M5 details (**proposed, waiting for the user's OK**): M5-1..10 below | — |
 
 ## Package layout
 ```
@@ -98,7 +99,11 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] `ined-gui -version` (SPEC-806)
 - [ ] Shared map, icons, network-group style, collapse/expand, details and notes panel, live updates (SPEC-701..703, 705, 708, 709, 711, 712)
 - [ ] Pan/zoom and find host (SPEC-713, 714)
-- [ ] View tabs: Spec items written at the start of M5 (D14-8); decide whether host JSON lists the views a host is in (crosscheck 2026-11-11-01 I1)
+- [x] View tabs and the rest of the GUI's behaviour: Spec items SPEC-715..718 (draft v0.18); SPEC-708/713/714 amended; test cases TC-710..713
+- [ ] Decisions M5-1..10 (D15)
+- [ ] `cmd/ined-gui` with flags, config, `-version` (SPEC-701, 806)
+- [ ] `internal/gui/mapmodel` (pure Go): state from `/views` and `/map`, event handling, visibility, frames, counts, coordinates, find
+- [ ] View tabs, toolbar, status bar; expand/collapse, note and contrast changes (SPEC-715..718)
 - [ ] Benchmark of the per-view status calculation (`AggregateAll`) with 5,000 hosts and several views, next to TC-708 (crosscheck 2026-11-11-01 I3)
 
 ### M6: GUI editing
@@ -108,6 +113,22 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [ ] GitHub Actions (pinned to commit SHAs, SPEC-006): `go vet`, `staticcheck`, `go test -race`, builds
 - [ ] OpenAPI document (SPEC-505)
 - [ ] Update `Changes.md`, tag `v0.1.0`
+
+### M5 decisions (proposed; defaults recommended)
+| # | Question | Recommended default | Alternative |
+|---|----------|---------------------|-------------|
+| M5-1 | Toolkit, version and build | **Fyne v2.8.2** (2026-10-07) in the same Go module. Only `ined-gui` needs cgo and the X11/OpenGL dev packages (present here). `ined-server` and `inedctl` don't import Fyne and stay cgo-free; `make build-nogui` and a check (`CGO_ENABLED=0 go build ./cmd/ined-server ./cmd/inedctl`) keep it that way | A separate Go module for the GUI (keeps Fyne out of the server's `go.mod`, but needs a `replace` and two module versions) |
+| M5-2 | Map drawing | A custom Fyne widget made of canvas objects (rectangles, lines, circles, text), created only for items in or near the visible area. TC-708 checks 5,000 hosts | Draw the whole map into one image (`canvas.Raster`) with our own text rendering: fast, but more code and blurrier text |
+| M5-3 | Keeping up with the server | SPEC-716: status and name changes in place; other changes reload that view's map, at most every 250 ms; `resync` reloads all | Apply every event to the client model in place (less traffic, but much more code and more ways to drift from the server) |
+| M5-4 | What M5 may change on the server | SPEC-718: expand/collapse, note, contrast only | Also drag and drop in M5 |
+| M5-5 | View tabs | SPEC-715. Zoom, pan and the selected tab live only while the GUI runs (not saved) | Save the selected tab and zoom per view in `gui.toml` |
+| M5-6 | Find host | Over all hosts; shown in the current tab if the host is there, else in the network view (SPEC-714) | Search only the current view |
+| M5-7 | Saving the contrast preset (SPEC-005) | Rewrite only the `preset` and `min_ratio` lines of `[contrast]` in `gui.toml`, so comments and other keys stay. A missing file or section is created. The write goes to a temporary file that is renamed into place | Re-encode the whole file (loses comments) |
+| M5-8 | Colours | Each colour role (text, frame, up, down, unknown, stale/off, selection) has a base hue, darkened step by step until it meets the preset's ratio against every background it is drawn on. `Max` is black and white only. A table-driven test checks every pair (TC-002) | Fixed hand-picked palettes per preset |
+| M5-9 | Shapes (SPEC-702, 704, 708, 711) | Host: a square with the status glyph (● up, ✕ down, ? unknown) and the word next to the name. Collapsed ordinary group: a folder shape (rectangle with a tab). Collapsed network group: a rectangle with a double border and a CIDR line. Expanded frames: solid border for ordinary groups, dashed for network groups. Stale: a hollow glyph plus "(stale)". Note marker: a folded top-right corner | — |
+| M5-10 | Which views a host is in (crosscheck 2026-11-11-01 I1) | Not in M5: no API change, and the details panel doesn't list views. Revisit in M6 | Add `views: [ids]` to host JSON now |
+
+Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit tests. The Fyne widgets are tested headless with `fyne.io/fyne/v2/test`. A manual script runs the GUI under Xvfb against a test server with generated hosts; Claude checks the screenshots, and the user does a final visual check.
 
 ## Open questions
 - Not yet decided: configurable `log/slog` level and format, OpenAPI-first or generated from the handlers (before M7), `inedctl backup`.

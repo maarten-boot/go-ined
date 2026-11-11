@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.19** (2026-11-11)
+Status: **draft v0.20** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -19,6 +19,7 @@ Status: **draft v0.19** (2026-11-11)
 | D12 | ICMP: own small prober on `golang.org/x/net/icmp` (BSD-3), not `pro-bing` (Apache-2.0, would need a licence notice in binaries) | 2026-11-10 |
 | D13 | Views (one tab per view, per-view host placements, network view fixed as view 1) as milestone M4b before the GUI; integer ids. See `Design-views.md` | 2026-11-10 |
 | D14 | M4b details (user OK 2026-11-10): hosts keep their network placement in `hosts`, a `placements` table holds custom-view placements only (no `hosts` rebuild); one `view.deleted` per view; per-item events for cascade/reparent in a custom view; only `host.deleted` when a host goes; unique view names, new views last; `GET /groups?view=`; `inedctl view …`; the GUI tabs are specified in M5 | 2026-11-10 |
+| D16 | Crosscheck 2026-11-11-02 decisions (user OK 2026-11-11): black button borders in Max contrast (D1 a); overlapping frames are handled by dragging in M6, no tidy-up action (D2 a); rows of a group grow with its size, 10–50 per row (D3 a); the toolbar shows the zoom (I1) | 2026-11-11 |
 | D15 | M5 details (user OK 2026-11-11, all defaults): Fyne v2.8.2 in the same module with a cgo-free check for server and CLI; canvas-object map with culling; status and names in place, other changes reload the view; M5 changes only expand/collapse, notes and contrast; tabs not saved; find over all hosts; contrast saved line by line in `gui.toml`; derived palettes; shapes as in M5-9; no host-views API in M5. See the M5 decisions table | 2026-11-11 |
 
 ## Package layout
@@ -105,7 +106,8 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 - [x] Pan, zoom, scroll bars, fit all and find host (SPEC-713, 714)
 - [x] View tabs, toolbar, status bar (SPEC-715..718)
 - [x] `make build-nogui` and `nogui-check` (M5-1)
-- [x] Benchmark: layout and drawing of 5,000 hosts (about 10 ms). The server's `AggregateAll` benchmark is not done yet; it moves to M7 with the other performance checks
+- [x] Benchmark: one layout and drawing pass of 5,000 hosts (about 10 ms). Burst test (TC-714): 1,000 status events with 5,000 hosts take about 15 ms with one redraw (crosscheck 2026-11-11-02 C1). The server's `AggregateAll` benchmark moves to M7 with the other performance checks
+- [x] Load probe with the real binaries (2,046 discovered hosts, about 1,600 changes in 10 s under Xvfb): memory +69 MB, no backlog after the changes stop. Repeat it after large GUI changes
 - [ ] The user's visual check of the GUI (TC-005, 702 partly, 705, 708 manual part)
 
 ### M6: GUI editing
@@ -133,7 +135,5 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit tests. The Fyne widgets are tested headless with `fyne.io/fyne/v2/test`. A manual script runs the GUI under Xvfb against a test server with generated hosts; Claude checks the screenshots, and the user does a final visual check.
 
 ## Open questions
-- GUI layout (M6): expanded frames are drawn around their members wherever those are, so items placed by hand or by older versions can overlap a frame. New members now start 120 units below their group (v0.19). Options for M6: dragging (planned), and perhaps a "tidy up" action for a group.
-- GUI in Max contrast: buttons have a white background like the window, so only their text shows. Acceptable for "black and white only", or give buttons a black border?
 - Not yet decided: configurable `log/slog` level and format, OpenAPI-first or generated from the handlers (before M7), `inedctl backup`.
 - `staticcheck` / `govulncheck`: run in CI (M7), or locally once allowed.

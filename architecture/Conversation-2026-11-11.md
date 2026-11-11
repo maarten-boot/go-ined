@@ -53,3 +53,24 @@
      - Smoke test of the real binary under Xvfb with screenshots.
      - Benchmark: about 10 ms to lay out and draw 5,000 hosts.
    - **Docs:** Spec and Plan v0.19, D15 recorded. Test cases: 103 passing, 4 partial (visual checks by the user, M6 parts), 2 planned (CI, OpenAPI). `make all` passes.
+6. **User**: pushed; do a crosscheck.
+   **Claude** ran crosscheck `Crosscheck-2026-11-11-02.md` (the seventh) on M5:
+   - 175 tests pass (1 skipped: the screenshot test), and the tracing is complete.
+   - **Load probes:**
+     - 500 status events with 5,000 hosts loaded take 2.3 s of UI-thread work, because every event re-lays out and redraws the whole view.
+     - The real GUI with 2,046 hosts and about 1,600 changes went from 236 MB to 947 MB, stayed busy for about 20 s after the changes stopped, and didn't release the memory.
+   - **Findings:** 1 H (C1: coalesce redraws and reuse canvas objects), 2 M (C2: the view list can miss an event while reloading; P1: no burst test), 6 L, plus three decisions:
+     - D1: a button border in Max contrast;
+     - D2: dragging enough for overlaps, or also a tidy-up action;
+     - D3: wider rows for large groups.
+   - The fixes wait for the user's OK.
+7. **User**: pushed; OK, all.
+   **Claude** applied the crosscheck 2026-11-11-02 fixes on `fix/crosscheck-07`:
+   - **C1, redraws:** combined (at most every 100 ms per view), and the canvas objects are reused.
+     - Test: a burst of 1,000 events on 5,000 hosts went from about 4.6 s to about 15 ms.
+     - Repeated real-binary probe: memory +69 MB instead of +710 MB, and no backlog.
+   - **C2:** the view list is fetched again if a view event arrives during the fetch.
+   - **D3:** rows grow with a group, so 2,046 hosts form a block that fits on screen.
+   - **D1, I1:** black button borders in Max; the toolbar shows the zoom.
+   - **C5:** new tests for find, the context menu, toolbar zoom, the details panel, and the custom-contrast dialog. `internal/gui` coverage is now 91 %.
+   - **Docs:** Spec and Plan v0.20, D16 recorded, TC-714 added. `make all` passes.

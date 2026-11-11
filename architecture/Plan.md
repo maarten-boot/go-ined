@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.25** (2026-11-11)
+Status: **draft v0.26** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -148,8 +148,11 @@ Testing: the API additions get unit and API tests as before. GUI actions are tes
 - [x] First CI run on GitHub green: run 43091727389 failed (GLFW 3.4 needs the Wayland and xkbcommon headers); after adding them, run 43093370048 passed all four jobs. raw-icmp ran as root in raw mode (127.0.0.1 and ::1); all 7 archives checked
 - [x] OpenAPI document with its tests (SPEC-505). Not yet checked by a formal OpenAPI validator: installing one from PyPI was blocked in this session
 - [x] `[log]` config (SPEC-807)
+- [x] User report (2026-11-11): scanning as an ordinary user failed (no ICMP mode on the user's machine) and the GUI's error couldn't be copied. Fixed: copyable messages in the discovery dialog and status bar, a ping warning on connect, the server message names the commands, README "Ping permissions" (crosscheck 2026-11-11-04 U1–U5)
+- [x] Curated `[0.1.0]` section in `Changes.md` (crosscheck 2026-11-11-04 D1)
+- [ ] CI on `main` green: run 43096857026 was queued during a GitHub Actions outage (2026-11-11 evening); re-check
 - [ ] The user's visual check and TC-702 (open since M5/M6)
-- [ ] `Changes.md` → `[0.1.0]`; the user pushes the tag `v0.1.0`; check the release
+- [ ] Add the date to `## [0.1.0]` in `Changes.md`; the user pushes the tag `v0.1.0`; check the release (TC-011)
 
 ### M7 decisions (proposed; defaults recommended)
 | # | Question | Recommended default | Alternative |
@@ -165,7 +168,7 @@ Testing: the API additions get unit and API tests as before. GUI actions are tes
 | M7-9 | Release | A tag workflow with archives, `SHA256SUMS` and the `Changes.md` section as text, published with `gh release` (preinstalled on the runner) and the job's `GITHUB_TOKEN` (SPEC-008). No signing in 0.1.0 | GoReleaser (another tool and config), or signing with Sigstore now |
 | M7-10 | Updates | Dependabot weekly for `github-actions` and `gomod`; it keeps the SHA pins and their version comments current | Update by hand |
 
-Process: Claude can't push. Claude writes the workflows and runs everything they run locally (apart from the GitHub-only parts). The user pushes, and Claude reads the run results with `gh run view` and fixes them. The same goes for the tag `v0.1.0`.
+Process: a Dependabot update of the `toolchain` line in `go.mod` makes CI fail (`TestCIWorkflow`) until `GO_VERSION` in `ci.yml` and the Go version in `release.yml` are changed to match; this is on purpose, so the three can't drift apart. Claude can't push. Claude writes the workflows and runs everything they run locally (apart from the GitHub-only parts). The user pushes, and Claude reads the run results with `gh run view` and fixes them. The same goes for the tag `v0.1.0`.
 
 ### M5 decisions (proposed; defaults recommended)
 | # | Question | Recommended default | Alternative |

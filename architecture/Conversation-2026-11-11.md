@@ -163,3 +163,13 @@
 19. **User**: "explain: (plus the tee line to persist it)".
     **Claude**: `sysctl -w` changes only the running kernel. `echo … | sudo tee /etc/sysctl.d/60-ined-ping.conf` writes a file that `systemd-sysctl` applies at every boot; `tee` because a `>` after `sudo echo` would run without root. `sudo sysctl --system` applies the files at once. The range 0 to 2147483647 allows ping sockets (not raw sockets) for all groups.
     **Claude** finished the crosscheck: 0 H, 2 M (C1: `Changes.md` isn't yet a good 0.1.0 release text; C5: CI on `main` unverified because of the outage, and Dependabot PR #1 is obsolete), 5 L, one decision (D1: curate the 0.1.0 notes). The fixes wait for the user's OK.
+20. **User**: continue.
+    **Claude** didn't take that as the OK for the fixes. It checked the state: the watcher had stopped; CI on `main` was still queued (GitHub Actions outage); the tree was clean. It asked for the OK.
+21. **User**: pushed; OK, all.
+    **Claude** applied the crosscheck 2026-11-11-04 fixes on `fix/crosscheck-09`:
+    - a curated `[0.1.0]` section in `Changes.md`;
+    - `TestOpenAPI` ties `info.version` to it;
+    - the README's Go toolchain note;
+    - a Plan note on Dependabot toolchain updates;
+    - Spec and Plan v0.26 with the user report's changes (SPEC-304, 707, 717).
+    - Left open: re-checking CI on `main` after the outage. Dependabot will close its obsolete PR #1 itself.

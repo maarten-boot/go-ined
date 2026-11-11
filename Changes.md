@@ -4,6 +4,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Changed
+- When the server can't ping (no ICMP mode), it now checks again every minute and before each scan, so allowing ping (the sysctl or `setcap`) works without restarting it; the log says when ICMP is found. The GUI re-reads the server's health every 30 seconds, so its ping warning goes away by itself.
+
 ## [0.1.0] - 2026-11-11
 
 The first release: a network monitor in the spirit of Tkined, with a server, a command-line client and a desktop GUI.

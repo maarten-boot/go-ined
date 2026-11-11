@@ -506,3 +506,83 @@ func TestLogConfig(t *testing.T) {
 		t.Errorf("bad format: %v", err)
 	}
 }
+
+// TC-315: ICMP found after start (a fixed sysctl) is used without a
+// restart: a discovery job checks at once, and the background check
+// updates /health by itself (SPEC-304, v0.27).
+func TestICMPFoundLater(t *testing.T) {
+	var mu sync.Mutex
+	works := false
+	old, oldEvery := newProber, icmpRecheck
+	newProber = func() (monitor.Prober, monitor.Status, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !works {
+			return nil, monitor.Status{}, errors.New("no ICMP mode available (test)")
+		}
+		return fakeProber{}, monitor.Status{Mode: apitypes.ICMPUnprivileged}, nil
+	}
+	icmpRecheck = time.Hour // only the discovery check counts in part 1
+	t.Cleanup(func() { newProber, icmpRecheck = old, oldEvery })
+
+	addr, _, log := startServer(t, "-listen", "127.0.0.1:0", "-db", filepath.Join(t.TempDir(), "x.db"))
+	post := func() int {
+		resp, err := http.Post("http://"+addr+"/api/v1/discovery", "application/json", strings.NewReader(`{"cidr":"10.9.9.0/30"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := post(); code != http.StatusServiceUnavailable {
+		t.Fatalf("discovery without ICMP: %d", code)
+	}
+	mu.Lock()
+	works = true
+	mu.Unlock()
+	if code := post(); code != http.StatusAccepted {
+		t.Fatalf("discovery after the fix: %d", code)
+	}
+	var hv apitypes.Health
+	getJSON(t, "http://"+addr+"/api/v1/health", &hv)
+	if hv.Status != "ok" || hv.ICMPMode != apitypes.ICMPUnprivileged || hv.ICMPError != "" {
+		t.Errorf("health after the fix: %+v", hv)
+	}
+	if !strings.Contains(log.String(), "ICMP found again") {
+		t.Errorf("no log line:\n%s", log)
+	}
+}
+
+// TC-315: the background check finds ICMP without any request.
+func TestICMPBackgroundRecheck(t *testing.T) {
+	var mu sync.Mutex
+	works := false
+	old, oldEvery := newProber, icmpRecheck
+	newProber = func() (monitor.Prober, monitor.Status, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !works {
+			return nil, monitor.Status{}, errors.New("no ICMP mode available (test)")
+		}
+		return fakeProber{}, monitor.Status{Mode: apitypes.ICMPUnprivileged}, nil
+	}
+	icmpRecheck = 50 * time.Millisecond
+	t.Cleanup(func() { newProber, icmpRecheck = old, oldEvery })
+
+	addr, _, _ := startServer(t, "-listen", "127.0.0.1:0", "-db", filepath.Join(t.TempDir(), "x.db"))
+	mu.Lock()
+	works = true
+	mu.Unlock()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var hv apitypes.Health
+		getJSON(t, "http://"+addr+"/api/v1/health", &hv)
+		if hv.ICMPMode == apitypes.ICMPUnprivileged && hv.Status == "ok" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("health never recovered: %+v", hv)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

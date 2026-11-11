@@ -107,7 +107,7 @@ Security: by default the server listens on loopback only. To listen on any other
 
 Only one `ined-server` can use a database at a time; a second one refuses to start.
 
-Ping permissions: the server first tries unprivileged ICMP sockets, then raw sockets. If neither works, the server still runs, but it can't scan or monitor: discovery answers 503 with the reason, hosts stay `unknown`, `inedctl health` and the GUI's status bar say so, and the startup log shows the mode in use. On Linux, either of these fixes it (then restart the server):
+Ping permissions: the server first tries unprivileged ICMP sockets, then raw sockets. If neither works, the server still runs, but it can't scan or monitor: discovery answers 503 with the reason, hosts stay `unknown`, `inedctl health` and the GUI's status bar say so, and the startup log shows the mode in use. On Linux, either of these fixes it. No restart is needed: while it can't ping, the server checks again every minute and before each scan, and the GUI's warning goes away by itself.
 
 ```bash
 # A: allow unprivileged ping ("ping sockets", not raw sockets) for all groups; covers IPv4 and IPv6

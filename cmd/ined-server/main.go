@@ -51,6 +51,10 @@ func main() {
 // shutdownTimeout bounds the graceful shutdown (SPEC-804).
 const shutdownTimeout = 10 * time.Second
 
+// icmpRecheck is how often the server looks again for a missing ICMP
+// mode (SPEC-304); tests shorten it.
+var icmpRecheck = time.Minute
+
 // newProber finds the ICMP prober; tests replace it with a fake. If the
 // prober is an io.Closer it is closed at shutdown, after the monitor.
 var newProber = func() (monitor.Prober, monitor.Status, error) {
@@ -142,22 +146,49 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	// ICMP (SPEC-304): without a working mode the server keeps running,
 	// hosts stay unknown and /health reports the error. The prober is also
 	// used by discovery, even when monitoring is turned off (SPEC-201).
-	icmp := api.ICMPInfo{Mode: apitypes.ICMPUnavailable}
-	prober, ps, perr := newProber()
-	discoveryProber, whyNot := prober, ""
+	// While a mode is missing, the Rechecker tries again (every
+	// icmpRecheck, and before each discovery job), so a fixed sysctl or a
+	// new capability works without a restart (v0.27).
+	var icmpMu sync.Mutex
+	var icmp api.ICMPInfo
+	setICMP := func(st monitor.Status, err error) {
+		icmpMu.Lock()
+		defer icmpMu.Unlock()
+		icmp = api.ICMPInfo{Mode: st.Mode, Error: st.IPv4Error, IPv6Error: st.IPv6Error}
+		if err != nil {
+			icmp = api.ICMPInfo{Mode: apitypes.ICMPUnavailable, Error: err.Error()}
+		}
+		if !cfg.Monitor.Enabled {
+			icmp.Mode = apitypes.ICMPDisabled
+		}
+	}
+	prober := monitor.NewRechecker(newProber, icmpRecheck, func(st monitor.Status, err error) {
+		setICMP(st, err)
+		log.Info("ICMP found again", "icmp_mode", st.Mode, "ipv4_error", st.IPv4Error, "ipv6_error", st.IPv6Error)
+	})
+	ps, perr := prober.State()
+	setICMP(ps, perr)
 	switch {
 	case perr != nil:
-		icmp.Error, whyNot, discoveryProber = perr.Error(), perr.Error(), nil
-		log.Error("ICMP unavailable: no monitoring, no discovery", "err", perr)
+		log.Error("ICMP unavailable: no monitoring, no discovery until it works; checking again every "+icmpRecheck.String(), "err", perr)
 	default:
-		icmp = api.ICMPInfo{Mode: ps.Mode, Error: ps.IPv4Error, IPv6Error: ps.IPv6Error}
 		if ps.IPv4Error != "" {
-			whyNot, discoveryProber = "IPv4 ICMP is unavailable: "+ps.IPv4Error, nil
 			log.Warn("IPv4 hosts are not pinged", "err", ps.IPv4Error)
 		}
 		if ps.IPv6Error != "" {
 			log.Warn("IPv6 hosts are not pinged", "err", ps.IPv6Error)
 		}
+	}
+	// discoveryReady finds ICMP again if needed before a job (SPEC-201).
+	discoveryReady := func() string {
+		st, err := prober.Recheck()
+		switch {
+		case err != nil:
+			return err.Error()
+		case st.IPv4Error != "":
+			return "IPv4 ICMP is unavailable: " + st.IPv4Error
+		}
+		return ""
 	}
 
 	// Background work: monitoring and reverse DNS.
@@ -168,17 +199,31 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 		bgWG.Add(1)
 		go func() { defer bgWG.Done(); f(bgCtx) }()
 	}
-	switch {
-	case !cfg.Monitor.Enabled:
-		icmp.Mode = apitypes.ICMPDisabled
-		log.Info("monitoring disabled by config (monitor.enabled = false)")
-	case perr == nil:
+	if cfg.Monitor.Enabled {
+		// Started even without ICMP: hosts of a family without a mode are
+		// skipped until the Rechecker finds one (SPEC-304).
 		log.Info("monitoring started", "icmp_mode", ps.Mode, "interval", cfg.Monitor.Interval)
 		goBG(monitor.New(prober, svc, monitor.Config{
 			Interval: cfg.Monitor.Interval, Count: cfg.Monitor.Count,
 			Timeout: cfg.Monitor.Timeout, DownAfter: cfg.Monitor.DownAfter,
 		}, log).Run)
+	} else {
+		log.Info("monitoring disabled by config (monitor.enabled = false)")
 	}
+	goBG(func(ctx context.Context) { // look for missing ICMP modes
+		t := time.NewTicker(icmpRecheck)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if !prober.Complete() {
+					prober.Recheck()
+				}
+			}
+		}
+	})
 	if cfg.DNS.Enabled {
 		goBG(dnsname.New(newResolver(), svc, dnsname.Config{
 			Refresh: cfg.DNS.Refresh, Concurrency: cfg.DNS.Concurrency,
@@ -186,9 +231,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	} else {
 		log.Info("reverse DNS disabled by config (dns.enabled = false)")
 	}
-	disc := discovery.New(svc, discoveryProber, whyNot, bus, runID, discovery.Config{
+	disc := discovery.New(svc, prober, "", bus, runID, discovery.Config{
 		MaxPrefix: cfg.Discovery.MaxPrefix, Rate: cfg.Discovery.Rate,
 		Concurrency: cfg.Discovery.Concurrency, Timeout: cfg.Monitor.Timeout,
+		Ready: discoveryReady,
 	}, log)
 
 	// stopBackground follows the shutdown order of SPEC-804 up to the HTTP
@@ -198,15 +244,18 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 		disc.Close()
 		bgStop()
 		bgWG.Wait()
-		if c, ok := prober.(io.Closer); ok {
-			c.Close()
-		}
+		prober.Close()
 		bus.Close()
 	}
 
 	handler := api.New(svc, api.Options{
 		Token: cfg.Server.Token, Version: version.Version, RunID: runID, DBPing: st.Ping, Logger: log,
-		Events: bus, ICMP: func() api.ICMPInfo { return icmp }, Discovery: disc,
+		Events: bus, Discovery: disc,
+		ICMP: func() api.ICMPInfo {
+			icmpMu.Lock()
+			defer icmpMu.Unlock()
+			return icmp
+		},
 	})
 	srv := &http.Server{
 		Handler:           handler,

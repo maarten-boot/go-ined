@@ -144,6 +144,18 @@ func (g *GUI) Start() {
 		}
 	}})
 	go func() {
+		t := time.NewTicker(healthEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-g.ctx.Done():
+				return
+			case <-t.C:
+				g.checkHealth()
+			}
+		}
+	}()
+	go func() {
 		for ev := range g.stream.C() {
 			g.do(func() { g.apply(ev) })
 		}
@@ -159,6 +171,17 @@ func (g *GUI) Stop() {
 	g.cancel()
 }
 
+// healthEvery is how often the GUI reads /health for the ping warning, so
+// the warning goes away once the server finds ICMP (v0.27).
+const healthEvery = 30 * time.Second
+
+// checkHealth updates the ping warning from /health.
+func (g *GUI) checkHealth() {
+	if h, err := g.c.Health(g.ctx); err == nil {
+		g.do(func() { g.status.ping(pingWarning(h)) })
+	}
+}
+
 // ShowAndRun starts the GUI and runs the Fyne event loop.
 func (g *GUI) ShowAndRun() {
 	g.Start()
@@ -171,9 +194,7 @@ func (g *GUI) ShowAndRun() {
 // loadAll reloads the views, the selected view's map and every other
 // loaded map (start, reconnect, resync).
 func (g *GUI) loadAll() {
-	if h, err := g.c.Health(g.ctx); err == nil {
-		g.do(func() { g.status.ping(pingWarning(h)) })
-	}
+	g.checkHealth()
 	var views []int64
 	for try := 0; ; try++ {
 		g.mu.Lock()

@@ -49,6 +49,11 @@ type Config struct {
 	Flush       time.Duration // found hosts are saved this often (default 1 s)
 	Progress    time.Duration // at most one progress event per this (default 1 s)
 	SecondTry   time.Duration // default SecondTry
+	// Ready, if set, is asked before every job: "" when IPv4 ICMP works,
+	// else why not. The server uses it to find ICMP again after a fixed
+	// sysctl without a restart (SPEC-304, v0.27). Without it, a nil prober
+	// means discovery is unavailable.
+	Ready func() string
 }
 
 func (c *Config) defaults() {
@@ -121,6 +126,11 @@ func New(inv Inventory, prober monitor.Prober, whyNot string, notify Notifier, r
 // Start validates the request, finds or creates the network group and
 // starts the job (SPEC-201, SPEC-203).
 func (m *Manager) Start(ctx context.Context, in apitypes.DiscoveryCreate) (apitypes.Discovery, error) {
+	if m.cfg.Ready != nil {
+		if why := m.cfg.Ready(); why != "" {
+			return apitypes.Discovery{}, inventory.Errorf(inventory.Unavailable, "discovery is unavailable: %s", why)
+		}
+	}
 	if m.prober == nil {
 		return apitypes.Discovery{}, inventory.Errorf(inventory.Unavailable, "discovery is unavailable: %s", m.whyNot)
 	}

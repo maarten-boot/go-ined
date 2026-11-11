@@ -657,3 +657,14 @@ func TestStatusBarCopyAndPing(t *testing.T) {
 		}
 	}
 }
+
+// TC-315 (GUI): the ping warning goes away when /health is fine again.
+func TestPingWarningClears(t *testing.T) {
+	e := start(t)
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "connected", func() bool { return strings.Contains(g.status.Text(), "connected") })
+	e.ui.Wait(func() { g.status.ping("The server can't ping (old)") })
+	go g.checkHealth()
+	eventually(t, e.ui, "warning cleared", func() bool { return !g.status.pingL.Visible() && g.status.pingL.Text == "" })
+}

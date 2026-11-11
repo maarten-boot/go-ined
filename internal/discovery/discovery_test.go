@@ -462,3 +462,17 @@ type safeBuf struct {
 func (s *safeBuf) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.b.Write(p) }
 func (s *safeBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
 func (s *safeBuf) Reset()                      { s.mu.Lock(); defer s.mu.Unlock(); s.b.Reset() }
+
+// TC-315 (discovery): Config.Ready is asked before every job.
+func TestReady(t *testing.T) {
+	why := "no ICMP mode available"
+	r := newRig(t, &prober{answer: all}, Config{Ready: func() string { return why }})
+	_, err := r.m.Start(context.Background(), apitypes.DiscoveryCreate{CIDR: "10.0.0.0/30"})
+	if inventory.KindOf(err) != inventory.Unavailable || !strings.Contains(err.Error(), why) {
+		t.Fatalf("not ready: %v", err)
+	}
+	why = "" // ICMP found again: the next job starts
+	if _, err := r.m.Start(context.Background(), apitypes.DiscoveryCreate{CIDR: "10.0.0.0/30"}); err != nil {
+		t.Fatalf("ready: %v", err)
+	}
+}

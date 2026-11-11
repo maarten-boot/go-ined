@@ -1,6 +1,6 @@
 # Plan — go-ined
 
-Status: **draft v0.23** (2026-11-11)
+Status: **draft v0.24** (2026-11-11)
 
 ## Decisions
 | # | Decision | Date |
@@ -19,6 +19,7 @@ Status: **draft v0.23** (2026-11-11)
 | D12 | ICMP: own small prober on `golang.org/x/net/icmp` (BSD-3), not `pro-bing` (Apache-2.0, would need a licence notice in binaries) | 2026-11-10 |
 | D13 | Views (one tab per view, per-view host placements, network view fixed as view 1) as milestone M4b before the GUI; integer ids. See `Design-views.md` | 2026-11-10 |
 | D14 | M4b details (user OK 2026-11-10): hosts keep their network placement in `hosts`, a `placements` table holds custom-view placements only (no `hosts` rebuild); one `view.deleted` per view; per-item events for cascade/reparent in a custom view; only `host.deleted` when a host goes; unique view names, new views last; `GET /groups?view=`; `inedctl view …`; the GUI tabs are specified in M5 | 2026-11-10 |
+| D19 | M7 details (**proposed, waiting for the user's OK**): M7-1..10 below | — |
 | D18 | Crosscheck 2026-11-11-03 decisions (user OK 2026-11-11): a `PATCH` of a group's position moves only the group, a new parent takes the contents along (D1 a); "New host here…" on empty space puts the host next to the network group the server picks (D2 a) | 2026-11-11 |
 | D17 | M6 details (user OK 2026-11-11, all defaults): dragging a group moves its subtree; `POST /groups/{id}/move` with one `group.moved`, and `inedctl group shift`; a new parent gives a free position; dropping onto empty space keeps the parent; `views` in host JSON; a View menu button; the discovery dialog can close while the job runs; always confirm deletes, Delete key, no undo; single-item drag with a 4-pixel threshold and Esc; dialog errors stay in the dialog. See the M6 decisions table | 2026-11-11 |
 | D16 | Crosscheck 2026-11-11-02 decisions (user OK 2026-11-11): black button borders in Max contrast (D1 a); overlapping frames are handled by dragging in M6, no tidy-up action (D2 a); rows of a group grow with its size, 10–50 per row (D3 a); the toolbar shows the zoom (I1) | 2026-11-11 |
@@ -140,9 +141,30 @@ examples/             reference config files (server.toml, gui.toml, ctl.toml)
 Testing: the API additions get unit and API tests as before. GUI actions are tested headless (`fyne.io/fyne/v2/test`: Drag, Tap, Type) against the test server; dialogs are built by functions that tests can drive, as in M5. A manual script (TC-702) and the user's visual check close the milestone.
 
 ### M7: CI + release 0.1.0
-- [ ] GitHub Actions (pinned to commit SHAs, SPEC-006): `go vet`, `staticcheck`, `go test -race`, builds
-- [ ] OpenAPI document (SPEC-505)
-- [ ] Update `Changes.md`, tag `v0.1.0`
+- [x] Spec items (draft v0.24): SPEC-007 (CI), SPEC-008 (release), SPEC-505 detailed, SPEC-807 (server log); test cases TC-010..013, TC-505 and TC-309 extended
+- [ ] Decisions M7-1..10 (D19)
+- [ ] Run `staticcheck` and `govulncheck` locally first and fix what they find
+- [ ] `.github/workflows/ci.yml` and `release.yml` (pinned SHAs), `.github/dependabot.yml`
+- [ ] OpenAPI document with its tests (SPEC-505)
+- [ ] `[log]` config (SPEC-807)
+- [ ] The user's visual check and TC-702 (open since M5/M6)
+- [ ] `Changes.md` → `[0.1.0]`; the user pushes the tag `v0.1.0`; check the release
+
+### M7 decisions (proposed; defaults recommended)
+| # | Question | Recommended default | Alternative |
+|---|----------|---------------------|-------------|
+| M7-1 | CI platform and layout | GitHub Actions with four jobs: check, test, raw-icmp, build (SPEC-007), on `ubuntu-24.04` | One job doing everything (simpler, slower, less clear when it fails) |
+| M7-2 | Actions used | Only `actions/checkout` **v7.0.1** (`3d3c42e5aac5ba805825da76410c181273ba90b1`) and `actions/setup-go` **v7.0.0** (`b7ad1dad31e06c5925ef5d2fc7ad053ef454303e`), both the latest releases (July 2026), pinned by SHA (SPEC-006). Go comes from `go.mod` (1.26) | Third-party actions for staticcheck, golangci-lint or releases (more SHAs to keep up to date) |
+| M7-3 | Lint tools | `staticcheck` from module `honnef.co/go/tools` **v0.8.2** (2026-10-12) and `govulncheck` **v1.9.0**, both run with `go run …@version`; findings fail the job. First run both locally and fix what they report | golangci-lint with a larger rule set (more noise, another config file) |
+| M7-4 | Raw-socket ICMP in CI (open since M2) | A job that runs the ICMP tests with `sudo`, forcing the raw mode, against 127.0.0.1 and ::1 (TC-309) | Leave raw mode tested only with the fake socket |
+| M7-5 | Builds | `ined-server` and `inedctl`: linux, darwin, windows × amd64, arm64 without cgo. `ined-gui`: linux/amd64 only (cgo cross-compiling for other systems needs their SDKs) | Also build the GUI for macOS and Windows on their own runners (three more runners and signing questions) |
+| M7-6 | OpenAPI (open question) | Written by hand, embedded, checked by tests against the real routes and `apitypes` (SPEC-505) | Generated from the code with an annotation tool (a new dependency and comment syntax) |
+| M7-7 | Server log (open question) | `[log] level` and `format` plus `-log-level` (SPEC-807) | Keep the fixed text log at info |
+| M7-8 | `inedctl backup` (open question) | LATER: for now the README says how to copy the database safely (`sqlite3 ined.db ".backup copy.db"` while the server runs) | An API endpoint for a consistent copy now |
+| M7-9 | Release | A tag workflow with archives, `SHA256SUMS` and the `Changes.md` section as text, published with `gh release` (preinstalled on the runner) and the job's `GITHUB_TOKEN` (SPEC-008). No signing in 0.1.0 | GoReleaser (another tool and config), or signing with Sigstore now |
+| M7-10 | Updates | Dependabot weekly for `github-actions` and `gomod`; it keeps the SHA pins and their version comments current | Update by hand |
+
+Process: Claude can't push. Claude writes the workflows and runs everything they run locally (apart from the GitHub-only parts). The user pushes, and Claude reads the run results with `gh run view` and fixes them. The same goes for the tag `v0.1.0`.
 
 ### M5 decisions (proposed; defaults recommended)
 | # | Question | Recommended default | Alternative |
@@ -161,5 +183,4 @@ Testing: the API additions get unit and API tests as before. GUI actions are tes
 Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit tests. The Fyne widgets are tested headless with `fyne.io/fyne/v2/test`. A manual script runs the GUI under Xvfb against a test server with generated hosts; Claude checks the screenshots, and the user does a final visual check.
 
 ## Open questions
-- Not yet decided: configurable `log/slog` level and format, OpenAPI-first or generated from the handlers (before M7), `inedctl backup`.
-- `staticcheck` / `govulncheck`: run in CI (M7), or locally once allowed.
+- The log, OpenAPI and backup questions, and the `staticcheck` / `govulncheck` question, are in the M7 decisions (M7-3, M7-6..8).

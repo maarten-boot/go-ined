@@ -117,3 +117,12 @@
     - **C6:** `group.moved` only with contents.
     - **Tests and examples:** new API and GUI tests (menus, Esc, the host pop-up); a "Moving groups" section in `API-examples.md`.
     - **Docs:** Spec and Plan v0.23, D18 recorded. `make all` passes.
+12. **User**: status?
+    **Claude**: M1–M6 done, including the crosscheck 08 fixes; 4 commits not yet pushed. Open: the user's visual check (TC-702 and others), and M7.
+13. **User**: pushed; start M7.
+    **Claude** looked up the current versions with `gh`: `actions/checkout` v7.0.1, `actions/setup-go` v7.0.0, `staticcheck` (module honnef.co/go/tools v0.8.2), `govulncheck` v1.9.0. It wrote the M7 draft, Spec and Plan v0.24:
+    - **New Spec items:** SPEC-007 (CI jobs: check, test, raw-icmp, build), SPEC-008 (release on a tag), SPEC-807 (server log level and format).
+    - **SPEC-505:** the OpenAPI document, hand-written, embedded and tested against the routes.
+    - **Tests:** TC-010..013 added; TC-505 and TC-309 extended.
+    - **Decisions:** proposed M7-1..10 (D19), which also settle the open questions on logging, OpenAPI, backup and lint tools.
+    - The code waits for the decisions.

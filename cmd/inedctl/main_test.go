@@ -499,3 +499,19 @@ func TestViewCommands(t *testing.T) {
 		t.Fatal("hosts must stay")
 	}
 }
+
+// TC-715, TC-716 (CLI): group shift, and move puts the item next to its
+// new parent.
+func TestGroupShift(t *testing.T) {
+	isolate(t)
+	s := testserver.Start(t, testserver.Options{})
+	u := "--url=" + s.URL()
+	ok(t, u, "group", "add", "--name", "a")
+	ok(t, u, "group", "add", "--name", "b")
+	contains(t, ok(t, u, "group", "shift", "1", "--dx", "-40", "--dy", "60"), "Position:", "0, 100")
+	if r := ctl(t, u, "group", "shift", "1"); r.code != 2 || !strings.Contains(r.errOut, "--dx") {
+		t.Fatalf("shift without offset: %+v", r)
+	}
+	// b (at 140,40) into a (at 0,100): next to a, one row below.
+	contains(t, ok(t, u, "group", "move", "2", "1"), "Parent:", "1", "Position:", "0, 220")
+}

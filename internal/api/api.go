@@ -107,6 +107,7 @@ func New(svc *inventory.Service, opts Options) http.Handler {
 	route("/hosts/{id}", map[string]http.HandlerFunc{"GET": s.getHost, "PATCH": s.patchHost, "DELETE": s.deleteHost})
 	route("/groups", map[string]http.HandlerFunc{"GET": s.listGroups, "POST": s.createGroup})
 	route("/groups/{id}", map[string]http.HandlerFunc{"GET": s.getGroup, "PATCH": s.patchGroup, "DELETE": s.deleteGroup})
+	route("/groups/{id}/move", map[string]http.HandlerFunc{"POST": s.moveGroup})
 	route("/views", map[string]http.HandlerFunc{"GET": s.listViews, "POST": s.createView})
 	route("/views/{id}", map[string]http.HandlerFunc{"GET": s.getView, "PATCH": s.patchView, "DELETE": s.deleteView})
 	route("/views/{id}/hosts/{host_id}", map[string]http.HandlerFunc{"PUT": s.placeHost, "DELETE": s.unplaceHost})
@@ -267,6 +268,20 @@ func (s *server) patchGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	g, err := s.svc.UpdateGroup(r.Context(), id, p)
+	s.respond(w, http.StatusOK, g, err)
+}
+
+// moveGroup serves POST /groups/{id}/move (SPEC-507).
+func (s *server) moveGroup(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in apitypes.GroupMove
+	if !decode(w, r, &in) {
+		return
+	}
+	g, err := s.svc.MoveGroup(r.Context(), id, in.DX, in.DY)
 	s.respond(w, http.StatusOK, g, err)
 }
 

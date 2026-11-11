@@ -25,7 +25,8 @@ var commands = map[string]map[string]command{
 	},
 	"group": {
 		"list": groupList, "add": groupAdd, "show": groupShow, "edit": groupEdit,
-		"rm": groupRm, "move": groupMove, "collapse": groupCollapse(true), "expand": groupCollapse(false),
+		"rm": groupRm, "move": groupMove, "shift": groupShift,
+		"collapse": groupCollapse(true), "expand": groupCollapse(false),
 	},
 	"note": {"get": noteGet, "set": noteSet, "clear": noteClear},
 	"view": {
@@ -262,6 +263,27 @@ func groupMove(a *app, name string, args []string) error {
 	}
 	var g apitypes.Group
 	return a.call(http.MethodPatch, path("group", id), apitypes.GroupPatch{ParentID: apitypes.Some(parent)}, &g,
+		func() { a.groupDetails(g) })
+}
+
+// groupShift moves a group with everything in it (SPEC-507).
+func groupShift(a *app, name string, args []string) error {
+	fs := a.flags(name)
+	dx := fs.Float64("dx", 0, "offset to the right (map units)")
+	dy := fs.Float64("dy", 0, "offset downwards (map units)")
+	pos, err := a.parse(fs, args, 1, 1)
+	if err != nil {
+		return err
+	}
+	gid, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	if given := set(fs); !given["dx"] && !given["dy"] {
+		return usagef("%s: give --dx and/or --dy", name)
+	}
+	var g apitypes.Group
+	return a.call(http.MethodPost, path("group", gid)+"/move", apitypes.GroupMove{DX: *dx, DY: *dy}, &g,
 		func() { a.groupDetails(g) })
 }
 

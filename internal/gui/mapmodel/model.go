@@ -195,6 +195,13 @@ func (m *Model) Apply(typ string, data json.RawMessage) (Effect, error) {
 			e.Reload = []int64{vm.ID}
 		}
 
+	case apitypes.EventGroupMoved:
+		var mv apitypes.GroupMovedEvent
+		if err := decode(typ, data, &mv); err != nil {
+			return e, err
+		}
+		e.Reload = m.ifLoaded(cmp.Or(mv.ViewID, NetworkView))
+
 	case apitypes.EventPlacementUpdated, apitypes.EventPlacementDeleted:
 		var p apitypes.PlacementDeletedEvent // both carry view_id and host_id
 		if err := decode(typ, data, &p); err != nil {

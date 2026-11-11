@@ -50,13 +50,14 @@ Commands:
   host show <id>
   host edit <id> [--ip A] [--name N] [--description D] [--monitored=true|false]
   host rm <id>
-  host move <id> <group-id|root>
+  host move <id> <group-id|root>              (moves it next to its new parent)
   group list [--view ID]
   group add [--cidr C] [--name N] [--description D] [--parent ID] [--note T] [--expanded] [--view ID]
   group show <id>
   group edit <id> [--name N] [--cidr C] [--description D]
   group rm <id> [--reparent | --cascade]
-  group move <id> <group-id|root>
+  group move <id> <group-id|root>             (moves it next to its new parent)
+  group shift <id> [--dx N] [--dy N]           (moves the group with everything in it)
   group collapse <id>
   group expand <id>
   note get|set|clear host|group <id> [text...]   (set reads stdin when no text is given)

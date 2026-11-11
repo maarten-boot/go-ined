@@ -300,6 +300,12 @@ func (c *Client) UpdateGroup(ctx context.Context, groupID int64, p apitypes.Grou
 	return g, c.Do(ctx, http.MethodPatch, "/groups/"+id(groupID), p, &g)
 }
 
+// MoveGroup moves a group and everything in it by (dx, dy) (SPEC-507).
+func (c *Client) MoveGroup(ctx context.Context, groupID int64, dx, dy float64) (apitypes.Group, error) {
+	var g apitypes.Group
+	return g, c.Do(ctx, http.MethodPost, "/groups/"+id(groupID)+"/move", apitypes.GroupMove{DX: dx, DY: dy}, &g)
+}
+
 // DeleteGroup removes a group. children is "" (the group must be empty),
 // apitypes.ChildrenReparent or apitypes.ChildrenCascade (SPEC-104).
 func (c *Client) DeleteGroup(ctx context.Context, groupID int64, children string) error {

@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/netip"
@@ -465,6 +466,10 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 				return apitypes.Host{}, err
 			}
 		}
+		if parent != h.ParentID && !p.X.Set && !p.Y.Set {
+			// A new parent without a position: next to it (SPEC-508).
+			h.X, h.Y = s.m.In(NetworkView).FreePosition(parent)
+		}
 		h.ParentID = parent
 	}
 	if p.X.Set {
@@ -616,6 +621,11 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 		if err := s.m.CheckMove(id, parent); err != nil {
 			return apitypes.Group{}, err
 		}
+		if parent != g.ParentID && !p.X.Set && !p.Y.Set {
+			// A new parent without a position: next to it, with the
+			// subtree moving along (SPEC-508).
+			g.X, g.Y = s.m.In(g.ViewID).FreePosition(parent)
+		}
 		g.ParentID = parent
 	}
 	if p.X.Set {
@@ -641,14 +651,98 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 		return apitypes.Group{}, err
 	}
 	cur.UpdatedAt = s.stamp()
-	if err := s.repo.Apply(ctx, Changes{Groups: []Group{*cur}}); err != nil {
+	dx, dy := cur.X-old.X, cur.Y-old.Y
+	ch := s.subtreeShift(cur, dx, dy, cur.UpdatedAt)
+	ch.Groups = append([]Group{*cur}, ch.Groups...)
+	if err := s.repo.Apply(ctx, ch); err != nil {
 		*cur = old
 		return apitypes.Group{}, err
 	}
+	s.applyShift(ch, cur.ViewID)
 	v := groupView(cur, s.m.In(cur.ViewID).Aggregate()[id])
 	s.notify.Publish(apitypes.EventGroupUpdated, v)
+	if len(ch.Groups) > 1 || len(ch.Hosts) > 0 || len(ch.Placements) > 0 {
+		s.notify.Publish(apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: id, ViewID: cur.ViewID, DX: dx, DY: dy})
+	}
 	s.emitGroupStatus(before)
 	return v, nil
+}
+
+// MoveGroup moves a group and everything in it by (dx, dy) in one
+// transaction (SPEC-507). It emits group.updated for the group and one
+// group.moved for its contents.
+func (s *Service) MoveGroup(ctx context.Context, id int64, dx, dy float64) (apitypes.Group, error) {
+	if err := checkPos(dx, dy); err != nil {
+		return apitypes.Group{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cur := s.m.Groups[id]
+	if cur == nil {
+		return apitypes.Group{}, notFoundf("group %d not found", id)
+	}
+	g := *cur
+	g.X, g.Y, g.UpdatedAt = g.X+dx, g.Y+dy, s.stamp()
+	if err := checkPos(g.X, g.Y); err != nil {
+		return apitypes.Group{}, err
+	}
+	ch := s.subtreeShift(cur, dx, dy, g.UpdatedAt)
+	ch.Groups = append([]Group{g}, ch.Groups...)
+	if err := s.repo.Apply(ctx, ch); err != nil {
+		return apitypes.Group{}, err
+	}
+	s.applyShift(ch, g.ViewID)
+	v := groupView(cur, s.m.In(cur.ViewID).Aggregate()[id])
+	s.notify.Publish(apitypes.EventGroupUpdated, v)
+	s.notify.Publish(apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: id, ViewID: cur.ViewID, DX: dx, DY: dy})
+	return v, nil
+}
+
+// subtreeShift returns the changes that move everything inside g (in its
+// view, not g itself) by (dx, dy): subgroups, and hosts (network view) or
+// placements (custom view). Caller holds the lock.
+func (s *Service) subtreeShift(g *Group, dx, dy float64, now time.Time) Changes {
+	var ch Changes
+	if dx == 0 && dy == 0 {
+		return ch
+	}
+	vm := s.m.In(g.ViewID)
+	for _, id := range sortedKeys(vm.Groups) {
+		if id != g.ID && vm.IsInSubtree(id, g.ID) {
+			c := *s.m.Groups[id]
+			c.X, c.Y, c.UpdatedAt = c.X+dx, c.Y+dy, now
+			ch.Groups = append(ch.Groups, c)
+		}
+	}
+	for _, hid := range sortedKeys(vm.Hosts) {
+		if h := vm.Hosts[hid]; h.ParentID == Root || !vm.IsInSubtree(h.ParentID, g.ID) {
+			continue
+		}
+		if g.ViewID == NetworkView {
+			c := *s.m.Hosts[hid]
+			c.X, c.Y, c.UpdatedAt = c.X+dx, c.Y+dy, now
+			ch.Hosts = append(ch.Hosts, c)
+		} else {
+			p := *s.m.Placements[g.ViewID][hid]
+			p.X, p.Y = p.X+dx, p.Y+dy
+			ch.Placements = append(ch.Placements, p)
+		}
+	}
+	return ch
+}
+
+// applyShift puts saved changes from subtreeShift (and the group) into
+// the model.
+func (s *Service) applyShift(ch Changes, view int64) {
+	for _, g := range ch.Groups {
+		*s.m.Groups[g.ID] = g
+	}
+	for _, h := range ch.Hosts {
+		*s.m.Hosts[h.ID] = h
+	}
+	for _, p := range ch.Placements {
+		*s.m.Placements[view][p.HostID] = p
+	}
 }
 
 // DeleteGroup removes a group (SPEC-104, SPEC-120). mode is "",
@@ -848,6 +942,7 @@ func (s *Service) hostView(h *Host) apitypes.Host {
 		ParentID: parentPtr(h.ParentID), Monitored: h.Monitored, Status: h.Status,
 		RTTms: h.RTTms, LossPct: h.LossPct, Stale: h.Stale, OutsideCIDR: s.m.OutsideCIDR(h),
 		X: h.X, Y: h.Y, CreatedAt: h.CreatedAt, UpdatedAt: h.UpdatedAt,
+		Views: s.hostViews(h.ID),
 	}
 	if !h.LastSeen.IsZero() {
 		t := h.LastSeen
@@ -858,6 +953,23 @@ func (s *Service) hostView(h *Host) apitypes.Host {
 		v.LastChange = &t
 	}
 	return v
+}
+
+// hostViews lists the views a host is placed in: the network view, then
+// the custom views in tab order (SPEC-509). Caller holds the lock.
+func (s *Service) hostViews(id int64) []int64 {
+	out := []int64{NetworkView}
+	var custom []*View
+	for vid, ps := range s.m.Placements {
+		if ps[id] != nil && s.m.Views[vid] != nil {
+			custom = append(custom, s.m.Views[vid])
+		}
+	}
+	slices.SortFunc(custom, func(a, b *View) int { return cmp.Or(cmp.Compare(a.Order, b.Order), cmp.Compare(a.ID, b.ID)) })
+	for _, v := range custom {
+		out = append(out, v.ID)
+	}
+	return out
 }
 
 func groupView(g *Group, c Counts) apitypes.Group {

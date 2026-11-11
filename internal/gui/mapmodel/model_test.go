@@ -147,6 +147,8 @@ func TestApply(t *testing.T) {
 		{apitypes.EventGroupUpdated, apitypes.Group{ID: 1, ViewID: 1}, []int64{1}},
 		{apitypes.EventGroupCreated, apitypes.Group{ID: 8, ViewID: 3}, nil}, // view 3 isn't loaded
 		{apitypes.EventGroupDeleted, apitypes.DeletedEvent{ID: 5}, []int64{2}},
+		{apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: 5, ViewID: 2, DX: 1}, []int64{2}},
+		{apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: 8, ViewID: 3, DX: 1}, nil},
 		{apitypes.EventGroupDeleted, apitypes.DeletedEvent{ID: 99}, nil},
 		{apitypes.EventPlacementUpdated, apitypes.Placement{ViewID: 2, HostID: 4}, []int64{2}},
 		{apitypes.EventPlacementDeleted, apitypes.PlacementDeletedEvent{ViewID: 3, HostID: 4}, nil},

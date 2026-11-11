@@ -493,6 +493,7 @@ func TestEventShort(t *testing.T) {
 		{apitypes.EventHostDeleted, `{"id":4}`, "host 4"},
 		{apitypes.EventGroupDeleted, `{"id":5}`, "group 5"},
 		{apitypes.EventGroupStatus, `{"id":5,"status":"down"}`, "group 5 down"},
+		{apitypes.EventGroupMoved, `{"id":5,"view_id":2,"dx":-10,"dy":2.5}`, "group 5 contents moved by -10,2.5 in view 2"},
 		{apitypes.EventDiscoveryProgress, `{"id":"r-1","cidr":"10.0.0.0/30","state":"running","probed":1,"total":2}`, "job r-1 10.0.0.0/30 running probed 1/2 found 0 added 0"},
 		{apitypes.EventDiscoveryFinished, `{"id":"r-1","cidr":"10.0.0.0/30","state":"failed","probed":2,"total":2,"errors":2,"error":"no route"}`, "job r-1 10.0.0.0/30 failed probed 2/2 found 0 added 0 errors 2: no route"},
 		{apitypes.EventResync, `{"reason":"client fell behind"}`, "reload: client fell behind"},
@@ -558,3 +559,32 @@ func TestViews(t *testing.T) {
 	_, err = c.ViewMap(ctx, v.ID)
 	apiErr(t, err, http.StatusNotFound, apitypes.CodeNotFound)
 }
+
+// TC-715, TC-717 (client): MoveGroup and the host's views.
+func TestMoveGroupAndViews(t *testing.T) {
+	s := testserver.Start(t, testserver.Options{})
+	c := newClient(t, s, "")
+	ctx := context.Background()
+	g, _ := c.CreateGroup(ctx, apitypes.GroupCreate{Name: "g", X: ptrF(10), Y: ptrF(10)})
+	h, _ := c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &g.ID, X: ptrF(20), Y: ptrF(30)})
+	g2, err := c.MoveGroup(ctx, g.ID, 5, -5)
+	if err != nil || g2.X != 15 || g2.Y != 5 {
+		t.Fatalf("move: %+v %v", g2, err)
+	}
+	h2, _ := c.Host(ctx, h.ID)
+	if h2.X != 25 || h2.Y != 25 || len(h2.Views) != 1 || h2.Views[0] != 1 {
+		t.Errorf("host after move: %+v", h2)
+	}
+	if _, err := c.MoveGroup(ctx, 99, 1, 1); !client.IsCode(err, apitypes.CodeNotFound) {
+		t.Errorf("unknown group: %v", err)
+	}
+	var raw json.RawMessage
+	if err := c.Do(ctx, "GET", "/groups/1/move", nil, &raw); !client.IsCode(err, apitypes.CodeMethodNotAllowed) {
+		t.Errorf("GET move: %v", err)
+	}
+	if err := c.Do(ctx, "POST", "/groups/1/move", json.RawMessage(`{"dx":"x"}`), &raw); !client.IsCode(err, apitypes.CodeInvalidArgument) {
+		t.Errorf("bad body: %v", err)
+	}
+}
+
+func ptrF(f float64) *float64 { return &f }

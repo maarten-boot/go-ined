@@ -294,6 +294,11 @@ func (e Event) Short() string {
 		if e.Decode(&d) == nil {
 			return fmt.Sprintf("%s %d", strings.TrimSuffix(e.Type, ".deleted"), d.ID)
 		}
+	case apitypes.EventGroupMoved:
+		var m apitypes.GroupMovedEvent
+		if e.Decode(&m) == nil {
+			return fmt.Sprintf("group %d contents moved by %g,%g in view %d", m.ID, m.DX, m.DY, m.ViewID)
+		}
 	case apitypes.EventGroupStatus:
 		var g apitypes.GroupStatusEvent
 		if e.Decode(&g) == nil {

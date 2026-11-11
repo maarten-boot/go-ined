@@ -50,6 +50,7 @@ const (
 	EventGroupUpdated = "group.updated"
 	EventGroupDeleted = "group.deleted"
 	EventGroupStatus  = "group.status"
+	EventGroupMoved   = "group.moved" // v0.21, SPEC-507
 
 	EventViewCreated      = "view.created"
 	EventViewUpdated      = "view.updated"
@@ -73,6 +74,15 @@ type (
 	GroupStatusEvent struct {
 		ID     int64  `json:"id"`
 		Status string `json:"status"`
+	}
+	// GroupMovedEvent is the payload of group.moved: everything inside the
+	// group (its subtree, not the group itself, whose new position comes
+	// with group.updated) moved by DX, DY in view ViewID (SPEC-507, 508).
+	GroupMovedEvent struct {
+		ID     int64   `json:"id"`
+		ViewID int64   `json:"view_id"`
+		DX     float64 `json:"dx"`
+		DY     float64 `json:"dy"`
 	}
 	// PlacementDeletedEvent is the payload of placement.deleted.
 	PlacementDeletedEvent struct {
@@ -161,6 +171,7 @@ type Host struct {
 	LastChange  *time.Time `json:"last_change"`
 	Stale       bool       `json:"stale"`
 	OutsideCIDR bool       `json:"outside_cidr"`
+	Views       []int64    `json:"views"` // views the host is placed in, network view first (v0.21, SPEC-509)
 	X           float64    `json:"x"`
 	Y           float64    `json:"y"`
 	CreatedAt   time.Time  `json:"created_at"`
@@ -248,6 +259,12 @@ type GroupCreate struct {
 	Collapsed   *bool    `json:"collapsed,omitempty"`
 	X           *float64 `json:"x,omitempty"`
 	Y           *float64 `json:"y,omitempty"`
+}
+
+// GroupMove is the body of POST /groups/{id}/move (SPEC-507).
+type GroupMove struct {
+	DX float64 `json:"dx"`
+	DY float64 `json:"dy"`
 }
 
 // GroupPatch is the body of PATCH /groups/{id}. "cidr": "" turns a network

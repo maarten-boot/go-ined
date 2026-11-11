@@ -26,3 +26,8 @@
    - **E1:** examples for arrange, `inedctl view arrange` and `contents_only`; on the way, "arranged 1 member".
    - Spec v0.30 (SPEC-304, 724), TC-727, the crosscheck's resolution. `make all` and `make lint` pass.
    - Then prepared release 0.2.0 (D2 a): see the next entry.
+4. **Claude** prepared release 0.2.0 (D2 a), on `main`:
+   - `Changes.md`: `[Unreleased]` became `[0.2.0] - 2026-11-12` (an empty `[Unreleased]` stays); the follow-up fixes were folded into the new features they belong to.
+   - OpenAPI `info.version` 0.2.0; README status (M1–7 done, latest release 0.2.0).
+   - `make all` passes; a local `build-release.sh v0.2.0` gave 8 files, the checksums match and the binaries print `v0.2.0`.
+   - Annotated tag `v0.2.0` made locally. The user pushes; then Claude checks the release run and its assets.

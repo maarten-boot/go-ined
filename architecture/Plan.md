@@ -193,7 +193,8 @@ Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit test
 - [x] User request: keep a group's top-left corner in place on expand/collapse: `contents_only` move; the GUI aligns on collapse (group position) and on expand (contents first); empty frames start at the icon's corner (SPEC-507, 703 v0.29; TC-725). Checked under Xvfb, also after dragging the collapsed icon elsewhere
 - [x] User request: multi-select with Tkined keys. User's answers: Ctrl+click and Shift+drag rubber band; g asks a name; c/e/Delete act on all selected (SPEC-724; TC-726). Checked under Xvfb: Ctrl+click, g, c, rubber band, Delete
 - [x] Crosscheck 2026-11-12-01 fixes (`fix/crosscheck-10`): delayed close of a replaced prober (C1); right-click keeps a multi-selection and the menu's Move/Delete act on all selected (C2, D1 b; TC-727); "Cmd on macOS" (S1); arrange and `contents_only` examples (E1); "arranged 1 member" (SPEC-304, 724 v0.30)
-- [ ] Release 0.2.0 (crosscheck 2026-11-12-01 D2 a): `[Unreleased]` becomes `[0.2.0]`, OpenAPI `info.version` 0.2.0, tag `v0.2.0`; verify the release run and its assets (TC-011)
+- [x] Release 0.2.0 prepared (crosscheck 2026-11-12-01 D2 a): `[0.2.0] - 2026-11-12` in `Changes.md` (curated: follow-up fixes folded into the new features), OpenAPI `info.version` 0.2.0, README status; local release build: 8 files, checksums OK, binaries print `v0.2.0`; annotated tag `v0.2.0`
+- [ ] Verify the 0.2.0 release run and its assets after the push (TC-011)
 
 ## Open questions
 - The log, OpenAPI and backup questions, and the `staticcheck` / `govulncheck` question, are in the M7 decisions (M7-3, M7-6..8).

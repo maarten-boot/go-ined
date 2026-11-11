@@ -11,6 +11,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
@@ -46,11 +47,18 @@ func TestDragWidget(t *testing.T) {
 		apitypes.MapItem{Type: "host", ID: 3, Name: "laptop", X: 500, Y: 400, Status: "up", Monitored: true},
 	)
 	var log []string
-	mv.OnMoved = func(k mapmodel.Key, dx, dy float64) {
-		log = append(log, fmt.Sprintf("move %s %d %g,%g", k.Type, k.ID, dx, dy))
+	keyList := func(keys []mapmodel.Key) string {
+		var out []string
+		for _, k := range keys {
+			out = append(out, fmt.Sprintf("%s %d", k.Type, k.ID))
+		}
+		return strings.Join(out, "+")
 	}
-	mv.OnDropInto = func(k mapmodel.Key, g int64, _, _ float64) {
-		log = append(log, fmt.Sprintf("into %s %d → %d", k.Type, k.ID, g))
+	mv.OnMoved = func(keys []mapmodel.Key, dx, dy float64) {
+		log = append(log, fmt.Sprintf("move %s %g,%g", keyList(keys), dx, dy))
+	}
+	mv.OnDropInto = func(keys []mapmodel.Key, g int64, _, _ float64) {
+		log = append(log, fmt.Sprintf("into %s → %d", keyList(keys), g))
 	}
 	mv.Subtree = func(k mapmodel.Key) map[mapmodel.Key]bool {
 		if k == mapmodel.GroupKey(1) {
@@ -709,4 +717,141 @@ func TestCornerStays(t *testing.T) {
 	if gg := must(c.Group(ctx, g.ID)); gg.Collapsed {
 		t.Error("still collapsed")
 	}
+}
+
+// TC-726 (widget): Ctrl+click adds and removes, Shift+drag selects with a
+// rubber band, and a drag on a selected item moves the whole selection.
+func TestMultiSelectWidget(t *testing.T) {
+	p := theme.NewPalette(theme.Default)
+	mv, _ := newMap(t, p,
+		apitypes.MapItem{Type: "host", ID: 1, Name: "a", X: 100, Y: 100, Status: "up", Monitored: true},
+		apitypes.MapItem{Type: "host", ID: 2, Name: "b", X: 200, Y: 100, Status: "up", Monitored: true},
+		apitypes.MapItem{Type: "host", ID: 3, Name: "c", X: 500, Y: 400, Status: "up", Monitored: true},
+	)
+	var moved []mapmodel.Key
+	mv.OnMoved = func(keys []mapmodel.Key, _, _ float64) { moved = keys }
+	at := func(x, y float64) *fyne.PointEvent {
+		sx, sy := mv.vp.ToScreen(x, y)
+		return &fyne.PointEvent{Position: fyne.NewPos(float32(sx), float32(sy))}
+	}
+	press := func(m fyne.KeyModifier) { mv.MouseDown(&desktop.MouseEvent{Modifier: m}) }
+	sel := func() string { return fmt.Sprint(mv.Selection()) }
+
+	press(0)
+	mv.Tapped(at(100, 100))
+	press(fyne.KeyModifierShortcutDefault)
+	mv.Tapped(at(200, 100))
+	if sel() != "[{host 1} {host 2}]" || *mv.Selected() != mapmodel.HostKey(2) {
+		t.Fatalf("ctrl+click add: %s", sel())
+	}
+	mv.Tapped(at(100, 100)) // ctrl+click again removes
+	mv.Tapped(at(700, 700)) // ctrl+click on empty space keeps the selection
+	if sel() != "[{host 2}]" {
+		t.Fatalf("ctrl+click remove: %s", sel())
+	}
+	press(0)
+	mv.Tapped(at(700, 700))
+	if sel() != "[]" {
+		t.Fatalf("plain click on empty space: %s", sel())
+	}
+
+	// Shift+drag from empty space around hosts 1 and 2.
+	press(fyne.KeyModifierShift)
+	drag(mv, 50, 50, 220, 100)
+	if sel() != "[{host 1} {host 2}]" || mv.Dragging() {
+		t.Fatalf("rubber band: %s", sel())
+	}
+	// A plain drag on a selected host moves both.
+	press(0)
+	drag(mv, 100, 100, 0, 60)
+	if fmt.Sprint(moved) != "[{host 1} {host 2}]" {
+		t.Errorf("multi-drag moved %v", moved)
+	}
+	// A drag on an unselected host moves only that one.
+	drag(mv, 500, 400, 0, 60)
+	if fmt.Sprint(moved) != "[{host 3}]" {
+		t.Errorf("single drag moved %v", moved)
+	}
+}
+
+// TC-726 (GUI): g groups the selection, c and e collapse and expand the
+// selected groups, Delete asks once for several items.
+func TestMultiSelectKeys(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	net := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "lan", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	h1 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Name: "web", ParentID: &net.ID, X: ptr(100.0), Y: ptr(220.0)}))
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", Name: "db", ParentID: &net.ID, X: ptr(200.0), Y: ptr(220.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h2.ID) != nil })
+
+	// g: a new group "app" inside lan, around web and db, positions kept.
+	var f *formDialog
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.HostKey(h1.ID), mapmodel.HostKey(h2.ID)})
+		g.lastForm = nil
+		g.onKey(&fyne.KeyEvent{Name: fyne.KeyG})
+		f = g.lastForm
+		if f == nil {
+			t.Fatal("no dialog for g")
+		}
+		f.form.Items[0].Widget.(*fyneEntry).SetText("app")
+		f.Submit()
+	})
+	eventually(t, e.ui, "grouped", func() bool { return f.done })
+	var app apitypes.Group
+	for _, gr := range must(c.Groups(ctx)) {
+		if gr.Name == "app" {
+			app = gr
+		}
+	}
+	if app.ID == 0 || app.ParentID == nil || *app.ParentID != net.ID || app.Collapsed {
+		t.Fatalf("new group: %+v", app)
+	}
+	for _, h := range []apitypes.Host{h1, h2} {
+		got := must(c.Host(ctx, h.ID))
+		if got.ParentID == nil || *got.ParentID != app.ID || got.X != h.X || got.Y != h.Y {
+			t.Errorf("host %d: %+v", h.ID, got)
+		}
+	}
+	eventually(t, e.ui, "app frame shown and selected", func() bool {
+		n := find(e.nodes(1), "group", app.ID)
+		return n != nil && n.Kind == mapmodel.KindFrame && g.maps[1].Selected() != nil && *g.maps[1].Selected() == mapmodel.GroupKey(app.ID)
+	})
+
+	// c and e on two selected groups.
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.GroupKey(net.ID), mapmodel.GroupKey(app.ID)})
+		g.onKey(&fyne.KeyEvent{Name: fyne.KeyC})
+	})
+	eventually(t, e.ui, "both collapsed", func() bool {
+		return must(c.Group(ctx, net.ID)).Collapsed && must(c.Group(ctx, app.ID)).Collapsed
+	})
+	e.ui.Wait(func() { g.onKey(&fyne.KeyEvent{Name: fyne.KeyE}) })
+	eventually(t, e.ui, "both expanded", func() bool {
+		return !must(c.Group(ctx, net.ID)).Collapsed && !must(c.Group(ctx, app.ID)).Collapsed
+	})
+
+	// Delete with two hosts selected: one question, both deleted.
+	eventually(t, e.ui, "hosts shown", func() bool { return find(e.nodes(1), "host", h1.ID) != nil })
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.HostKey(h1.ID), mapmodel.HostKey(h2.ID)})
+		g.lastForm = nil
+		g.onKey(&fyne.KeyEvent{Name: fyne.KeyDelete})
+		f = g.lastForm
+		if f == nil || f.form.Items[0].Widget.(*fyneLabel).Text != "Delete 2 hosts? Hosts are removed from every view. This can't be undone." {
+			t.Fatalf("delete many: %+v", f)
+		}
+		f.Submit()
+	})
+	eventually(t, e.ui, "deleted", func() bool { return f.done && len(must(c.Hosts(ctx))) == 0 })
+	// Esc clears the selection.
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.GroupKey(app.ID)})
+		g.onKey(&fyne.KeyEvent{Name: fyne.KeyEscape})
+		if len(g.maps[1].Selection()) != 0 {
+			t.Error("Esc kept the selection")
+		}
+	})
 }

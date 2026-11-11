@@ -617,3 +617,155 @@ func (g *GUI) reflowDialog(view int64, parent *int64) *formDialog {
 		return err
 	})
 }
+
+// ---- several items at once (SPEC-724) ----
+
+// deleteManyDialog asks once before deleting several items. Groups go
+// with "move contents up", so nothing else is deleted by surprise.
+func (g *GUI) deleteManyDialog(view int64, keys []mapmodel.Key) *formDialog {
+	var hosts, groups int
+	for _, k := range keys {
+		if k.Type == apitypes.TypeHost {
+			hosts++
+		} else {
+			groups++
+		}
+	}
+	var what, notes []string
+	if hosts > 0 {
+		what, notes = append(what, plural(hosts, "host")), append(notes, "hosts are removed from every view")
+	}
+	if groups > 0 {
+		what, notes = append(what, plural(groups, "group")), append(notes, "the groups' contents move up to their parents")
+	}
+	text := fmt.Sprintf("Delete %s? The %s. This can't be undone.", strings.Join(what, " and "), strings.Join(notes, "; "))
+	text = strings.Replace(text, "The hosts are", "Hosts are", 1)
+	text = strings.Replace(text, "The the groups'", "The groups'", 1)
+	l := widget.NewLabel(text)
+	l.Wrapping = fyne.TextWrapWord
+	return g.showForm(fmt.Sprintf("Delete %d items", len(keys)), "Delete", []*widget.FormItem{widget.NewFormItem("", l)}, func() error {
+		for _, k := range keys { // hosts first, then groups
+			if k.Type == apitypes.TypeHost {
+				if err := g.c.DeleteHost(g.ctx, k.ID); err != nil {
+					return err
+				}
+			}
+		}
+		for _, k := range keys {
+			if k.Type == apitypes.TypeGroup {
+				if err := g.c.DeleteGroup(g.ctx, k.ID, apitypes.ChildrenReparent); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
+
+// groupSelectionDialog asks for a name and makes a new group of the
+// selected items (key g, as in Tkined). The group goes into the items'
+// deepest common parent and is shown expanded around them; the items keep
+// their positions, and the group's own position is the frame's top-left
+// corner, so collapsing it later puts the icon there.
+func (g *GUI) groupSelectionDialog(view int64, keys []mapmodel.Key) *formDialog {
+	keys = g.topLevel(view, keys)
+	if len(keys) == 0 {
+		g.status.message("select hosts or groups first (Ctrl+click, Shift+drag), then press g")
+		return nil
+	}
+	g.mu.Lock()
+	parent := g.commonParent(view, keys)
+	var box mapmodel.Rect
+	pos := map[mapmodel.Key][2]float64{}
+	for _, k := range keys {
+		if it := g.item(view, k); it != nil {
+			pos[k] = [2]float64{it.X, it.Y}
+		}
+	}
+	g.mu.Unlock()
+	for _, n := range g.maps[view].Nodes() {
+		if _, ok := pos[mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}]; ok {
+			box = box.Union(n.Bounds)
+		}
+	}
+	cx, cy := mapmodel.CenterForCorner(box.X-mapmodel.FramePad, box.Y-mapmodel.FramePad-mapmodel.FrameLabelH)
+	name := entry("group")
+	return g.showForm(fmt.Sprintf("Group %d items", len(keys)), "Create", []*widget.FormItem{widget.NewFormItem("Name", name)}, func() error {
+		gr, err := g.c.CreateGroup(g.ctx, apitypes.GroupCreate{
+			Name: name.Text, ViewID: &view, ParentID: parent, Collapsed: ptrTo(false), X: &cx, Y: &cy,
+		})
+		if err != nil {
+			return err
+		}
+		for _, k := range keys { // into the group, at the same place
+			p := pos[k]
+			if err := g.setParentAt(view, k, gr.ID, p[0], p[1]); err != nil {
+				return err
+			}
+		}
+		g.do(func() {
+			if mv := g.maps[view]; mv != nil {
+				k := mapmodel.GroupKey(gr.ID)
+				mv.Select(&k)
+				g.details.show(view, &k)
+			}
+		})
+		return nil
+	})
+}
+
+// commonParent is the deepest group above all the items (nil: the root).
+// Caller holds g.mu.
+func (g *GUI) commonParent(view int64, keys []mapmodel.Key) *int64 {
+	var common []int64 // ancestors of the first item, nearest first
+	for i, k := range keys {
+		it := g.item(view, k)
+		if it == nil {
+			continue
+		}
+		var chain []int64
+		for p, n := it.ParentID, 0; p != nil && n < 1000; n++ {
+			chain = append(chain, *p)
+			pg := g.item(view, mapmodel.GroupKey(*p))
+			if pg == nil {
+				break
+			}
+			p = pg.ParentID
+		}
+		if i == 0 {
+			common = chain
+			continue
+		}
+		in := map[int64]bool{}
+		for _, c := range chain {
+			in[c] = true
+		}
+		var keep []int64
+		for _, c := range common {
+			if in[c] {
+				keep = append(keep, c)
+			}
+		}
+		common = keep
+	}
+	if len(common) == 0 {
+		return nil
+	}
+	return &common[0]
+}
+
+// setParentAt gives an item a new parent and keeps its position.
+func (g *GUI) setParentAt(view int64, k mapmodel.Key, group int64, x, y float64) error {
+	var err error
+	switch {
+	case k.Type == apitypes.TypeGroup:
+		_, err = g.c.UpdateGroup(g.ctx, k.ID, apitypes.GroupPatch{ParentID: apitypes.Some(&group), X: apitypes.Some(x), Y: apitypes.Some(y)})
+	case view == mapmodel.NetworkView:
+		_, err = g.c.UpdateHost(g.ctx, k.ID, apitypes.HostPatch{ParentID: apitypes.Some(&group), X: apitypes.Some(x), Y: apitypes.Some(y)})
+	default:
+		_, err = g.c.PlaceHost(g.ctx, view, k.ID, apitypes.PlacementSet{ParentID: &group, X: &x, Y: &y})
+	}
+	return err
+}
+
+func ptrTo[T any](v T) *T { return &v }

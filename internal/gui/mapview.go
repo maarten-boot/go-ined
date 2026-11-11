@@ -1,11 +1,15 @@
 package gui
 
 import (
+	"cmp"
 	"image/color"
 	"math"
+	"slices"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/maarten-boot/go-ined/internal/gui/mapmodel"
@@ -30,8 +34,10 @@ type MapView struct {
 	view    int64
 	nodes   []mapmodel.Node
 	vp      mapmodel.Viewport
-	placed  bool // the viewport has been set ("fit all" on the first layout)
-	sel     *mapmodel.Key
+	placed  bool                  // the viewport has been set ("fit all" on the first layout)
+	sel     *mapmodel.Key         // the primary selection (shown in the details)
+	sels    map[mapmodel.Key]bool // everything selected (SPEC-724)
+	mods    fyne.KeyModifier      // modifier keys held at the last mouse press
 	palette func() theme.Palette
 
 	// Callbacks, set by the GUI.
@@ -42,10 +48,10 @@ type MapView struct {
 	OnMenu func(n *mapmodel.Node, at fyne.Position, mx, my float64)
 	// OnViewport is called when the viewport changes (zoom display).
 	OnViewport func(mapmodel.Viewport)
-	// OnMoved: an item was dragged by (dx, dy) map units onto empty space.
-	OnMoved func(k mapmodel.Key, dx, dy float64)
-	// OnDropInto: an item was dropped onto a group (SPEC-704).
-	OnDropInto func(k mapmodel.Key, group int64, dx, dy float64)
+	// OnMoved: items were dragged by (dx, dy) map units onto empty space.
+	OnMoved func(keys []mapmodel.Key, dx, dy float64)
+	// OnDropInto: items were dropped onto a group (SPEC-704).
+	OnDropInto func(keys []mapmodel.Key, group int64, dx, dy float64)
 	// Subtree returns the keys that move with a dragged item: the item,
 	// and for a group everything below it.
 	Subtree func(k mapmodel.Key) map[mapmodel.Key]bool
@@ -54,12 +60,15 @@ type MapView struct {
 	// A press that may become an item drag or a pan (M6-9: 4 pixels).
 	pendingKey   *mapmodel.Key
 	pendingTotal fyne.Delta
-	// An item drag in progress.
-	dragKey    mapmodel.Key
-	dragSet    map[mapmodel.Key]bool
-	dragDX     float64 // map units
-	dragDY     float64
-	dropTarget *mapmodel.Node
+	// An item drag in progress: the items dragged (the selection, when the
+	// drag starts on a selected item), and everything moving with them.
+	dragKeys []mapmodel.Key
+	// A rubber band (Shift+drag), in map units.
+	bandX0, bandY0, bandX1, bandY1 float64
+	dragSet                        map[mapmodel.Key]bool
+	dragDX                         float64 // map units
+	dragDY                         float64
+	dropTarget                     *mapmodel.Node
 }
 
 type dragMode int
@@ -71,6 +80,7 @@ const (
 	dragHBar
 	dragVBar
 	dragItem
+	dragBand
 )
 
 // dragThreshold is how far the pointer moves before a press becomes a
@@ -116,14 +126,69 @@ func (mv *MapView) viewportChanged() {
 	}
 }
 
-// Select marks an item as selected (nil clears).
+// Select makes one item the selection (nil clears it).
 func (mv *MapView) Select(k *mapmodel.Key) {
-	mv.sel = k
+	mv.sel, mv.sels = k, map[mapmodel.Key]bool{}
+	if k != nil {
+		mv.sels[*k] = true
+	}
 	mv.Refresh()
 }
 
-// Selected returns the selected item.
+// SetSelection selects these items; the last one is the primary.
+func (mv *MapView) SetSelection(keys []mapmodel.Key) {
+	mv.sel, mv.sels = nil, map[mapmodel.Key]bool{}
+	for _, k := range keys {
+		mv.sels[k] = true
+		mv.sel = &k
+	}
+	mv.Refresh()
+}
+
+// toggle adds an item to the selection or removes it (Ctrl+click).
+func (mv *MapView) toggle(k mapmodel.Key) {
+	if mv.sels == nil {
+		mv.sels = map[mapmodel.Key]bool{}
+	}
+	if mv.sels[k] {
+		delete(mv.sels, k)
+		if mv.sel != nil && *mv.sel == k {
+			mv.sel = nil
+			if rest := mv.Selection(); len(rest) > 0 { // another one becomes primary
+				mv.sel = &rest[len(rest)-1]
+			}
+		}
+	} else {
+		mv.sels[k] = true
+		mv.sel = &k
+	}
+	mv.Refresh()
+}
+
+// Selected returns the primary selected item.
 func (mv *MapView) Selected() *mapmodel.Key { return mv.sel }
+
+// Selection returns every selected item, in a stable order.
+func (mv *MapView) Selection() []mapmodel.Key {
+	out := make([]mapmodel.Key, 0, len(mv.sels))
+	for k := range mv.sels {
+		out = append(out, k)
+	}
+	slices.SortFunc(out, func(a, b mapmodel.Key) int {
+		return cmp.Or(strings.Compare(a.Type, b.Type), cmp.Compare(a.ID, b.ID))
+	})
+	return out
+}
+
+// MouseDown records the modifier keys of a press, for the tap or drag that
+// follows (Ctrl+click, Shift+drag; SPEC-724).
+func (mv *MapView) MouseDown(ev *desktop.MouseEvent) { mv.mods = ev.Modifier }
+
+// MouseUp implements desktop.Mouseable.
+func (mv *MapView) MouseUp(*desktop.MouseEvent) {}
+
+func (mv *MapView) ctrlHeld() bool  { return mv.mods&fyne.KeyModifierShortcutDefault != 0 }
+func (mv *MapView) shiftHeld() bool { return mv.mods&fyne.KeyModifierShift != 0 }
 
 // ZoomBy zooms around the centre of the widget.
 func (mv *MapView) ZoomBy(f float64) {
@@ -159,14 +224,22 @@ func (mv *MapView) hit(p fyne.Position) *mapmodel.Node {
 }
 
 // Tapped selects the item under the pointer, or clears the selection.
+// With Ctrl held it adds the item to the selection or removes it.
 func (mv *MapView) Tapped(ev *fyne.PointEvent) {
 	var k *mapmodel.Key
 	if n := mv.hit(ev.Position); n != nil {
 		k = &mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}
 	}
-	mv.Select(k)
+	switch {
+	case mv.ctrlHeld() && k != nil:
+		mv.toggle(*k)
+	case mv.ctrlHeld():
+		return // Ctrl+click on empty space keeps the selection
+	default:
+		mv.Select(k)
+	}
 	if mv.OnSelect != nil {
-		mv.OnSelect(k)
+		mv.OnSelect(mv.sel)
 	}
 }
 
@@ -221,11 +294,21 @@ func (mv *MapView) Dragged(ev *fyne.DragEvent) {
 	if mv.drag == dragNone {
 		start := fyne.NewPos(ev.Position.X-ev.Dragged.DX, ev.Position.Y-ev.Dragged.DY)
 		mv.drag = mv.barAt(start)
+		if mv.drag == dragPan && mv.shiftHeld() { // a rubber band (SPEC-724)
+			mv.drag = dragBand
+			mv.bandX0, mv.bandY0 = mv.toMap(start)
+			mv.bandX1, mv.bandY1 = mv.bandX0, mv.bandY0
+		}
 		if mv.drag == dragPan {
 			mv.drag, mv.pendingKey, mv.pendingTotal = dragPending, mv.draggable(start), fyne.Delta{}
 		}
 	}
 	dx, dy := float64(ev.Dragged.DX), float64(ev.Dragged.DY)
+	if mv.drag == dragBand {
+		mv.bandX1, mv.bandY1 = mv.toMap(ev.Position)
+		mv.Refresh()
+		return
+	}
 	if mv.drag == dragPending {
 		mv.pendingTotal.DX += ev.Dragged.DX
 		mv.pendingTotal.DY += ev.Dragged.DY
@@ -235,10 +318,20 @@ func (mv *MapView) Dragged(ev *fyne.DragEvent) {
 		dx, dy = float64(mv.pendingTotal.DX), float64(mv.pendingTotal.DY)
 		mv.drag = dragPan
 		if k := mv.pendingKey; k != nil {
-			mv.drag, mv.dragKey, mv.dragDX, mv.dragDY = dragItem, *k, 0, 0
-			mv.dragSet = map[mapmodel.Key]bool{*k: true}
-			if mv.Subtree != nil {
-				mv.dragSet = mv.Subtree(*k)
+			// A drag on a selected item moves the whole selection.
+			mv.dragKeys = []mapmodel.Key{*k}
+			if mv.sels[*k] && len(mv.sels) > 1 {
+				mv.dragKeys = mv.Selection()
+			}
+			mv.drag, mv.dragDX, mv.dragDY = dragItem, 0, 0
+			mv.dragSet = map[mapmodel.Key]bool{}
+			for _, dk := range mv.dragKeys {
+				mv.dragSet[dk] = true
+				if mv.Subtree != nil {
+					for sk := range mv.Subtree(dk) {
+						mv.dragSet[sk] = true
+					}
+				}
 			}
 		}
 	}
@@ -271,21 +364,25 @@ func (mv *MapView) Dragged(ev *fyne.DragEvent) {
 // move (SPEC-704).
 func (mv *MapView) DragEnd() {
 	if mv.drag == dragItem {
-		k, dx, dy, target := mv.dragKey, mv.dragDX, mv.dragDY, mv.dropTarget
+		keys, dx, dy, target := mv.dragKeys, mv.dragDX, mv.dragDY, mv.dropTarget
 		mv.endItemDrag()
 		switch {
 		case target != nil && mv.OnDropInto != nil:
-			mv.OnDropInto(k, target.Item.ID, dx, dy)
+			mv.OnDropInto(keys, target.Item.ID, dx, dy)
 		case (dx != 0 || dy != 0) && mv.OnMoved != nil:
-			mv.OnMoved(k, dx, dy)
+			mv.OnMoved(keys, dx, dy)
 		}
+	}
+	if mv.drag == dragBand {
+		mv.drag = dragNone
+		mv.selectBand()
 	}
 	mv.drag, mv.pendingKey = dragNone, nil
 }
 
 // CancelDrag stops an item drag without a change (Esc, SPEC-704).
 func (mv *MapView) CancelDrag() {
-	if mv.drag == dragItem || mv.drag == dragPending {
+	if mv.drag == dragItem || mv.drag == dragPending || mv.drag == dragBand {
 		mv.endItemDrag()
 		mv.drag = dragPan // the rest of this pointer drag pans
 	}
@@ -295,8 +392,29 @@ func (mv *MapView) CancelDrag() {
 func (mv *MapView) Dragging() bool { return mv.drag == dragItem }
 
 func (mv *MapView) endItemDrag() {
-	mv.dragSet, mv.dropTarget, mv.dragDX, mv.dragDY, mv.pendingKey = nil, nil, 0, 0, nil
+	mv.dragSet, mv.dropTarget, mv.dragDX, mv.dragDY, mv.pendingKey, mv.dragKeys = nil, nil, 0, 0, nil, nil
 	mv.Refresh()
+}
+
+// selectBand selects every item whose icon (or frame label) centre lies
+// inside the rubber band; with Ctrl held it adds them to the selection.
+func (mv *MapView) selectBand() {
+	x0, x1 := math.Min(mv.bandX0, mv.bandX1), math.Max(mv.bandX0, mv.bandX1)
+	y0, y1 := math.Min(mv.bandY0, mv.bandY1), math.Max(mv.bandY0, mv.bandY1)
+	band := mapmodel.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
+	var keys []mapmodel.Key
+	if mv.ctrlHeld() {
+		keys = mv.Selection()
+	}
+	for _, n := range mv.nodes {
+		if band.Contains(n.Icon.X+n.Icon.W/2, n.Icon.Y+n.Icon.H/2) {
+			keys = append(keys, mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID})
+		}
+	}
+	mv.SetSelection(keys)
+	if mv.OnSelect != nil {
+		mv.OnSelect(mv.sel)
+	}
 }
 
 // draggable returns the item a drag starting at p would move: a host or
@@ -404,13 +522,18 @@ func (r *mapRenderer) build() {
 		if !n.Bounds.Intersects(vis) {
 			continue
 		}
-		selected := mv.sel != nil && mv.sel.Type == n.Item.Type && mv.sel.ID == n.Item.ID
+		selected := mv.sels[mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}]
 		switch n.Kind {
 		case mapmodel.KindFrame:
 			d.frame(n, vis, selected)
 		default:
 			d.icon(n, selected)
 		}
+	}
+	if mv.drag == dragBand { // the rubber band (SPEC-724)
+		x0, x1 := math.Min(mv.bandX0, mv.bandX1), math.Max(mv.bandX0, mv.bandX1)
+		y0, y1 := math.Min(mv.bandY0, mv.bandY1), math.Max(mv.bandY0, mv.bandY1)
+		d.rect(mapmodel.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}, color.Transparent, nrgba(p.Primary), 1.5)
 	}
 	if t := mv.dropTarget; t != nil { // SPEC-704: mark the drop target
 		r := t.Icon

@@ -21,16 +21,22 @@ import (
 func (g *GUI) wireEditing(mv *MapView) {
 	view := mv.view
 	mv.OnMenu = func(n *mapmodel.Node, at fyne.Position, mx, my float64) { g.openMenu(view, n, at, mx, my) }
-	mv.OnMoved = func(k mapmodel.Key, dx, dy float64) { g.moveItem(view, k, dx, dy) }
-	mv.OnDropInto = func(k mapmodel.Key, group int64, dx, dy float64) {
-		g.mu.Lock()
-		it := g.item(view, k)
-		g.mu.Unlock()
-		if it != nil && it.ParentID != nil && *it.ParentID == group {
-			g.moveItem(view, k, dx, dy) // dropped onto its own group: just a move
-			return
+	mv.OnMoved = func(keys []mapmodel.Key, dx, dy float64) {
+		for _, k := range g.topLevel(view, keys) {
+			g.moveItem(view, k, dx, dy)
 		}
-		g.moveInto(view, k, &group)
+	}
+	mv.OnDropInto = func(keys []mapmodel.Key, group int64, dx, dy float64) {
+		for _, k := range g.topLevel(view, keys) {
+			g.mu.Lock()
+			it := g.item(view, k)
+			g.mu.Unlock()
+			if it != nil && it.ParentID != nil && *it.ParentID == group {
+				g.moveItem(view, k, dx, dy) // dropped onto its own group: just a move
+				continue
+			}
+			g.moveInto(view, k, &group)
+		}
 	}
 	mv.Subtree = func(k mapmodel.Key) map[mapmodel.Key]bool {
 		if k.Type == apitypes.TypeHost {
@@ -219,11 +225,69 @@ func (g *GUI) unplace(view, host int64) {
 	}()
 }
 
-// deleteSelected asks to delete the selected item of the current tab
-// (Delete key, SPEC-719).
+// deleteSelected asks to delete the selected items of the current tab
+// (Delete key, SPEC-719, 724).
 func (g *GUI) deleteSelected() {
-	if mv := g.currentMap(); mv != nil && mv.Selected() != nil {
-		g.deleteDialog(mv.view, *mv.Selected())
+	mv := g.currentMap()
+	if mv == nil {
+		return
+	}
+	switch keys := g.topLevel(mv.view, mv.Selection()); len(keys) {
+	case 0:
+	case 1:
+		g.deleteDialog(mv.view, keys[0])
+	default:
+		g.deleteManyDialog(mv.view, keys)
+	}
+}
+
+// topLevel drops the keys that lie inside a selected group: they move or
+// go with that group.
+func (g *GUI) topLevel(view int64, keys []mapmodel.Key) []mapmodel.Key {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	sel := map[int64]bool{}
+	for _, k := range keys {
+		if k.Type == apitypes.TypeGroup {
+			sel[k.ID] = true
+		}
+	}
+	var out []mapmodel.Key
+	for _, k := range keys {
+		it := g.item(view, k)
+		if it == nil {
+			continue
+		}
+		inside := false
+		for p, n := it.ParentID, 0; p != nil && n < 1000; n++ {
+			if sel[*p] {
+				inside = true
+				break
+			}
+			pg := g.item(view, mapmodel.GroupKey(*p))
+			if pg == nil {
+				break
+			}
+			p = pg.ParentID
+		}
+		if !inside {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// setSelectedCollapsed collapses or expands every selected group, each
+// keeping its top-left corner (keys c and e, SPEC-724).
+func (g *GUI) setSelectedCollapsed(collapsed bool) {
+	mv := g.currentMap()
+	if mv == nil {
+		return
+	}
+	for _, k := range mv.Selection() {
+		if k.Type == apitypes.TypeGroup {
+			g.setCollapsed(k.ID, collapsed)
+		}
 	}
 }
 
@@ -233,9 +297,22 @@ func (g *GUI) onKey(ev *fyne.KeyEvent) {
 	switch ev.Name {
 	case fyne.KeyEscape:
 		if mv := g.currentMap(); mv != nil {
-			mv.CancelDrag()
+			if mv.Dragging() {
+				mv.CancelDrag()
+			} else {
+				mv.Select(nil) // Esc clears the selection (SPEC-724)
+				g.details.clear()
+			}
 		}
 	case fyne.KeyDelete:
 		g.deleteSelected()
+	case fyne.KeyG: // group the selection (SPEC-724, as in Tkined)
+		if mv := g.currentMap(); mv != nil {
+			g.groupSelectionDialog(mv.view, mv.Selection())
+		}
+	case fyne.KeyC:
+		g.setSelectedCollapsed(true)
+	case fyne.KeyE:
+		g.setSelectedCollapsed(false)
 	}
 }

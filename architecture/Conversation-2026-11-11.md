@@ -184,3 +184,11 @@
     - The published release https://github.com/maarten-boot/go-ined/releases/tag/v0.1.0 has 7 archives and `SHA256SUMS`; it is neither a draft nor a pre-release.
     - Claude downloaded everything: all checksums OK; `ined-server`, `inedctl` and `ined-gui` print `v0.1.0`; the binaries are built with go1.26.11; the release text equals the `[0.1.0]` section of `Changes.md`.
     - TC-011 passing; M7 done.
+24. **User**: pushed; give me the delete command for merged branches.
+    **Claude** listed GitHub's branches through the API (SSH isn't available here). It found 19 `feature/*` and `fix/*` branches fully merged into `main`, and gave the `git push origin --delete` command plus the local cleanup. Kept: `main`, `docs/architecture`, and the Dependabot PR branch.
+25. **User**: the fetch showed `[new branch] dependabot/…`.
+    **Claude**: a remote-tracking ref of the PR #1 branch, fetched for the first time; nothing new on GitHub. It also found that the 19 branches were still on GitHub, so the delete hadn't taken effect, and gave a one-line command.
+26. **User**: `remote: - Pushes can not update more than 5 branches or tags.`
+    **Claude**: a GitHub ruleset limits every push to 5 refs, including deletes. It split the delete into 4 pushes, and will keep every push command within 5 refs (saved to memory).
+27. **User**: verify now.
+    **Claude**: GitHub has `main`, `docs/architecture`, the Dependabot branch and the tag `v0.1.0`; locally `main` and `docs/architecture`; `main` is the same commit on both sides (`0ea5ef2`).

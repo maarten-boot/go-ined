@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.16** (2026-11-10)
+Status: **draft v0.17** (2026-11-11)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -61,12 +61,12 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - `GET/POST /views`, `GET/PATCH/DELETE /views/{id}` (`name`, `order`; deleting view 1 → 409).
   - `GET /map?view=<id>`: the items of one view, with the placement's parent and position for hosts. Without `view`, the network view.
   - `PUT /views/{id}/hosts/{host_id}` with `{parent_id, x, y}` adds or moves a host in a custom view; `DELETE /views/{id}/hosts/{host_id}` removes it from the view. For view 1 both return 400: there, use `PATCH /hosts/{id}`.
-  - `POST /groups` takes `view_id` (default 1); group JSON has `view_id`. `GET /groups?view=<id>` lists one view's groups.
+  - `POST /groups` takes `view_id` (default 1); group JSON has `view_id`. `GET /groups?view=<id>` lists one view's groups; without `view`, all groups of all views, each with its `view_id` (v0.17).
   - Host JSON keeps `parent_id`, `x`, `y`: the network placement.
   - Events (SPEC-502): `view.created|updated` (full view), `view.deleted` (`{id}`, one event; the view's groups and placements go with it), `placement.updated` (`{view_id, host_id, parent_id, x, y}`), `placement.deleted` (`{view_id, host_id}`). Deleting a host emits only `host.deleted`, also for its placements. Cascade or reparent in a custom view emits `placement.deleted` / `placement.updated` and `group.deleted` / `group.updated` per item.
   - `GET /map` returns `view_id` next to `items`; in custom views `outside_cidr` is always `false`.
 - **SPEC-123** MUST: Storage: migration 3 adds views and custom-view placements; an existing database is upgraded with all its groups in view 1. A host's network placement stays in the `hosts` table (decision M4b-1). The startup check (SPEC-605) also covers views: a group of a missing view moves to view 1's root, a group or placement whose parent is in another view or missing moves to the root of its view, each with a warning.
-- **SPEC-124** MUST: `inedctl view list|add|show|rename|order|rm|place|unplace`, `--view` on `group add` and `group list`. `view show <id>` prints the view and a table of its hosts (with `--json`: the view only). `view place <view> <host> [--parent ID] [--x X --y Y]`.
+- **SPEC-124** MUST: `inedctl view list|add|show|rename|order|rm|place|unplace`, `--view` on `group add` and `group list`. `view show <id>` prints the view and a table of its hosts (with `--json`: the view only). `view place <view> <host> [--parent ID] [--x X --y Y]`; without `--parent` the host goes to the view's root, as with the API's `PUT` (v0.17).
 
 ## 5. Discovery
 - **SPEC-201** MUST: A discovery job takes either an IPv4 CIDR range or the id of an IPv4 network group, and probes every address in the range with ICMP echo. Hosts it finds go into the network group for that range. If no network group with that CIDR exists, one is created (named after the CIDR) under the optional target group, or at the root if none is given. An IPv6 range or IPv6 network group is rejected with 400 (A2). A job whose new network group would break SPEC-114 is rejected with 409 before it starts. Each address gets one echo request, and a second one 200 ms later only if the first gets no answer; each waits up to `monitor.timeout`. Discovery uses the same ICMP prober as monitoring and works even with `monitor.enabled = false`. Without a working IPv4 ICMP mode, `POST /discovery` returns 503 `unavailable` with the reason (v0.11).
@@ -97,19 +97,20 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - `GET /map`: every item with its type, parent, position, `collapsed` flag, `cidr`, status, `stale` flag, display name, `has_note` flag, `outside_cidr` flag and, for hosts, `ip`. Flags that don't apply to an item type (`collapsed` on hosts, `outside_cidr` on groups) are `false`. A client builds the map from this one response.
   - `POST /discovery` (202 with the new job), `GET /discovery/{id}`, `DELETE /discovery/{id}` (cancel; 200 with the job's state at that moment, `discovery.finished` follows)
   - `GET /health`: without a token, returns only `{status, version}`. With a valid token, it also returns the ICMP mode (`unprivileged`, `privileged`, `unavailable` or `disabled`), `icmp_error` and `icmp6_error` when set, the database status and the run id. `status` is `degraded` when the database fails or no ICMP mode works (v0.10).
-  - Moving, repositioning, collapsing, expanding and editing notes are all done with `PATCH` on `parent_id`, `x` / `y`, `collapsed` or `note`.
-- **SPEC-502** MUST: `GET /api/v1/events` is a Server-Sent Events (SSE) stream. Event types: `host.created|updated|deleted|status`, `group.created|updated|deleted|status`, `discovery.progress|finished` (`finished` includes the final `state`: `done`, `cancelled` or `failed`), and `resync`.
+  - Moving, repositioning, collapsing, expanding and editing notes are all done with `PATCH` on `parent_id`, `x` / `y`, `collapsed` or `note`. In a `PATCH`, an absent field is left unchanged; `null` is allowed only for `parent_id` (the root) and is rejected with 400 for every other field (v0.17).
+  - Views and placements: SPEC-122.
+- **SPEC-502** MUST: `GET /api/v1/events` is a Server-Sent Events (SSE) stream. Event types: `host.created|updated|deleted|status`, `group.created|updated|deleted|status`, `discovery.progress|finished` (`finished` includes the final `state`: `done`, `cancelled` or `failed`), `view.created|updated|deleted` and `placement.updated|deleted` (SPEC-122), and `resync`.
   Payloads (v0.8): `*.created` and `*.updated` carry the full object (the same JSON as `GET`); `*.deleted` carries `{"id": …}`, one event per deleted item (a cascade delete emits one per host and group); `host.status` carries the full host; `group.status` carries `{"id": …, "status": …}`; `resync` carries `{"reason": …}`. The server sends a keepalive comment every 30 s. The token is sent in the `Authorization` header, as for every other endpoint. A client that falls too far behind gets `resync` and the stream ends. A client that accepts no data for 10 s is disconnected, so it can't hold up the server or its shutdown (v0.10).
 - **SPEC-503** MUST: Every event id has the form `<run>-<seq>`. `run` is a random id chosen at server start, and `seq` increases within a run. The server keeps a buffer of the most recent events (`events.buffer`, default 1,000). A client that reconnects with `Last-Event-ID` gets the events it missed. If those events are no longer in the buffer, or the id comes from a different run, the client gets a `resync` event, which tells it to reload the full state. The `resync` event carries the id of the newest event, so a client that reloads and keeps the stream open continues without a gap (v0.8).
 - **SPEC-504** MUST: Errors use the right HTTP status code with the body `{"error":{"code":"…","message":"…"}}`:
 
   | HTTP | `code` | When |
   |------|--------|------|
-  | 400 | `invalid_argument` | Malformed JSON, unknown JSON field, invalid IP or CIDR, non-canonical CIDR, IPv6 discovery, a `parent_id` that doesn't exist, text over its length limit (except notes) |
+  | 400 | `invalid_argument` | Malformed JSON, unknown JSON field, `null` for a field that can't be null (v0.17), invalid IP or CIDR, non-canonical CIDR, IPv6 discovery, a `parent_id` that doesn't exist or is in another view, a `cidr` in a custom view, placing a host in view 1, text over its length limit (except notes) |
   | 401 | `unauthenticated` | Missing or invalid token |
   | 404 | `not_found` | Unknown id in the path, unknown endpoint |
   | 405 | `method_not_allowed` | Method not supported on an existing endpoint (with an `Allow` header) |
-  | 409 | `conflict` | Duplicate IP or CIDR, cycle, non-empty group delete, SPEC-114 violation |
+  | 409 | `conflict` | Duplicate IP, CIDR or view name, cycle, non-empty group delete, SPEC-114 violation, deleting the network view |
   | 413 | `too_large` | Note over 64 KiB, request body too large |
   | 503 | `unavailable` | The server is shutting down (for example, a new `GET /events` during shutdown) (v0.9) |
   | 500 | `internal` | Unexpected server error |
@@ -125,7 +126,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
 
 ## 10. GUI (Fyne)
 - **SPEC-701** MUST: `ined-gui` connects to a server URL (and token) given in its config file or by command-line flags.
-- **SPEC-702** MUST: The GUI shows **one shared map** with every visible item at its stored position (SPEC-112). Hosts and collapsed groups are icons labelled with their display name. A network group has its own icon shape and frame style and also shows its CIDR, so it can be told apart without relying on colour. Status is shown by **colour plus shape plus text** (for example: up = ● "up", down = ✕ "down", unknown = ? "unknown"), never by colour alone.
+- **SPEC-702** MUST: The GUI shows **one shared map per view** (§4b; the view tabs are specified at the start of M5, D14-8) with every visible item at its stored position (SPEC-112). Hosts and collapsed groups are icons labelled with their display name. A network group has its own icon shape and frame style and also shows its CIDR, so it can be told apart without relying on colour. Status is shown by **colour plus shape plus text** (for example: up = ● "up", down = ✕ "down", unknown = ? "unknown"), never by colour alone.
 - **SPEC-703** MUST: A **collapsed** group is one icon showing the group's status. An **expanded** group is a labelled frame around its visible members, with the group's name and status. Double-clicking a collapsed group icon expands it. Double-clicking an expanded group's frame label collapses it. Both actions are also in the context menu, and the change is saved on the server.
 - **SPEC-704** MUST: The user can drag hosts, collapsed groups and expanded group frames. Dragging an expanded frame moves all its members with it. New positions are saved on the server. Dropping an item onto a collapsed group icon or an expanded frame label moves it into that group. A context menu action "Move to group…" does the same.
 - **SPEC-705** MUST: The GUI updates live from SSE events. It reconnects automatically and shows the connection state.
@@ -176,11 +177,12 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - `discover start|status|cancel`
   - `events` (streams events until interrupted)
   - `health`
+  - `view list|add|show|rename|order|rm|place|unplace` (SPEC-124)
 
   The server URL and token come from SPEC-805.
 
   Shape (v0.13): `inedctl [--url U] [--token T] [--ca-cert F] [--json] [--config F] <object> <action> [flags] [args]`, parsed with the standard library `flag` package. Examples: `host add <ip> [--name N] [--parent ID] [--note T] [--unmonitored]`, `host move <id> <group-id|root>`, `group add [--cidr C] [--name N] [--parent ID]`, `group rm <id> [--reparent|--cascade]`. `discover start` prints the job; with `--wait` it follows the events, shows progress until the job ends, and exits 1 if the job fails or is cancelled (v0.14). `events` prints one line per event (time, type, id, short summary); with `--json`, one JSON object per line: `{"id", "type", "data"}` (v0.14). Global flags are also accepted after the command, and command flags after positional arguments (v0.14). `note set` without text reads stdin and removes trailing newlines (v0.14).
-- **SPEC-902** MUST: Output is a human-readable table by default. `--json` prints the API's JSON unchanged. Tables are sorted by ID. Hosts: ID, IP, NAME, STATUS, RTT, PARENT, MON. Groups: ID, NAME, CIDR, STATUS, PARENT, COLLAPSED (v0.13). A stale host shows `(stale)` after its status, so the status is always in words (v0.14).
+- **SPEC-902** MUST: Output is a human-readable table by default. `--json` prints the API's JSON unchanged. Tables are sorted by ID. Hosts: ID, IP, NAME, STATUS, RTT, PARENT, MON. Groups: ID, NAME, CIDR, STATUS, PARENT, COLLAPSED (v0.13), VIEW (v0.17); `group show` includes the view. A stale host shows `(stale)` after its status, so the status is always in words (v0.14).
 - **SPEC-903** MUST: Exit codes: `0` OK, `1` the API returned an error (or a waited-for discovery job failed or was cancelled), `2` usage or config error (bad config file, URL or CA file), `3` connection, TLS or authentication error (including 401), `130` interrupted with Ctrl-C (`events` exits 0 instead). After an interrupted `discover start --wait`, inedctl says that the job keeps running on the server. `health` exits 0 whenever the server answers, also when its status is `degraded`; scripts read `--json` (v0.15).
 
 ## 13. LATER (not in v0.1)

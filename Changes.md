@@ -4,6 +4,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Fixed
+- `ined-gui`: with a group and an item inside it both selected, the context menu acted as if both were chosen ("Move 2 items…", "Delete 2 items…") and its delete question had no "delete everything" choice. It now acts on the group only, as the keys do, with the group's usual delete question.
+- When the server switches to a better ping mode, the old one is now closed when the last check using it ends, instead of after a fixed two minutes, which a long check (many pings with a long timeout) could exceed.
+
 ## [0.2.0] - 2026-11-12
 
 ### Added

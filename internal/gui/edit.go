@@ -145,24 +145,37 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	}
 	k := mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}
 	// With several items selected and this one among them, "Move to
-	// group…" and "Delete…" act on all of them (SPEC-724).
+	// group…" and "Delete…" act on the selection as the keys do: items
+	// inside a selected group go with that group (SPEC-724).
 	targets := []mapmodel.Key{k}
 	if mv := g.maps[view]; mv != nil {
 		if sel := mv.Selection(); len(sel) > 1 && slices.Contains(sel, k) {
-			targets = sel
+			if top := g.topLevel(view, sel); len(top) > 0 {
+				targets = top
+			}
 		}
 	}
 	moveLabel, delLabel := "Move to group…", "Delete "+k.Type+"…"
-	if len(targets) > 1 {
+	switch {
+	case len(targets) > 1:
 		moveLabel = fmt.Sprintf("Move %d items to group…", len(targets))
 		delLabel = fmt.Sprintf("Delete %d items…", len(targets))
+	case targets[0] != k: // only the selected group this item is in
+		g.mu.Lock()
+		name := ""
+		if it := g.item(view, targets[0]); it != nil {
+			name = it.Name
+		}
+		g.mu.Unlock()
+		what := fmt.Sprintf("%s %q", targets[0].Type, name)
+		moveLabel, delLabel = "Move "+what+" to group…", "Delete "+what+"…"
 	}
 	deleteTargets := func() {
 		if len(targets) == 1 {
-			g.deleteDialog(view, k)
+			g.deleteDialog(view, targets[0])
 			return
 		}
-		g.deleteManyDialog(view, g.topLevel(view, targets))
+		g.deleteManyDialog(view, targets)
 	}
 	if n.Item.Type == apitypes.TypeHost {
 		items := []*fyne.MenuItem{

@@ -47,3 +47,7 @@
    - **C1:** the menu acts on the top-level selection; with a group and its member selected it names the group and opens the group's own delete question.
    - **C2:** a replaced prober is closed when its last round ends (round counting, no timer); `Close` closes those too.
    - Spec v0.31 (SPEC-304, 724), TC-315 and TC-727 extended, `Changes.md` `[Unreleased]` "Fixed". `make all` and `make lint` pass.
+8. **User**: pushed; the hosts now show their IP address instead of the DNS name; best add a menu per group: view IP / view DNS.
+   **Claude** checked the wording with the user (confirmed; the names showed before) and asked two design questions. User's answers: Name / IP / both; saved on the server.
+   - **The regression:** not reproduced. A fresh server with reverse DNS names hosts added by hand, hosts found by a scan, and hosts after a restart; the reverse-DNS wiring is unchanged since 0.1.0, and the GUI only shows the server's display name. The user's server runs on another machine, so Claude asked for `inedctl --json host show <id>` and `dig -x <ip>` output.
+   - **`feature/group-labels`** (merged): `labels` on groups (migration 4), "Host labels ▸" in the group menu, `inedctl group labels`, OpenAPI and examples. Spec v0.32 (SPEC-725), TC-728. `make all` and `make lint` pass.

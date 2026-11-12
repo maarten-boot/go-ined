@@ -203,7 +203,8 @@ Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit test
 - [x] The user's report "hosts show their IP instead of the DNS name": explained. The names came back by themselves after a while, which matches the reverse-DNS refresher: one NXDOMAIN answer cleared a name until the next hourly lookup (crosscheck 2026-11-12-04 P2)
 - [x] Crosscheck 2026-11-12-04 fixes (`fix/crosscheck-13`): expanding leaves already expanded groups alone (C1); a known PTR name is kept until 3 NXDOMAIN answers in a row, rechecked a minute apart, and changes are logged at Info (D2 a+b) (SPEC-403, 703 v0.34; TC-402, 726, 727)
 - [x] Release 0.3.1 prepared (D1 a): `[0.3.1] - 2026-11-12` in `Changes.md`, OpenAPI `info.version` 0.3.1, README status; local release build: 8 files, checksums OK, binaries print `v0.3.1`; annotated tag `v0.3.1`
-- [ ] Release run for v0.3.1 green, and the release checked (TC-011)
+- [x] Release run 43303659200 green; CI on `main` (43303613070), `docs/architecture` and `fix/crosscheck-13` green. The v0.3.1 release has 7 archives and SHA256SUMS; downloaded: every checksum OK, the three binaries print `v0.3.1`, built with go1.26.11, and the release text equals the `[0.3.1]` section (TC-011)
+- [x] Crosscheck 2026-11-12-05 fix (`fix/crosscheck-14`): DNS answers for an address the host no longer has are dropped, and only saved name changes are logged (C1; SPEC-403 v0.35; TC-405). In `[Unreleased]`, no release on its own
 - [x] Release run 43227857742 green; CI on `main` (43227827366), `docs/architecture` and `fix/crosscheck-10` green. https://github.com/maarten-boot/go-ined/releases/tag/v0.2.0 has 7 archives and SHA256SUMS. Downloaded: every checksum OK; `ined-server`, `inedctl` and `ined-gui` print `v0.2.0`; built with go1.26.11; the release text equals the `[0.2.0]` section (TC-011)
 
 ## Open questions

@@ -88,4 +88,13 @@
     - Verified the v0.3.0 release: all runs green; 7 archives plus `SHA256SUMS`; checksums OK; binaries print `v0.3.0`; the release text matches.
     - Applied C1 and D2 (a+b) on `fix/crosscheck-13` (merged). Spec v0.34 (SPEC-403, 703); TC-011, 402, 726 and 727 updated.
     - **Release 0.3.1** prepared: the local build checks out; annotated tag `v0.3.1`.
+15. **User**: pushed; check the release run. Then: do a crosscheck.
+    **Claude** checked the push with `git ls-remote`: all four refs arrived. The v0.3.1 release run started.
+    Claude ran crosscheck `Crosscheck-2026-11-12-05.md` (the fourteenth) on the crosscheck-13 fixes:
+    - 229 tests pass.
+    - **C1 (L):** when a host's IP changed during a lookup, the log reported a name change that was never saved (found with a probe). The data stayed correct.
+    - The user fixed the stray edit in `README.md` meanwhile.
+16. **User**: OK, all.
+    **Claude** applied C1 on `fix/crosscheck-14` (merged): stale answers are dropped, and only saved changes are logged. Spec v0.35 (SPEC-403); TC-405. Kept in `[Unreleased]`.
+    - **v0.3.1** verified: release run 43303659200 and the three CI runs green; 7 archives plus `SHA256SUMS`; checksums OK; binaries print `v0.3.1` (go1.26.11); the release text matches. TC-011 and the Plan are updated.
 

@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.34** (2026-11-12)
+Status: **draft v0.35** (2026-11-12)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -95,7 +95,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
 ## 7. Reverse DNS
 - **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20). It uses Go's resolver (the system's DNS settings), with 5 s per lookup. At startup, the refreshes of the existing hosts are spread across `dns.refresh`. A changed name is saved and emits `host.updated`. When a host's IP changes, its PTR name is cleared at once and looked up again (v0.11). `dns.enabled = false` turns reverse DNS off; PTR names then stay as stored (v0.11).
 - **SPEC-402** MUST: The name shown for a host is its manual name if set, otherwise the first PTR name (without the trailing dot), otherwise its IP address.
-- **SPEC-403** MUST: A temporary DNS error keeps the last known PTR name. An NXDOMAIN answer (the name doesn't exist) clears it; a host that has a name keeps it until 3 such answers in a row, looked up again 1 minute after each instead of after `dns.refresh`, and a found name resets the count. Hosts without a name stay on `dns.refresh`. A name that is cleared, changes, or comes back after being cleared is logged at Info (v0.34, crosscheck 2026-11-12-04 D2: one bad answer from the user's DNS dropped names for up to an hour). Of several PTR names, the first is used. DNS results never affect a host's status.
+- **SPEC-403** MUST: A temporary DNS error keeps the last known PTR name. An NXDOMAIN answer (the name doesn't exist) clears it; a host that has a name keeps it until 3 such answers in a row, looked up again 1 minute after each instead of after `dns.refresh`, and a found name resets the count. Hosts without a name stay on `dns.refresh`. A name that is cleared, changes, or comes back after being cleared is logged at Info (v0.34, crosscheck 2026-11-12-04 D2: one bad answer from the user's DNS dropped names for up to an hour). An answer for an address the host no longer has is ignored, and only saved changes are logged (v0.35, crosscheck 2026-11-12-05 C1). Of several PTR names, the first is used. DNS results never affect a host's status.
 
 ## 8. API (REST + SSE)
 - **SPEC-501** MUST: The JSON REST API lives under `/api/v1`:

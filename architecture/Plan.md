@@ -194,6 +194,8 @@ Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit test
 - [x] User request: multi-select with Tkined keys. User's answers: Ctrl+click and Shift+drag rubber band; g asks a name; c/e/Delete act on all selected (SPEC-724; TC-726). Checked under Xvfb: Ctrl+click, g, c, rubber band, Delete
 - [x] Crosscheck 2026-11-12-01 fixes (`fix/crosscheck-10`): delayed close of a replaced prober (C1); right-click keeps a multi-selection and the menu's Move/Delete act on all selected (C2, D1 b; TC-727); "Cmd on macOS" (S1); arrange and `contents_only` examples (E1); "arranged 1 member" (SPEC-304, 724 v0.30)
 - [x] Release 0.2.0 prepared (crosscheck 2026-11-12-01 D2 a): `[0.2.0] - 2026-11-12` in `Changes.md` (curated: follow-up fixes folded into the new features), OpenAPI `info.version` 0.2.0, README status; local release build: 8 files, checksums OK, binaries print `v0.2.0`; annotated tag `v0.2.0`
+- [x] Crosscheck 2026-11-12-02 fixes (`fix/crosscheck-11`): the menu counts and acts on the top-level selection (C1); a replaced prober is closed after its last round instead of after two minutes (C2) (SPEC-304, 724 v0.31; TC-315, 727)
+- [ ] Next release (0.2.1, or with the next features), when the user wants it
 - [x] Release run 43227857742 green; CI on `main` (43227827366), `docs/architecture` and `fix/crosscheck-10` green. https://github.com/maarten-boot/go-ined/releases/tag/v0.2.0 has 7 archives and SHA256SUMS. Downloaded: every checksum OK; `ined-server`, `inedctl` and `ined-gui` print `v0.2.0`; built with go1.26.11; the release text equals the `[0.2.0]` section (TC-011)
 
 ## Open questions

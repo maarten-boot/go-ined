@@ -42,3 +42,8 @@
      - **C1:** with a group and its member both selected, the menu says "2 items" and its Delete loses the cascade choice; the keys count only the group.
      - **C2:** the 2-minute grace for a replaced prober isn't guaranteed to cover a round (`count` and `timeout` have no upper limit). Proposed: close it when its last round ends.
    - No decisions needed. The fixes wait for the user's OK.
+7. **User**: pushed; OK, all.
+   **Claude** applied the crosscheck fixes on `fix/crosscheck-11` (merged):
+   - **C1:** the menu acts on the top-level selection; with a group and its member selected it names the group and opens the group's own delete question.
+   - **C2:** a replaced prober is closed when its last round ends (round counting, no timer); `Close` closes those too.
+   - Spec v0.31 (SPEC-304, 724), TC-315 and TC-727 extended, `Changes.md` `[Unreleased]` "Fixed". `make all` and `make lint` pass.

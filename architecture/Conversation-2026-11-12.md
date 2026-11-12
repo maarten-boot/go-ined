@@ -51,3 +51,14 @@
    **Claude** checked the wording with the user (confirmed; the names showed before) and asked two design questions. User's answers: Name / IP / both; saved on the server.
    - **The regression:** not reproduced. A fresh server with reverse DNS names hosts added by hand, hosts found by a scan, and hosts after a restart; the reverse-DNS wiring is unchanged since 0.1.0, and the GUI only shows the server's display name. The user's server runs on another machine, so Claude asked for `inedctl --json host show <id>` and `dig -x <ip>` output.
    - **`feature/group-labels`** (merged): `labels` on groups (migration 4), "Host labels ▸" in the group menu, `inedctl group labels`, OpenAPI and examples. Spec v0.32 (SPEC-725), TC-728. `make all` and `make lint` pass.
+9. **User**: pushed; do a crosscheck.
+   **Claude** ran crosscheck `Crosscheck-2026-11-12-03.md` (the twelfth) on the crosscheck-11 fixes and host labels:
+   - 226 tests pass; CI on `main` (43263438617) is green; the examples are current; the trace is complete.
+   - **Probes:** the layout of 5,000 hosts costs the same in every label mode (24–29 ms). Under Xvfb `:97` (a free display) the submenu, its tick mark and the name-plus-IP labels work.
+   - **Findings:** 0 H, 0 M, 4 L.
+     - C1: the menu's Host labels and Expand/Collapse act on one group, even with several selected (decision D1).
+     - C2: the effective mode isn't visible for "As the parent group".
+     - S1: `inedctl group add` has no `--labels`.
+     - P1: the README lacks host labels and the multi-select menu.
+   - Still open: the user's names-to-IP report (P2).
+   - The fixes wait for the user's OK.

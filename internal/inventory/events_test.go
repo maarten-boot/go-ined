@@ -408,8 +408,8 @@ func TestPTRName(t *testing.T) {
 	h := mustHost(t, s, apitypes.HostCreate{IP: "10.0.0.1"})
 	r.take()
 	ip := netip.MustParseAddr("10.0.0.1")
-	if err := s.SetPTRName(context.Background(), h.ID, ip, "nas.example."); err != nil {
-		t.Fatal(err)
+	if old, changed, err := s.SetPTRName(context.Background(), h.ID, ip, "nas.example."); err != nil || !changed || old != "" {
+		t.Fatalf("set: %q %v %v", old, changed, err)
 	}
 	got, _ := s.Host(h.ID)
 	if got.PTRName != "nas.example." || got.DisplayName != "nas.example" || repo.hosts[h.ID].PTRName != "nas.example." {
@@ -423,9 +423,19 @@ func TestPTRName(t *testing.T) {
 		t.Fatalf("DNS targets: %+v", ts)
 	}
 	// Same name, a stale IP, or an unknown host: nothing happens.
-	s.SetPTRName(context.Background(), h.ID, ip, "nas.example.")
-	s.SetPTRName(context.Background(), h.ID, netip.MustParseAddr("10.0.0.2"), "x.")
-	s.SetPTRName(context.Background(), 99, ip, "x.")
+	for _, c := range []struct {
+		id   int64
+		ip   netip.Addr
+		name string
+	}{{h.ID, ip, "nas.example."}, {h.ID, netip.MustParseAddr("10.0.0.2"), "x."}, {99, ip, "x."}} {
+		if _, changed, err := s.SetPTRName(context.Background(), c.id, c.ip, c.name); changed || err != nil {
+			t.Errorf("no-op %+v: changed %v, %v", c, changed, err)
+		}
+	}
+	if old, changed, _ := s.SetPTRName(context.Background(), h.ID, ip, "nas2.example."); !changed || old != "nas.example." {
+		t.Fatalf("change: %q %v", old, changed)
+	}
+	r.take()
 	if ev := r.take(); ev != "" {
 		t.Fatalf("no-ops emitted %s", ev)
 	}

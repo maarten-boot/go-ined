@@ -4,6 +4,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- Host labels per group: a group's context menu has "Host labels ▸ Name / IP address / Name and IP address / As the parent group". The choice applies to the hosts inside the group and its subgroups (until one sets its own), is saved on the server and is the same in every GUI. API: `labels` on groups (`""`, `name`, `ip`, `both`); `inedctl group labels <id> name|ip|both|inherit`. The database gets a new column on first start (schema 4).
+
 ### Fixed
 - `ined-gui`: with a group and an item inside it both selected, the context menu acted as if both were chosen ("Move 2 items…", "Delete 2 items…") and its delete question had no "delete everything" choice. It now acts on the group only, as the keys do, with the group's usual delete question.
 - When the server switches to a better ping mode, the old one is now closed when the last check using it ends, instead of after a fixed two minutes, which a long check (many pings with a long timeout) could exceed.

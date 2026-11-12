@@ -27,6 +27,7 @@ var commands = map[string]map[string]command{
 		"list": groupList, "add": groupAdd, "show": groupShow, "edit": groupEdit,
 		"rm": groupRm, "move": groupMove, "shift": groupShift,
 		"collapse": groupCollapse(true), "expand": groupCollapse(false),
+		"labels": groupLabels,
 	},
 	"note": {"get": noteGet, "set": noteSet, "clear": noteClear},
 	"view": {
@@ -297,6 +298,28 @@ func groupCollapse(collapsed bool) command {
 		return a.call(http.MethodPatch, path("group", id), apitypes.GroupPatch{Collapsed: apitypes.Some(collapsed)}, &g,
 			func() { a.groupDetails(g) })
 	}
+}
+
+// groupLabels sets what the GUI shows under the hosts in a group
+// (SPEC-725): name, ip, both, or inherit (as the parent group).
+func groupLabels(a *app, name string, args []string) error {
+	pos, err := a.parse(a.flags(name), args, 2, 2)
+	if err != nil {
+		return err
+	}
+	gid, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	mode := pos[1]
+	if mode == "inherit" {
+		mode = apitypes.LabelsInherit
+	} else if mode == "" || !apitypes.ValidLabels(mode) {
+		return usagef("labels must be name, ip, both or inherit, not %q", pos[1])
+	}
+	var g apitypes.Group
+	return a.call(http.MethodPatch, path("group", gid), apitypes.GroupPatch{Labels: apitypes.Some(mode)}, &g,
+		func() { a.groupDetails(g) })
 }
 
 // ---- notes ----

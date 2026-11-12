@@ -82,6 +82,7 @@ type Group struct {
 	ViewID      int64        // SPEC-118; fixed at creation
 	ParentID    int64
 	Collapsed   bool
+	Labels      string // host label mode, SPEC-725
 	X, Y        float64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time

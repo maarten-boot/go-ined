@@ -197,6 +197,7 @@ type Group struct {
 	ViewID      int64     `json:"view_id"`
 	ParentID    *int64    `json:"parent_id"`
 	Collapsed   bool      `json:"collapsed"`
+	Labels      string    `json:"labels"` // SPEC-725: "" (as the parent), "name", "ip" or "both"
 	Status      string    `json:"status"`
 	X           float64   `json:"x"`
 	Y           float64   `json:"y"`
@@ -215,11 +216,12 @@ type MapItem struct {
 	Status      string  `json:"status"`
 	Stale       bool    `json:"stale"`
 	HasNote     bool    `json:"has_note"`
-	Monitored   bool    `json:"monitored"`      // hosts only, false for groups (v0.18, SPEC-712)
-	IP          string  `json:"ip,omitempty"`   // hosts only
-	OutsideCIDR bool    `json:"outside_cidr"`   // hosts only, false for groups
-	Collapsed   bool    `json:"collapsed"`      // groups only, false for hosts
-	CIDR        string  `json:"cidr,omitempty"` // network groups only
+	Monitored   bool    `json:"monitored"`        // hosts only, false for groups (v0.18, SPEC-712)
+	IP          string  `json:"ip,omitempty"`     // hosts only
+	OutsideCIDR bool    `json:"outside_cidr"`     // hosts only, false for groups
+	Collapsed   bool    `json:"collapsed"`        // groups only, false for hosts
+	CIDR        string  `json:"cidr,omitempty"`   // network groups only
+	Labels      string  `json:"labels,omitempty"` // groups only (SPEC-725)
 }
 
 // Map is the response of GET /map: the items of one view (SPEC-122).
@@ -265,6 +267,7 @@ type GroupCreate struct {
 	ViewID      *int64   `json:"view_id,omitempty"` // default: the network view
 	ParentID    *int64   `json:"parent_id,omitempty"`
 	Collapsed   *bool    `json:"collapsed,omitempty"`
+	Labels      string   `json:"labels,omitempty"` // SPEC-725
 	X           *float64 `json:"x,omitempty"`
 	Y           *float64 `json:"y,omitempty"`
 }
@@ -295,6 +298,25 @@ type ArrangeResult struct {
 	Moved    int    `json:"moved"`
 }
 
+// Host label modes of a group (SPEC-725): what the GUI shows under the
+// hosts inside it. LabelsInherit takes the parent group's mode; at the
+// root that is LabelsName.
+const (
+	LabelsInherit = ""
+	LabelsName    = "name" // the display name (SPEC-402)
+	LabelsIP      = "ip"   // the IP address
+	LabelsBoth    = "both" // the display name, and the IP address below it
+)
+
+// ValidLabels reports whether s is a label mode.
+func ValidLabels(s string) bool {
+	switch s {
+	case LabelsInherit, LabelsName, LabelsIP, LabelsBoth:
+		return true
+	}
+	return false
+}
+
 // GroupPatch is the body of PATCH /groups/{id}. "cidr": "" turns a network
 // group into an ordinary group; "parent_id": null moves it to the root.
 type GroupPatch struct {
@@ -304,6 +326,7 @@ type GroupPatch struct {
 	CIDR        Opt[string]  `json:"cidr,omitzero"`
 	ParentID    Opt[*int64]  `json:"parent_id,omitzero"`
 	Collapsed   Opt[bool]    `json:"collapsed,omitzero"`
+	Labels      Opt[string]  `json:"labels,omitzero"` // SPEC-725; "" = as the parent
 	X           Opt[float64] `json:"x,omitzero"`
 	Y           Opt[float64] `json:"y,omitzero"`
 }

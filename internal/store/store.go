@@ -102,6 +102,8 @@ var migrations = []string{
 	);
 	CREATE INDEX placements_host ON placements(host_id);
 	INSERT INTO meta (key, value) VALUES ('next_view_id', 2);`,
+	// 3 → 4: a group's host label mode (SPEC-725).
+	`ALTER TABLE groups ADD COLUMN labels TEXT NOT NULL DEFAULT '';`,
 }
 
 // Store is a SQLite-backed inventory.Repository.
@@ -302,7 +304,7 @@ func (s *Store) loadPlacements(ctx context.Context) ([]inventory.Placement, erro
 }
 
 func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, note, cidr, view_id, parent_id, collapsed, x, y, created_at, updated_at FROM groups ORDER BY id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, note, cidr, view_id, parent_id, collapsed, labels, x, y, created_at, updated_at FROM groups ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("store: load groups: %w", err)
 	}
@@ -311,7 +313,7 @@ func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
 	for rows.Next() {
 		var g inventory.Group
 		var cidr, created, updated sql.NullString
-		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.Note, &cidr, &g.ViewID, &g.ParentID, &g.Collapsed, &g.X, &g.Y, &created, &updated); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.Note, &cidr, &g.ViewID, &g.ParentID, &g.Collapsed, &g.Labels, &g.X, &g.Y, &created, &updated); err != nil {
 			return nil, fmt.Errorf("store: scan group: %w", err)
 		}
 		if cidr.Valid && cidr.String != "" {
@@ -413,12 +415,12 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 		if g.IsNetwork() {
 			cidr = g.CIDR.String()
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO groups (id, name, description, note, cidr, view_id, parent_id, collapsed, x, y, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		_, err = tx.ExecContext(ctx, `INSERT INTO groups (id, name, description, note, cidr, view_id, parent_id, collapsed, labels, x, y, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description, note=excluded.note,
-				cidr=excluded.cidr, view_id=excluded.view_id, parent_id=excluded.parent_id, collapsed=excluded.collapsed, x=excluded.x, y=excluded.y,
+				cidr=excluded.cidr, view_id=excluded.view_id, parent_id=excluded.parent_id, collapsed=excluded.collapsed, labels=excluded.labels, x=excluded.x, y=excluded.y,
 				updated_at=excluded.updated_at`,
-			g.ID, g.Name, g.Description, g.Note, cidr, max(g.ViewID, 1), g.ParentID, g.Collapsed, g.X, g.Y, fmtTime(g.CreatedAt), fmtTime(g.UpdatedAt))
+			g.ID, g.Name, g.Description, g.Note, cidr, max(g.ViewID, 1), g.ParentID, g.Collapsed, g.Labels, g.X, g.Y, fmtTime(g.CreatedAt), fmtTime(g.UpdatedAt))
 		if err != nil {
 			return fmt.Errorf("store: upsert group %d: %w", g.ID, err)
 		}

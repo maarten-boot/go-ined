@@ -537,3 +537,38 @@ func TestReflowCell(t *testing.T) {
 		t.Error("unloaded view")
 	}
 }
+
+// TC-728 (GUI model): a group's label mode applies to the hosts below it
+// until a group in between sets its own; at the root hosts show names.
+func TestLabelModes(t *testing.T) {
+	m := New()
+	m.SetMap(apitypes.Map{ViewID: 1, Items: []apitypes.MapItem{
+		{Type: "group", ID: 1, Name: "lan", X: 0, Y: 0, Labels: "ip"},
+		{Type: "group", ID: 2, ParentID: p(1), Name: "inner", X: 0, Y: 100},
+		{Type: "group", ID: 3, ParentID: p(1), Name: "both", X: 400, Y: 100, Labels: "both"},
+		{Type: "host", ID: 1, ParentID: p(2), Name: "web.example.org", IP: "192.0.2.1", X: 0, Y: 200, Status: "up", Monitored: true},
+		{Type: "host", ID: 2, ParentID: p(3), Name: "db.example.org", IP: "192.0.2.2", X: 400, Y: 200, Status: "up", Monitored: true},
+		{Type: "host", ID: 3, ParentID: p(3), Name: "192.0.2.3", IP: "192.0.2.3", X: 600, Y: 200, Status: "down", Monitored: true},
+		{Type: "host", ID: 4, Name: "laptop", IP: "192.0.2.4", X: 900, Y: 0, Status: "up", Monitored: true},
+	}})
+	labels := map[int64][]string{}
+	for _, n := range m.Layout(1, measure) {
+		if n.Item.Type == "host" {
+			labels[n.Item.ID] = n.Labels
+		}
+	}
+	for id, want := range map[int64][]string{
+		1: {"192.0.2.1", "up"},                   // inherited through "inner"
+		2: {"db.example.org", "192.0.2.2", "up"}, // both
+		3: {"192.0.2.3", "down"},                 // no name: the IP once
+		4: {"laptop", "up"},                      // root: names
+	} {
+		if !slices.Equal(labels[id], want) {
+			t.Errorf("host %d: %q, want %q", id, labels[id], want)
+		}
+	}
+	// Reflow measures the lines as shown.
+	if w, _, _ := m.ReflowCell(1, p(3), measure); w < float64(len("db.example.org"))*7 {
+		t.Errorf("reflow cell %g too narrow", w)
+	}
+}

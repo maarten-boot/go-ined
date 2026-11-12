@@ -198,7 +198,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		fyne.NewMenuItem("Edit…", func() { g.editGroupDialog(view, id) }),
 		fyne.NewMenuItem(moveLabel, func() { g.moveToDialog(view, targets...) }),
 	}
-	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }))
+	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }), g.labelsItem(n.Item))
 	if cidr := n.Item.CIDR; cidr != "" {
 		scan := fyne.NewMenuItem("Scan this network", func() { g.openDiscovery(cidr) })
 		scan.Disabled = strings.Contains(cidr, ":") // IPv6 (SPEC-707)
@@ -209,6 +209,36 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		items = append(items, newItems...)
 	}
 	return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem(delLabel, deleteTargets))
+}
+
+// labelsItem is "Host labels ▸" of a group (SPEC-725): what the hosts
+// inside it show, the current choice checked.
+func (g *GUI) labelsItem(grp *apitypes.MapItem) *fyne.MenuItem {
+	id, current := grp.ID, grp.Labels
+	choice := func(label, mode string) *fyne.MenuItem {
+		mi := fyne.NewMenuItem(label, func() { g.setLabels(id, mode) })
+		mi.Checked = current == mode
+		return mi
+	}
+	mi := fyne.NewMenuItem("Host labels", nil)
+	mi.ChildMenu = fyne.NewMenu("",
+		choice("Name", apitypes.LabelsName),
+		choice("IP address", apitypes.LabelsIP),
+		choice("Name and IP address", apitypes.LabelsBoth),
+		fyne.NewMenuItemSeparator(),
+		choice("As the parent group", apitypes.LabelsInherit),
+	)
+	return mi
+}
+
+// setLabels saves a group's host label mode; the group.updated event
+// reloads the view.
+func (g *GUI) setLabels(group int64, mode string) {
+	go func() {
+		if _, err := g.c.UpdateGroup(g.ctx, group, apitypes.GroupPatch{Labels: apitypes.Some(mode)}); err != nil {
+			g.fail(fmt.Sprintf("group %d", group), err)
+		}
+	}()
 }
 
 // showInViewItem is "Show in view ▸" with every custom view, marked where

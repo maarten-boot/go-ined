@@ -118,7 +118,10 @@ func TestCommands(t *testing.T) {
 
 	contains(t, ok(t, u, "group", "add", "--name", "lab", "--expanded", "--parent", "1"), "Name:", "lab", "Collapsed:   no", "Parent:      1")
 	contains(t, ok(t, u, "group", "collapse", "2"), "Collapsed:   yes")
-	contains(t, ok(t, u, "group", "expand", "2"), "Collapsed:   no")
+	contains(t, ok(t, u, "group", "expand", "2"), "Collapsed:   no", "Labels:      inherit")
+	contains(t, ok(t, u, "group", "labels", "2", "ip"), "Labels:      ip")
+	contains(t, ok(t, u, "group", "labels", "2", "both"), "Labels:      name and IP")
+	contains(t, ok(t, u, "group", "labels", "2", "inherit"), "Labels:      inherit")
 	contains(t, ok(t, u, "group", "edit", "2", "--name", "lab2"), "Name:        lab2")
 	contains(t, ok(t, u, "group", "move", "2", "root"), "Parent:      root")
 	contains(t, ok(t, u, "group", "show", "1"), "CIDR:        10.0.0.0/24")
@@ -205,6 +208,8 @@ func TestExitCodes(t *testing.T) {
 		{2, []string{u, "host", "move", "1", "nowhere"}},
 		{2, []string{u, "host", "edit", "1"}},
 		{2, []string{u, "group", "add"}},
+		{2, []string{u, "group", "labels", "1"}},
+		{2, []string{u, "group", "labels", "1", "dns"}},
 		{2, []string{u, "group", "rm", "1", "--reparent", "--cascade"}},
 		{2, []string{u, "note", "get", "router", "1"}},
 		{2, []string{u, "discover", "start"}},

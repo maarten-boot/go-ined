@@ -960,3 +960,44 @@ func TestMultiSelectKeys(t *testing.T) {
 		}
 	})
 }
+
+// TC-728 (GUI): "Host labels ▸" on a group saves the mode on the server,
+// marks the current one, and the hosts inside show their IP address.
+func TestHostLabelsMenu(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	lan := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "lan", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Name: "web", ParentID: &lan.ID, X: ptr(100.0), Y: ptr(220.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h.ID) != nil })
+	sub := func() *fyne.Menu {
+		fr := find(e.nodes(1), "group", lan.ID)
+		mi := menuItem(g.menuItems(1, fr, fr.Icon.X+2, fr.Icon.Y+2, nil), "Host labels")
+		if mi == nil || mi.ChildMenu == nil {
+			t.Fatal("no Host labels submenu")
+		}
+		return mi.ChildMenu
+	}
+	e.ui.Wait(func() {
+		m := sub()
+		if !menuItem(m.Items, "As the parent group").Checked || menuItem(m.Items, "IP address").Checked {
+			t.Errorf("initial marks: %v", labels(m.Items))
+		}
+		menuItem(m.Items, "IP address").Action()
+	})
+	eventually(t, e.ui, "saved and shown", func() bool {
+		n := find(e.nodes(1), "host", h.ID)
+		return must(c.Group(ctx, lan.ID)).Labels == apitypes.LabelsIP && n != nil && n.Labels[0] == "192.0.2.1"
+	})
+	e.ui.Wait(func() {
+		if m := sub(); !menuItem(m.Items, "IP address").Checked || menuItem(m.Items, "As the parent group").Checked {
+			t.Error("IP address not marked")
+		}
+		menuItem(sub().Items, "Name and IP address").Action()
+	})
+	eventually(t, e.ui, "both", func() bool {
+		n := find(e.nodes(1), "host", h.ID)
+		return n != nil && len(n.Labels) == 3 && n.Labels[0] == "web" && n.Labels[1] == "192.0.2.1"
+	})
+}

@@ -334,3 +334,38 @@ func TestRoundTripViews(t *testing.T) {
 		t.Fatal("duplicate view name accepted")
 	}
 }
+
+// TC-728 (store part): migration 4 upgrades a schema-3 database: every
+// group gets the label mode "" (as the parent); a mode is saved and read.
+func TestMigration4(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v3.db")
+	db, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(ctx, db, migrations[:3]); err != nil {
+		t.Fatal(err)
+	}
+	ts := "2026-11-01T10:00:00Z"
+	if _, err := db.Exec(`INSERT INTO groups (id, name, parent_id, x, y, created_at, updated_at) VALUES (3, 'lan', 0, 5, 6, ?1, ?1)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s, err := Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	st, err := s.Load(ctx)
+	if err != nil || len(st.Groups) != 1 || st.Groups[0].Labels != "" || st.Groups[0].Name != "lan" {
+		t.Fatalf("groups after migration: %+v %v", st.Groups, err)
+	}
+	g := st.Groups[0]
+	g.Labels = "both"
+	if err := s.Apply(ctx, inventory.Changes{Groups: []inventory.Group{g}}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err = s.Load(ctx); err != nil || st.Groups[0].Labels != "both" {
+		t.Fatalf("saved mode: %+v %v", st.Groups, err)
+	}
+}

@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "292a614e97f91218"
+  "run_id": "82c624b0bb11d525"
 }
 ```
 
@@ -45,11 +45,12 @@ Response: `201`
   "view_id": 1,
   "parent_id": null,
   "collapsed": true,
+  "labels": "",
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-11T23:43:26.146Z",
-  "updated_at": "2026-11-11T23:43:26.146Z"
+  "created_at": "2026-11-12T16:50:55.623Z",
+  "updated_at": "2026-11-12T16:50:55.623Z"
 }
 ```
 
@@ -71,11 +72,12 @@ Response: `201`
   "view_id": 1,
   "parent_id": 1,
   "collapsed": false,
+  "labels": "",
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-11T23:43:26.16Z",
-  "updated_at": "2026-11-11T23:43:26.16Z"
+  "created_at": "2026-11-12T16:50:55.638Z",
+  "updated_at": "2026-11-12T16:50:55.638Z"
 }
 ```
 
@@ -110,8 +112,8 @@ Response: `201`
   ],
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-11T23:43:26.169Z",
-  "updated_at": "2026-11-11T23:43:26.169Z"
+  "created_at": "2026-11-12T16:50:55.652Z",
+  "updated_at": "2026-11-12T16:50:55.652Z"
 }
 ```
 
@@ -146,8 +148,8 @@ Response: `200`
   ],
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-11T23:43:26.169Z",
-  "updated_at": "2026-11-11T23:43:26.183Z"
+  "created_at": "2026-11-12T16:50:55.652Z",
+  "updated_at": "2026-11-12T16:50:55.667Z"
 }
 ```
 
@@ -169,11 +171,12 @@ Response: `200`
   "view_id": 1,
   "parent_id": null,
   "collapsed": false,
+  "labels": "",
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-11T23:43:26.146Z",
-  "updated_at": "2026-11-11T23:43:26.194Z"
+  "created_at": "2026-11-12T16:50:55.623Z",
+  "updated_at": "2026-11-12T16:50:55.682Z"
 }
 ```
 
@@ -334,11 +337,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: 292a614e97f91218-10
+id: 82c624b0bb11d525-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-11T23:43:26.577Z","updated_at":"2026-11-11T23:43:26.577Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-12T16:50:56.097Z","updated_at":"2026-11-12T16:50:56.097Z"}
 
-id: 292a614e97f91218-11
+id: 82c624b0bb11d525-11
 event: host.deleted
 data: {"id":2}
 
@@ -354,7 +357,7 @@ Response: `202`
 
 ```json
 {
-  "id": "292a614e97f91218-1",
+  "id": "82c624b0bb11d525-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -363,7 +366,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-11T23:43:26.912Z",
+  "started_at": "2026-11-12T16:50:56.424Z",
   "finished_at": null
 }
 ```
@@ -371,14 +374,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/292a614e97f91218-1
+curl -s $INED/api/v1/discovery/82c624b0bb11d525-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "292a614e97f91218-1",
+  "id": "82c624b0bb11d525-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -387,8 +390,8 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-11T23:43:26.912Z",
-  "finished_at": "2026-11-11T23:43:26.918Z"
+  "started_at": "2026-11-12T16:50:56.424Z",
+  "finished_at": "2026-11-12T16:50:56.431Z"
 }
 ```
 
@@ -455,9 +458,10 @@ View:        1
 Parent:      root
 Status:      unknown
 Collapsed:   yes
+Labels:      inherit
 Position:    40, 40
-Created:     2026-11-12 00:43:28
-Updated:     2026-11-12 00:43:28
+Created:     2026-11-12 17:50:58
+Updated:     2026-11-12 17:50:58
 Note:        -
 ```
 
@@ -485,8 +489,8 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-12 00:43:28
-Updated:      2026-11-12 00:43:28
+Created:      2026-11-12 17:50:58
+Updated:      2026-11-12 17:50:58
 Note:         2nd floor
 ```
 
@@ -547,8 +551,8 @@ inedctl --json host show 5
   ],
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-11T23:43:28.985Z",
-  "updated_at": "2026-11-11T23:43:28.985Z"
+  "created_at": "2026-11-12T16:50:58.499Z",
+  "updated_at": "2026-11-12T16:50:58.499Z"
 }
 ```
 
@@ -583,8 +587,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job 292a614e97f91218-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job 292a614e97f91218-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job 82c624b0bb11d525-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job 82c624b0bb11d525-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -644,8 +648,8 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-11T23:43:29.031Z",
-  "updated_at": "2026-11-11T23:43:29.031Z"
+  "created_at": "2026-11-12T16:50:58.556Z",
+  "updated_at": "2026-11-12T16:50:58.556Z"
 }
 ```
 
@@ -667,11 +671,12 @@ Response: `201`
   "view_id": 2,
   "parent_id": null,
   "collapsed": false,
+  "labels": "",
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-11T23:43:29.04Z",
-  "updated_at": "2026-11-11T23:43:29.04Z"
+  "created_at": "2026-11-12T16:50:58.57Z",
+  "updated_at": "2026-11-12T16:50:58.57Z"
 }
 ```
 
@@ -797,8 +802,8 @@ ID:      2
 Name:    Printers
 Kind:    custom
 Order:   1
-Created: 2026-11-12 00:43:29
-Updated: 2026-11-12 00:43:29
+Created: 2026-11-12 17:50:58
+Updated: 2026-11-12 17:50:58
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6
@@ -828,11 +833,12 @@ Response: `200`
   "view_id": 2,
   "parent_id": null,
   "collapsed": false,
+  "labels": "",
   "status": "unknown",
   "x": 90,
   "y": 40,
-  "created_at": "2026-11-11T23:43:29.04Z",
-  "updated_at": "2026-11-11T23:43:29.095Z"
+  "created_at": "2026-11-12T16:50:58.57Z",
+  "updated_at": "2026-11-12T16:50:58.643Z"
 }
 ```
 
@@ -851,9 +857,10 @@ View:        2
 Parent:      root
 Status:      unknown
 Collapsed:   no
+Labels:      inherit
 Position:    90, 80
-Created:     2026-11-12 00:43:29
-Updated:     2026-11-12 00:43:29
+Created:     2026-11-12 17:50:58
+Updated:     2026-11-12 17:50:58
 Note:        -
 ```
 
@@ -877,11 +884,12 @@ Response: `200`
   "view_id": 2,
   "parent_id": null,
   "collapsed": false,
+  "labels": "",
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-11T23:43:29.04Z",
-  "updated_at": "2026-11-11T23:43:29.103Z"
+  "created_at": "2026-11-12T16:50:58.57Z",
+  "updated_at": "2026-11-12T16:50:58.653Z"
 }
 ```
 
@@ -907,9 +915,81 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     240, 40
-Created:      2026-11-12 00:43:28
-Updated:      2026-11-12 00:43:29
+Created:      2026-11-12 17:50:58
+Updated:      2026-11-12 17:50:58
 Note:         Toner replaced 2026-11
+```
+
+Exit code: `0`
+
+## Host labels
+
+A group says what the GUI shows under the hosts inside it: `name`, `ip`, `both`, or `""` (as the parent group; at the root: names).
+
+### Show IP addresses under the hosts in group 6
+
+```bash
+curl -s -X PATCH $INED/api/v1/groups/6 -d '{"labels":"ip"}'
+```
+
+Response: `200`
+
+```json
+{
+  "id": 6,
+  "name": "2nd floor",
+  "description": "",
+  "note": "",
+  "cidr": "",
+  "view_id": 2,
+  "parent_id": null,
+  "collapsed": false,
+  "labels": "ip",
+  "status": "unknown",
+  "x": 90,
+  "y": 80,
+  "created_at": "2026-11-12T16:50:58.57Z",
+  "updated_at": "2026-11-12T16:50:58.682Z"
+}
+```
+
+### Error: unknown label mode
+
+```bash
+curl -s -X PATCH $INED/api/v1/groups/6 -d '{"labels":"dns"}'
+```
+
+Response: `400`
+
+```json
+{
+  "error": {
+    "code": "invalid_argument",
+    "message": "labels must be name, ip, both or empty (as the parent group), not \"dns\""
+  }
+}
+```
+
+### The same with inedctl: names and IP addresses
+
+```bash
+inedctl group labels 6 both
+```
+
+```text
+ID:          6
+Name:        2nd floor
+CIDR:        -
+Description: -
+View:        2
+Parent:      root
+Status:      unknown
+Collapsed:   no
+Labels:      name and IP
+Position:    90, 80
+Created:     2026-11-12 17:50:58
+Updated:     2026-11-12 17:50:58
+Note:        -
 ```
 
 Exit code: `0`

@@ -143,6 +143,13 @@ ctl "The same with inedctl" "group shift 6 --dy 40" group shift 6 --dy 40
 ex "Move only the contents of group 6, not the group itself" POST /groups/6/move '{"dx":0,"dy":30,"contents_only":true}'
 ctl "A new parent: the host moves next to it" "host move 5 root" host move 5 root
 
+# Host labels per group (SPEC-725).
+{ echo "## Host labels"; echo
+  echo 'A group says what the GUI shows under the hosts inside it: `name`, `ip`, `both`, or `""` (as the parent group; at the root: names).'; echo; } >>"$OUT"
+ex "Show IP addresses under the hosts in group 6" PATCH /groups/6 '{"labels":"ip"}'
+ex "Error: unknown label mode" PATCH /groups/6 '{"labels":"dns"}'
+ctl "The same with inedctl: names and IP addresses" "group labels 6 both" group labels 6 both
+
 # Arranging a group's members on a wider grid (SPEC-510, "Reflow" in the GUI).
 { echo "## Arranging"; echo
   echo 'Lays out the direct members of a group (or of the view'"'"'s root) on a grid, so long names have room. One `map.arranged` event; the response says how many members moved.'; echo; } >>"$OUT"

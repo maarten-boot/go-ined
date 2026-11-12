@@ -1019,6 +1019,16 @@
           "collapsed": {
             "type": "boolean"
           },
+          "labels": {
+            "type": "string",
+            "enum": [
+              "",
+              "name",
+              "ip",
+              "both"
+            ],
+            "description": "Host label mode (SPEC-725): what the GUI shows under the hosts inside the group. \"\" = as the parent group (at the root: \"name\"); \"name\" = the display name; \"ip\" = the IP address; \"both\" = the display name and the IP address"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -1054,6 +1064,7 @@
           "view_id",
           "parent_id",
           "collapsed",
+          "labels",
           "status",
           "x",
           "y",
@@ -1124,6 +1135,16 @@
           "collapsed": {
             "type": "boolean",
             "description": "groups only; false for hosts"
+          },
+          "labels": {
+            "type": "string",
+            "enum": [
+              "",
+              "name",
+              "ip",
+              "both"
+            ],
+            "description": "groups only (SPEC-725); left out when empty"
           },
           "cidr": {
             "type": "string",
@@ -1271,6 +1292,16 @@
             "type": "boolean",
             "description": "default true"
           },
+          "labels": {
+            "type": "string",
+            "enum": [
+              "",
+              "name",
+              "ip",
+              "both"
+            ],
+            "description": "Host label mode (SPEC-725): what the GUI shows under the hosts inside the group. \"\" = as the parent group (at the root: \"name\"); \"name\" = the display name; \"ip\" = the IP address; \"both\" = the display name and the IP address. Default \"\""
+          },
           "x": {
             "type": "number",
             "format": "double"
@@ -1307,6 +1338,16 @@
           },
           "collapsed": {
             "type": "boolean"
+          },
+          "labels": {
+            "type": "string",
+            "enum": [
+              "",
+              "name",
+              "ip",
+              "both"
+            ],
+            "description": "Host label mode (SPEC-725): what the GUI shows under the hosts inside the group. \"\" = as the parent group (at the root: \"name\"); \"name\" = the display name; \"ip\" = the IP address; \"both\" = the display name and the IP address"
           },
           "x": {
             "type": "number",

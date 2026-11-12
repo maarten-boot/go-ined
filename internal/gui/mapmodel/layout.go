@@ -205,11 +205,46 @@ func StatusWord(status string, stale bool) string {
 }
 
 func (l *layout) hostLabels(it *apitypes.MapItem) []string {
+	return hostLabels(l.vm, it)
+}
+
+// hostLabels are the lines under a host: its name lines (SPEC-725) and
+// its status word.
+func hostLabels(vm *ViewMap, it *apitypes.MapItem) []string {
 	word := StatusWord(it.Status, it.Stale)
 	if !it.Monitored {
 		word = "off"
 	}
-	return []string{it.Name, word}
+	return append(HostNames(vm.LabelMode(it), it), word)
+}
+
+// LabelMode is the host label mode that applies to an item (SPEC-725):
+// the mode of the nearest group above it that sets one; LabelsName when
+// none does.
+func (vm *ViewMap) LabelMode(it *apitypes.MapItem) string {
+	for p, n := it.ParentID, 0; p != nil && n <= len(vm.Items); n++ {
+		g := vm.Items[GroupKey(*p)]
+		if g == nil {
+			break
+		}
+		if g.Labels != apitypes.LabelsInherit {
+			return g.Labels
+		}
+		p = g.ParentID
+	}
+	return apitypes.LabelsName
+}
+
+// HostNames are the name lines of a host in a label mode: the display
+// name, the IP address, or both (the IP once when they are the same).
+func HostNames(mode string, it *apitypes.MapItem) []string {
+	switch {
+	case mode == apitypes.LabelsIP && it.IP != "":
+		return []string{it.IP}
+	case mode == apitypes.LabelsBoth && it.IP != "" && it.IP != it.Name:
+		return []string{it.Name, it.IP}
+	}
+	return []string{it.Name}
 }
 
 func (l *layout) groupLabels(it *apitypes.MapItem) []string {
@@ -447,10 +482,10 @@ func (m *Model) ReflowCell(view int64, parent *int64, measure Measure) (w, h flo
 		b, ok := bounds[k]
 		if !ok { // hidden in a collapsed group: estimate from its labels
 			iw, ih := HostSize, HostSize
-			labels := []string{it.Name, StatusWord(it.Status, it.Stale)}
+			labels := hostLabels(vm, it)
 			if it.Type == apitypes.TypeGroup {
 				iw, ih = GroupW, GroupH
-				labels = append(labels, it.CIDR)
+				labels = []string{it.Name, StatusWord(it.Status, false), it.CIDR}
 			}
 			b = Rect{W: iw, H: ih + LabelGap}
 			for _, s := range labels {

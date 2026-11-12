@@ -60,6 +60,7 @@ Commands:
   group shift <id> [--dx N] [--dy N]           (moves the group with everything in it)
   group collapse <id>
   group expand <id>
+  group labels <id> name|ip|both|inherit      (what the GUI shows under the hosts in it)
   note get|set|clear host|group <id> [text...]   (set reads stdin when no text is given)
   view list
   view add <name> [--order N]

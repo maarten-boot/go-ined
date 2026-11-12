@@ -63,7 +63,7 @@ func (a *app) groupDetails(g apitypes.Group) {
 	a.details([][2]string{
 		{"ID", id(g.ID)}, {"Name", g.Name}, {"CIDR", dash(g.CIDR)}, {"Description", g.Description},
 		{"View", id(g.ViewID)}, {"Parent", parent(g.ParentID)}, {"Status", g.Status}, {"Collapsed", yesNo(g.Collapsed)},
-		{"Position", pos(g.X, g.Y)},
+		{"Labels", labelsText(g.Labels)}, {"Position", pos(g.X, g.Y)},
 		{"Created", g.CreatedAt.Local().Format(time.DateTime)}, {"Updated", g.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(g.Note)},
 	}, false)
@@ -190,4 +190,16 @@ func (a *app) viewHosts(m apitypes.Map) {
 		return cmp.Compare(n, k)
 	})
 	a.table("ID\tIP\tNAME\tSTATUS\tPARENT", rows)
+}
+
+// labelsText describes a group's host label mode (SPEC-725).
+func labelsText(mode string) string {
+	switch mode {
+	case apitypes.LabelsInherit:
+		return "inherit"
+	case apitypes.LabelsBoth:
+		return "name and IP"
+	default:
+		return mode
+	}
 }

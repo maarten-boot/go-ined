@@ -265,6 +265,45 @@ func TestPersistence(t *testing.T) {
 	}
 }
 
+// TC-728 (API part): a group's host label mode is set on create and by
+// PATCH, checked, kept over a restart and given in /map (SPEC-725).
+func TestGroupLabels(t *testing.T) {
+	e := newEnv(t, "")
+	var g apitypes.Group
+	e.want(201, "POST", "/groups", apitypes.GroupCreate{Name: "lan", Labels: "ip"}, &g)
+	if g.Labels != "ip" {
+		t.Fatalf("created: %+v", g)
+	}
+	var plain apitypes.Group
+	e.want(201, "POST", "/groups", apitypes.GroupCreate{Name: "plain"}, &plain)
+	if plain.Labels != "" {
+		t.Errorf("default: %q", plain.Labels)
+	}
+	e.wantErr(400, "invalid_argument", "POST", "/groups", apitypes.GroupCreate{Name: "x", Labels: "dns"})
+	e.wantErr(400, "invalid_argument", "PATCH", "/groups/"+itoa(g.ID), `{"labels": "IP"}`)
+	e.want(200, "PATCH", "/groups/"+itoa(g.ID), `{"labels": "both"}`, &g)
+	if g.Labels != "both" {
+		t.Errorf("patched: %+v", g)
+	}
+	e.restart()
+	e.want(200, "GET", "/groups/"+itoa(g.ID), nil, &g)
+	if g.Labels != "both" {
+		t.Errorf("after restart: %+v", g)
+	}
+	var m apitypes.Map
+	e.want(200, "GET", "/map", nil, &m)
+	for _, it := range m.Items {
+		if it.ID == g.ID && it.Labels != "both" || it.ID == plain.ID && it.Labels != "" {
+			t.Errorf("map item: %+v", it)
+		}
+	}
+	// "" goes back to the parent's mode.
+	e.want(200, "PATCH", "/groups/"+itoa(g.ID), `{"labels": ""}`, &g)
+	if g.Labels != "" {
+		t.Errorf("cleared: %+v", g)
+	}
+}
+
 // TC-504: /map contains every item with the specified fields.
 func TestMap(t *testing.T) {
 	e := newEnv(t, "")

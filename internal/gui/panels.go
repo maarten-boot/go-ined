@@ -334,7 +334,14 @@ func (d *details) fill() {
 		d.g.mu.Lock()
 		view, _ := d.g.model.View(gr.ViewID)
 		d.g.mu.Unlock()
-		counts := "-"
+		counts, labels := "-", mapmodel.LabelModeText(gr.Labels)
+		d.g.mu.Lock()
+		if vm := d.g.model.Map(d.view); vm != nil {
+			if it := vm.Items[mapmodel.GroupKey(gr.ID)]; it != nil {
+				labels = vm.GroupLabelsText(it)
+			}
+		}
+		d.g.mu.Unlock()
 		var nodes []mapmodel.Node
 		if mv := d.g.maps[d.view]; mv != nil { // nil once the view is gone (C3)
 			nodes = mv.Nodes()
@@ -347,7 +354,7 @@ func (d *details) fill() {
 		rows = [][2]string{
 			{"ID", strconv.FormatInt(gr.ID, 10)}, {"Name", gr.Name}, {"CIDR", dash(gr.CIDR)},
 			{"Status", mapmodel.StatusWord(gr.Status, false)}, {"Hosts", counts},
-			{"Collapsed", yesNo(gr.Collapsed)}, {"Parent (this view)", d.parentName()},
+			{"Collapsed", yesNo(gr.Collapsed)}, {"Host labels", labels}, {"Parent (this view)", d.parentName()},
 			{"View", dash(view.Name)}, {"Description", dash(gr.Description)},
 		}
 	}

@@ -148,8 +148,10 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	// group…" and "Delete…" act on the selection as the keys do: items
 	// inside a selected group go with that group (SPEC-724).
 	targets := []mapmodel.Key{k}
+	var sel []mapmodel.Key // the selection, when the menu acts on it
 	if mv := g.maps[view]; mv != nil {
-		if sel := mv.Selection(); len(sel) > 1 && slices.Contains(sel, k) {
+		if s := mv.Selection(); len(s) > 1 && slices.Contains(s, k) {
+			sel = s
 			if top := g.topLevel(view, sel); len(top) > 0 {
 				targets = top
 			}
@@ -191,14 +193,40 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem(delLabel, deleteTargets))
 	}
 	id := n.Item.ID
-	expand := fyne.NewMenuItem("Expand", func() { g.setCollapsed(id, false) })
-	collapse := fyne.NewMenuItem("Collapse", func() { g.setCollapsed(id, true) })
-	expand.Disabled, collapse.Disabled = n.Kind == mapmodel.KindFrame, n.Kind != mapmodel.KindFrame
+	// Expand, Collapse and Host labels act on every selected group, as
+	// the keys c and e do (crosscheck 2026-11-12-03 C1).
+	groups := []*apitypes.MapItem{n.Item}
+	anyCollapsed, anyExpanded := n.Kind != mapmodel.KindFrame, n.Kind == mapmodel.KindFrame
+	g.mu.Lock()
+	for _, s := range sel {
+		if s.Type != apitypes.TypeGroup || s == k {
+			continue
+		}
+		if it := g.item(view, s); it != nil {
+			groups = append(groups, it)
+			anyCollapsed = anyCollapsed || it.Collapsed
+			anyExpanded = anyExpanded || !it.Collapsed
+		}
+	}
+	labels := g.labelsItem(view, groups)
+	g.mu.Unlock()
+	setAll := func(collapsed bool) {
+		for _, it := range groups {
+			g.setCollapsed(it.ID, collapsed)
+		}
+	}
+	expand := fyne.NewMenuItem("Expand", func() { setAll(false) })
+	collapse := fyne.NewMenuItem("Collapse", func() { setAll(true) })
+	if len(groups) > 1 {
+		expand.Label = fmt.Sprintf("Expand %d groups", len(groups))
+		collapse.Label = fmt.Sprintf("Collapse %d groups", len(groups))
+	}
+	expand.Disabled, collapse.Disabled = !anyCollapsed, !anyExpanded
 	items := []*fyne.MenuItem{expand, collapse,
 		fyne.NewMenuItem("Edit…", func() { g.editGroupDialog(view, id) }),
 		fyne.NewMenuItem(moveLabel, func() { g.moveToDialog(view, targets...) }),
 	}
-	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }), g.labelsItem(n.Item))
+	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }), labels)
 	if cidr := n.Item.CIDR; cidr != "" {
 		scan := fyne.NewMenuItem("Scan this network", func() { g.openDiscovery(cidr) })
 		scan.Disabled = strings.Contains(cidr, ":") // IPv6 (SPEC-707)
@@ -211,22 +239,40 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem(delLabel, deleteTargets))
 }
 
-// labelsItem is "Host labels ▸" of a group (SPEC-725): what the hosts
-// inside it show, the current choice checked.
-func (g *GUI) labelsItem(grp *apitypes.MapItem) *fyne.MenuItem {
-	id, current := grp.ID, grp.Labels
-	choice := func(label, mode string) *fyne.MenuItem {
-		mi := fyne.NewMenuItem(label, func() { g.setLabels(id, mode) })
-		mi.Checked = current == mode
+// labelsItem is "Host labels ▸" of one or more groups (SPEC-725): what
+// the hosts inside them show. A choice is checked when every group has
+// it; for one group taking its parent's mode, that mode is shown in
+// brackets (crosscheck 2026-11-12-03 C2). Caller holds g.mu.
+func (g *GUI) labelsItem(view int64, groups []*apitypes.MapItem) *fyne.MenuItem {
+	ids := make([]int64, len(groups))
+	same := true
+	for i, it := range groups {
+		ids[i] = it.ID
+		same = same && it.Labels == groups[0].Labels
+	}
+	choice := func(mode string) *fyne.MenuItem {
+		label := mapmodel.LabelModeText(mode)
+		if vm := g.model.Map(view); vm != nil && len(groups) == 1 && mode == apitypes.LabelsInherit {
+			label = vm.GroupLabelsText(&apitypes.MapItem{ParentID: groups[0].ParentID})
+		}
+		mi := fyne.NewMenuItem(label, func() {
+			for _, id := range ids {
+				g.setLabels(id, mode)
+			}
+		})
+		mi.Checked = same && groups[0].Labels == mode
 		return mi
 	}
 	mi := fyne.NewMenuItem("Host labels", nil)
+	if len(groups) > 1 {
+		mi.Label = fmt.Sprintf("Host labels (%d groups)", len(groups))
+	}
 	mi.ChildMenu = fyne.NewMenu("",
-		choice("Name", apitypes.LabelsName),
-		choice("IP address", apitypes.LabelsIP),
-		choice("Name and IP address", apitypes.LabelsBoth),
+		choice(apitypes.LabelsName),
+		choice(apitypes.LabelsIP),
+		choice(apitypes.LabelsBoth),
 		fyne.NewMenuItemSeparator(),
-		choice("As the parent group", apitypes.LabelsInherit),
+		choice(apitypes.LabelsInherit),
 	)
 	return mi
 }

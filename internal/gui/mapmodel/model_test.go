@@ -571,4 +571,19 @@ func TestLabelModes(t *testing.T) {
 	if w, _, _ := m.ReflowCell(1, p(3), measure); w < float64(len("db.example.org"))*7 {
 		t.Errorf("reflow cell %g too narrow", w)
 	}
+	// The setting as shown in the menu and the details panel (C2).
+	vm := m.Map(1)
+	for id, want := range map[int64]string{
+		1: "IP address",
+		2: "As the parent group (IP address)",
+		3: "Name and IP address",
+	} {
+		if got := vm.GroupLabelsText(vm.Items[GroupKey(id)]); got != want {
+			t.Errorf("group %d: %q, want %q", id, got, want)
+		}
+	}
+	root := &apitypes.MapItem{Type: "group", ID: 9}
+	if got := vm.GroupLabelsText(root); got != "As the parent group (Name)" {
+		t.Errorf("root group: %q", got)
+	}
 }

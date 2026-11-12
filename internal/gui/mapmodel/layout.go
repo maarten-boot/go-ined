@@ -235,6 +235,29 @@ func (vm *ViewMap) LabelMode(it *apitypes.MapItem) string {
 	return apitypes.LabelsName
 }
 
+// LabelModeText names a label mode as the menus show it.
+func LabelModeText(mode string) string {
+	switch mode {
+	case apitypes.LabelsIP:
+		return "IP address"
+	case apitypes.LabelsBoth:
+		return "Name and IP address"
+	case apitypes.LabelsInherit:
+		return "As the parent group"
+	}
+	return "Name"
+}
+
+// GroupLabelsText describes a group's host label setting, with the mode
+// it gets from above when it takes the parent's (SPEC-725):
+// "IP address", or "As the parent group (Name)".
+func (vm *ViewMap) GroupLabelsText(it *apitypes.MapItem) string {
+	if it.Labels != apitypes.LabelsInherit {
+		return LabelModeText(it.Labels)
+	}
+	return LabelModeText(apitypes.LabelsInherit) + " (" + LabelModeText(vm.LabelMode(it)) + ")"
+}
+
 // HostNames are the name lines of a host in a label mode: the display
 // name, the IP address, or both (the IP once when they are the same).
 func HostNames(mode string, it *apitypes.MapItem) []string {

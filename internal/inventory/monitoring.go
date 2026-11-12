@@ -8,10 +8,12 @@ import (
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
 
-// Target is a host the monitor should ping (SPEC-301, SPEC-306).
+// Target is a host the monitor should ping (SPEC-301, SPEC-306), or whose
+// PTR name the DNS refresher looks up (SPEC-401).
 type Target struct {
-	ID int64
-	IP netip.Addr
+	ID      int64
+	IP      netip.Addr
+	PTRName string // set by DNSTargets only
 }
 
 // MonitorTargets returns every monitored host, ordered by ID. Hosts with

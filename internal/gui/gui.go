@@ -453,14 +453,20 @@ func (g *GUI) currentMap() *MapView { return g.maps[g.current] }
 //
 // The group's top-left corner stays where it is (v0.29): on collapse the
 // icon goes to the frame's top-left corner; on expand the contents move
-// first so that the frame starts at the icon's top-left corner. UI
-// goroutine only.
+// first so that the frame starts at the icon's top-left corner. A group
+// already in that state is left alone: for an expanded group the stored
+// icon position isn't the frame's corner, so "expanding" it again would
+// move its contents (crosscheck 2026-11-12-04 C1). UI goroutine only.
 func (g *GUI) setCollapsed(group int64, collapsed bool) {
 	patch := apitypes.GroupPatch{Collapsed: apitypes.Some(collapsed)}
 	var dx, dy float64
 	g.mu.Lock()
 	view, ok := g.model.GroupView(group)
 	it := g.item(view, mapmodel.GroupKey(group))
+	if ok && it != nil && it.Collapsed == collapsed {
+		g.mu.Unlock()
+		return
+	}
 	if ok && it != nil {
 		if collapsed {
 			for _, n := range g.maps[view].Nodes() {

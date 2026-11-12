@@ -197,7 +197,9 @@ Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit test
 - [x] Crosscheck 2026-11-12-02 fixes (`fix/crosscheck-11`): the menu counts and acts on the top-level selection (C1); a replaced prober is closed after its last round instead of after two minutes (C2) (SPEC-304, 724 v0.31; TC-315, 727)
 - [x] User request (2026-11-12): show the IP address instead of the DNS name, per group. User's answers: Name / IP / both; saved on the server. Defaults taken by Claude: `""` inherits from the parent group, the root shows names; one group per menu choice (not the whole selection); `both` puts the IP on the line below the name (SPEC-725 v0.32; TC-728)
 - [ ] The user's report "hosts now show their IP instead of the DNS name" (names showed before): not reproduced here (a fresh server names hosts added by hand, found by a scan and after a restart; the GUI only shows the server's display name). Waiting for the user's `inedctl --json host show` and `dig -x` output
-- [ ] Next release (0.3.0: a new feature), when the user wants it
+- [x] Crosscheck 2026-11-12-03 fixes (`fix/crosscheck-12`): Expand, Collapse and Host labels in the menu act on all selected groups (C1, D1 b); the inherited mode in brackets in the submenu and a "Host labels" row in the details panel (C2); `inedctl group add --labels` (S1); README (P1) (SPEC-724, 725 v0.33; TC-727, 728)
+- [x] Release 0.3.0 prepared (crosscheck 2026-11-12-03): `[0.3.0] - 2026-11-12` in `Changes.md`, OpenAPI `info.version` 0.3.0, README status; local release build: 8 files, checksums OK, binaries print `v0.3.0`; annotated tag `v0.3.0`
+- [ ] Release run for v0.3.0 green, and the release checked (TC-011)
 - [x] Release run 43227857742 green; CI on `main` (43227827366), `docs/architecture` and `fix/crosscheck-10` green. https://github.com/maarten-boot/go-ined/releases/tag/v0.2.0 has 7 archives and SHA256SUMS. Downloaded: every checksum OK; `ined-server`, `inedctl` and `ined-gui` print `v0.2.0`; built with go1.26.11; the release text equals the `[0.2.0]` section (TC-011)
 
 ## Open questions

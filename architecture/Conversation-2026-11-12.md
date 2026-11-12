@@ -62,3 +62,13 @@
      - P1: the README lacks host labels and the multi-select menu.
    - Still open: the user's names-to-IP report (P2).
    - The fixes wait for the user's OK.
+10. **User**: pushed; OK, all.
+    **Claude** applied the crosscheck-12 fixes on `fix/crosscheck-12` (merged):
+    - C1 (D1 b): the menu's Expand, Collapse and Host labels act on all selected groups.
+    - C2: "As the parent group (IP address)" in the submenu, and a "Host labels" row in the details panel.
+    - S1: `inedctl group add --labels`. P1: README.
+    - Spec v0.33 (SPEC-724, 725); TC-727 and TC-728 extended (TestHostLabelsMenuSelection).
+    - All tests pass, the changed packages also with the race detector.
+    - **Release 0.3.0** prepared: `Changes.md`, OpenAPI version, README; the local release build checks out (checksums, `-version` prints `v0.3.0`); annotated tag `v0.3.0`.
+    - Still open: the names-to-IP report (waiting for the user's data).
+

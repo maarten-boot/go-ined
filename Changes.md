@@ -4,6 +4,8 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-12
+
 ### Changed
 - Reverse DNS: a host's name is no longer dropped after a single "doesn't exist" answer. The server looks again a minute later and clears the name only after 3 such answers in a row; until then the host keeps showing its name. Hosts that have no name are still looked up once an hour. The server log says at Info level when a name is cleared, changes, or comes back.
 

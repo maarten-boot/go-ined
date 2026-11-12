@@ -5,7 +5,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 ## [Unreleased]
 
 ### Added
-- Host labels per group: a group's context menu has "Host labels ▸ Name / IP address / Name and IP address / As the parent group". The choice applies to the hosts inside the group and its subgroups (until one sets its own), is saved on the server and is the same in every GUI. API: `labels` on groups (`""`, `name`, `ip`, `both`); `inedctl group labels <id> name|ip|both|inherit`. The database gets a new column on first start (schema 4).
+- Host labels per group: a group's context menu has "Host labels ▸ Name / IP address / Name and IP address / As the parent group". The choice applies to the hosts inside the group and its subgroups (until one sets its own), is saved on the server and is the same in every GUI. API: `labels` on groups (`""`, `name`, `ip`, `both`); `inedctl group labels <id> name|ip|both|inherit`. The database gets a new column on first start (schema 4). For a group that takes its parent's mode, the menu shows that mode in brackets ("As the parent group (IP address)"); the details panel has a "Host labels" row. `inedctl group add --labels`.
+
+### Changed
+- `ined-gui`: with several groups selected, the context menu's "Expand", "Collapse" and "Host labels" act on all selected groups ("Expand 2 groups", "Host labels (2 groups)"), like "Move" and "Delete" and the keys **c** and **e**.
 
 ### Fixed
 - `ined-gui`: with a group and an item inside it both selected, the context menu acted as if both were chosen ("Move 2 items…", "Delete 2 items…") and its delete question had no "delete everything" choice. It now acts on the group only, as the keys do, with the group's usual delete question.

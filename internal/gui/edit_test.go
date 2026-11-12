@@ -981,7 +981,7 @@ func TestHostLabelsMenu(t *testing.T) {
 	}
 	e.ui.Wait(func() {
 		m := sub()
-		if !menuItem(m.Items, "As the parent group").Checked || menuItem(m.Items, "IP address").Checked {
+		if !menuItem(m.Items, "As the parent group (Name)").Checked || menuItem(m.Items, "IP address").Checked {
 			t.Errorf("initial marks: %v", labels(m.Items))
 		}
 		menuItem(m.Items, "IP address").Action()
@@ -991,7 +991,7 @@ func TestHostLabelsMenu(t *testing.T) {
 		return must(c.Group(ctx, lan.ID)).Labels == apitypes.LabelsIP && n != nil && n.Labels[0] == "192.0.2.1"
 	})
 	e.ui.Wait(func() {
-		if m := sub(); !menuItem(m.Items, "IP address").Checked || menuItem(m.Items, "As the parent group").Checked {
+		if m := sub(); !menuItem(m.Items, "IP address").Checked || menuItem(m.Items, "As the parent group (Name)").Checked {
 			t.Error("IP address not marked")
 		}
 		menuItem(sub().Items, "Name and IP address").Action()
@@ -999,5 +999,56 @@ func TestHostLabelsMenu(t *testing.T) {
 	eventually(t, e.ui, "both", func() bool {
 		n := find(e.nodes(1), "host", h.ID)
 		return n != nil && len(n.Labels) == 3 && n.Labels[0] == "web" && n.Labels[1] == "192.0.2.1"
+	})
+}
+
+// TC-728 (crosscheck 2026-11-12-03 C1, C2): with several groups selected,
+// Expand, Collapse and Host labels act on all of them; the details panel
+// shows the setting with the mode a group takes from its parent.
+func TestHostLabelsMenuSelection(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	a := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "a", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	b := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "b", Collapsed: ptr(true), X: ptr(700.0), Y: ptr(100.0)}))
+	in := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "in", ParentID: &a.ID, Collapsed: ptr(true), X: ptr(100.0), Y: ptr(220.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "group", in.ID) != nil })
+	menu := func() []*fyne.MenuItem {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.GroupKey(a.ID), mapmodel.GroupKey(b.ID)})
+		fr := find(e.nodes(1), "group", a.ID)
+		return g.menuItems(1, fr, fr.Icon.X+2, fr.Icon.Y+2, nil)
+	}
+	e.ui.Wait(func() {
+		items := menu()
+		ex, co := menuItem(items, "Expand 2 groups"), menuItem(items, "Collapse 2 groups")
+		if ex == nil || co == nil || ex.Disabled || co.Disabled {
+			t.Fatalf("menu: %v", labels(items))
+		}
+		mi := menuItem(items, "Host labels (2 groups)")
+		if mi == nil || menuItem(mi.ChildMenu.Items, "As the parent group") == nil {
+			t.Fatalf("labels submenu: %v", labels(items))
+		}
+		menuItem(mi.ChildMenu.Items, "IP address").Action()
+	})
+	eventually(t, e.ui, "both groups set", func() bool {
+		return must(c.Group(ctx, a.ID)).Labels == apitypes.LabelsIP && must(c.Group(ctx, b.ID)).Labels == apitypes.LabelsIP
+	})
+	eventually(t, e.ui, "reloaded", func() bool {
+		mi := menuItem(menu(), "Host labels (2 groups)")
+		return mi != nil && menuItem(mi.ChildMenu.Items, "IP address").Checked
+	})
+	e.ui.Wait(func() { menuItem(menu(), "Collapse 2 groups").Action() })
+	eventually(t, e.ui, "both collapsed", func() bool {
+		return must(c.Group(ctx, a.ID)).Collapsed && must(c.Group(ctx, b.ID)).Collapsed
+	})
+
+	// The inner group takes a's mode: shown in the details panel.
+	must(c.UpdateGroup(ctx, a.ID, apitypes.GroupPatch{Collapsed: apitypes.Some(false)}))
+	eventually(t, e.ui, "inner shown", func() bool { return find(e.nodes(1), "group", in.ID) != nil })
+	k := mapmodel.GroupKey(in.ID)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	eventually(t, e.ui, "details", func() bool {
+		return strings.Contains(formText(g.details), "As the parent group (IP address)")
 	})
 }

@@ -168,7 +168,12 @@ func groupAdd(a *app, name string, args []string) error {
 	parent := fs.Int64("parent", 0, "parent group id (default: the root)")
 	expanded := fs.Bool("expanded", false, "create the group expanded")
 	view := fs.Int64("view", 0, "view of the group (default: the network view)")
+	labels := fs.String("labels", "inherit", "what the GUI shows under its hosts: name, ip, both or inherit")
 	if _, err := a.parse(fs, args, 0, 0); err != nil {
+		return err
+	}
+	var err error
+	if in.Labels, err = labelsArg(*labels); err != nil {
 		return err
 	}
 	if set(fs)["view"] {
@@ -311,15 +316,25 @@ func groupLabels(a *app, name string, args []string) error {
 	if err != nil {
 		return err
 	}
-	mode := pos[1]
-	if mode == "inherit" {
-		mode = apitypes.LabelsInherit
-	} else if mode == "" || !apitypes.ValidLabels(mode) {
-		return usagef("labels must be name, ip, both or inherit, not %q", pos[1])
+	mode, err := labelsArg(pos[1])
+	if err != nil {
+		return err
 	}
 	var g apitypes.Group
 	return a.call(http.MethodPatch, path("group", gid), apitypes.GroupPatch{Labels: apitypes.Some(mode)}, &g,
 		func() { a.groupDetails(g) })
+}
+
+// labelsArg turns a label mode as typed (inherit for the parent's) into
+// the API's value (SPEC-725).
+func labelsArg(s string) (string, error) {
+	switch {
+	case s == "inherit":
+		return apitypes.LabelsInherit, nil
+	case s == "" || !apitypes.ValidLabels(s):
+		return "", usagef("labels must be name, ip, both or inherit, not %q", s)
+	}
+	return s, nil
 }
 
 // ---- notes ----

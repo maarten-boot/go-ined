@@ -53,6 +53,7 @@ Commands:
   host move <id> <group-id|root>              (moves it next to its new parent)
   group list [--view ID]
   group add [--cidr C] [--name N] [--description D] [--parent ID] [--note T] [--expanded] [--view ID]
+            [--labels name|ip|both|inherit]
   group show <id>
   group edit <id> [--name N] [--cidr C] [--description D]
   group rm <id> [--reparent | --cascade]

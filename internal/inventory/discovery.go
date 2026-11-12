@@ -120,20 +120,21 @@ func (s *Service) DNSTargets() []Target {
 // SetPTRName records the result of a reverse lookup of ip (SPEC-401,
 // SPEC-403). It does nothing if the host is gone, has another IP by now, or
 // already has this name; otherwise it saves the name and emits
-// host.updated.
-func (s *Service) SetPTRName(ctx context.Context, id int64, ip netip.Addr, name string) error {
+// host.updated. It returns the name it replaced and whether it changed
+// anything, so the refresher logs only real changes.
+func (s *Service) SetPTRName(ctx context.Context, id int64, ip netip.Addr, name string) (old string, changed bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cur := s.m.Hosts[id]
 	if cur == nil || cur.IP != ip || cur.PTRName == name {
-		return nil
+		return "", false, nil
 	}
 	h := *cur
 	h.PTRName = name
 	if err := s.repo.Apply(ctx, Changes{Hosts: []Host{h}}); err != nil {
-		return err
+		return "", false, err
 	}
-	*cur = h
+	old, *cur = cur.PTRName, h
 	s.notify.Publish(apitypes.EventHostUpdated, s.hostView(cur))
-	return nil
+	return old, true, nil
 }

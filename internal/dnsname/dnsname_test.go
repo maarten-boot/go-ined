@@ -88,12 +88,23 @@ func (i *inv) DNSTargets() []inventory.Target {
 	return out
 }
 
-func (i *inv) SetPTRName(_ context.Context, id int64, _ netip.Addr, name string) error {
+// SetPTRName stores the name unless the host has another address by now,
+// like the inventory.
+func (i *inv) SetPTRName(_ context.Context, id int64, ip netip.Addr, name string) (string, bool, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	i.ptr[id] = name
+	for _, t := range i.targets {
+		if t.ID == id && t.IP != ip {
+			return "", false, nil
+		}
+	}
+	old := i.ptr[id]
 	i.sets++
-	return nil
+	if old == name {
+		return "", false, nil
+	}
+	i.ptr[id] = name
+	return old, true, nil
 }
 
 func (i *inv) name(id int64) (string, bool) {
@@ -361,5 +372,37 @@ func TestNoGoroutinePerWaitingHost(t *testing.T) {
 	// Run, its ticker and 4 workers; allow a few for the runtime.
 	if n := runtime.NumGoroutine() - base; n > 10 {
 		t.Fatalf("%d extra goroutines for 4 slots and 50 due hosts", n)
+	}
+}
+
+// TC-405 (crosscheck 2026-11-12-05 C1): an answer for an address the host
+// no longer has is dropped: nothing is logged for it, and the new address
+// gets its name with a log line that names the stored one.
+func TestIPChangeDuringLookup(t *testing.T) {
+	g := newRig(t, Config{Refresh: time.Hour, Sync: time.Millisecond}, target(1, "10.0.0.1"))
+	g.r.set("10.0.0.1", names("old.example."))
+	waitFor(t, "first", func() bool { n, _ := g.inv.name(1); return n == "old.example." })
+	g.r.set("10.0.0.1", names("other.example."))
+	g.r.mu.Lock()
+	g.r.block = make(chan struct{})
+	g.r.mu.Unlock()
+	g.clk.Advance(time.Hour)
+	waitFor(t, "held", func() bool { return g.r.active.Load() == 1 })
+	// The IP changes meanwhile; the inventory clears the name.
+	g.inv.mu.Lock()
+	g.inv.ptr[1] = ""
+	g.inv.mu.Unlock()
+	g.inv.setTargets(target(1, "10.0.0.9"))
+	g.r.set("10.0.0.9", names("new.example."))
+	g.clk.Advance(time.Millisecond)
+	settle()
+	g.r.mu.Lock()
+	close(g.r.block)
+	g.r.block = nil
+	g.r.mu.Unlock()
+	waitFor(t, "new name", func() bool { n, _ := g.inv.name(1); return n == "new.example." })
+	settle()
+	if log := g.log.String(); strings.Contains(log, "other.example.") || strings.Contains(log, "level=INFO") {
+		t.Errorf("stale answer logged, or a first name at Info:\n%s", log)
 	}
 }

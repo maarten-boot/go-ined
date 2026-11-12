@@ -22,7 +22,7 @@ type Resolver interface {
 // Inventory is the part of inventory.Service the refresher uses.
 type Inventory interface {
 	DNSTargets() []inventory.Target
-	SetPTRName(ctx context.Context, id int64, ip netip.Addr, name string) error
+	SetPTRName(ctx context.Context, id int64, ip netip.Addr, name string) (old string, changed bool, err error)
 }
 
 // Config holds the DNS settings. Zero values get defaults.
@@ -114,9 +114,10 @@ type hostState struct {
 // result is what a lookup reports back to the loop.
 type result struct {
 	id       int64
-	notFound bool   // the name doesn't exist
-	keep     bool   // temporary error: nothing changed
-	name     string // otherwise the name now in the inventory
+	ip       netip.Addr // the address that was looked up
+	notFound bool       // the name doesn't exist
+	keep     bool       // temporary error: nothing changed
+	name     string     // otherwise the name now in the inventory
 }
 
 // Run looks up names until ctx is cancelled, then waits for the lookups in
@@ -171,6 +172,7 @@ func (f *Refresher) Run(ctx context.Context) {
 		if ctx.Err() == nil {
 			res = f.apply(ctx, id, st, names, err)
 		}
+		res.ip = st.ip
 		select {
 		case done <- res:
 		case <-ctx.Done():
@@ -208,7 +210,10 @@ func (f *Refresher) Run(ctx context.Context) {
 			if st := hosts[res.id]; st != nil {
 				st.busy = false
 				switch {
-				case res.keep:
+				case res.keep, res.ip != st.ip:
+					// Nothing changed, or the host has another address by
+					// now: that lookup is already due (crosscheck
+					// 2026-11-12-05 C1).
 				case res.notFound && st.name != "" && st.misses+1 < f.cfg.ClearAfter:
 					st.misses++
 					st.next = f.cfg.Now().Add(f.cfg.Recheck)
@@ -237,16 +242,19 @@ func (f *Refresher) apply(ctx context.Context, id int64, st hostState, names []s
 			"name", st.name, "answers", st.misses+1, "clear_after", f.cfg.ClearAfter)
 		return result{id: id, notFound: true}
 	}
-	if err := f.inv.SetPTRName(ctx, id, ip, name); err != nil {
+	old, changed, err := f.inv.SetPTRName(ctx, id, ip, name)
+	if err != nil {
 		f.log.Error("saving PTR name failed", "host", id, "err", err)
 		return result{id: id, keep: true}
 	}
+	// Log only what was saved: the inventory ignores an answer for an
+	// address the host no longer has (crosscheck 2026-11-12-05 C1).
 	switch {
-	case name == st.name:
+	case !changed:
 	case name == "":
-		f.log.Info("reverse DNS: name cleared", "host", id, "ip", ip, "name", st.name, "answers", f.cfg.ClearAfter)
-	case st.name != "":
-		f.log.Info("reverse DNS: name changed", "host", id, "ip", ip, "from", st.name, "to", name)
+		f.log.Info("reverse DNS: name cleared", "host", id, "ip", ip, "name", old, "answers", f.cfg.ClearAfter)
+	case old != "":
+		f.log.Info("reverse DNS: name changed", "host", id, "ip", ip, "from", old, "to", name)
 	case st.cleared:
 		f.log.Info("reverse DNS: name back", "host", id, "ip", ip, "name", name)
 	default:

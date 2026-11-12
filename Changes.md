@@ -4,6 +4,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Fixed
+- Reverse DNS: when a host's IP address changed while its name was being looked up, the server log reported a name change for the old address that was never saved. Answers for an address the host no longer has are now ignored, and only saved changes are logged.
+
 ## [0.3.1] - 2026-11-12
 
 ### Changed

@@ -4,6 +4,8 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-12
+
 ### Added
 - Host labels per group: a group's context menu has "Host labels ▸ Name / IP address / Name and IP address / As the parent group". The choice applies to the hosts inside the group and its subgroups (until one sets its own), is saved on the server and is the same in every GUI. API: `labels` on groups (`""`, `name`, `ip`, `both`); `inedctl group labels <id> name|ip|both|inherit`. The database gets a new column on first start (schema 4). For a group that takes its parent's mode, the menu shows that mode in brackets ("As the parent group (IP address)"); the details panel has a "Host labels" row. `inedctl group add --labels`.
 

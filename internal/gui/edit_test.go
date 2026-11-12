@@ -933,6 +933,14 @@ func TestMultiSelectKeys(t *testing.T) {
 	eventually(t, e.ui, "both collapsed", func() bool {
 		return must(c.Group(ctx, net.ID)).Collapsed && must(c.Group(ctx, app.ID)).Collapsed
 	})
+	// e acts on what the map shows (groups already expanded are left
+	// alone), so wait until the GUI has the collapse too.
+	eventually(t, e.ui, "collapse shown", func() bool {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		a, b := g.item(1, mapmodel.GroupKey(net.ID)), g.item(1, mapmodel.GroupKey(app.ID))
+		return a != nil && b != nil && a.Collapsed && b.Collapsed
+	})
 	e.ui.Wait(func() { g.onKey(&fyne.KeyEvent{Name: fyne.KeyE}) })
 	eventually(t, e.ui, "both expanded", func() bool {
 		return !must(c.Group(ctx, net.ID)).Collapsed && !must(c.Group(ctx, app.ID)).Collapsed
@@ -1051,4 +1059,42 @@ func TestHostLabelsMenuSelection(t *testing.T) {
 	eventually(t, e.ui, "details", func() bool {
 		return strings.Contains(formText(g.details), "As the parent group (IP address)")
 	})
+}
+
+// TC-726, 727 (crosscheck 2026-11-12-04 C1): expanding a mixed selection,
+// from the menu or with e, expands the collapsed group and leaves the
+// already expanded one, and its members, where they are.
+func TestExpandMixedSelection(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	a := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "a", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	b := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "b", Collapsed: ptr(true), X: ptr(900.0), Y: ptr(100.0)}))
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &a.ID, X: ptr(400.0), Y: ptr(400.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h.ID) != nil })
+	sel := []mapmodel.Key{mapmodel.GroupKey(a.ID), mapmodel.GroupKey(b.ID)}
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection(sel)
+		fr := find(e.nodes(1), "group", b.ID)
+		menuItem(g.menuItems(1, fr, fr.Icon.X+2, fr.Icon.Y+2, nil), "Expand 2 groups").Action()
+	})
+	eventually(t, e.ui, "b expanded", func() bool { return !must(c.Group(ctx, b.ID)).Collapsed })
+	// The key: a is expanded, b now too; nothing may move.
+	must(c.UpdateGroup(ctx, b.ID, apitypes.GroupPatch{Collapsed: apitypes.Some(true)}))
+	eventually(t, e.ui, "b collapsed", func() bool {
+		n := find(e.nodes(1), "group", b.ID)
+		return n != nil && n.Kind != mapmodel.KindFrame
+	})
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection(sel)
+		g.setSelectedCollapsed(false)
+	})
+	eventually(t, e.ui, "b expanded by e", func() bool { return !must(c.Group(ctx, b.ID)).Collapsed })
+	if got := must(c.Host(ctx, h.ID)); got.X != 400 || got.Y != 400 {
+		t.Errorf("host in the expanded group moved to %v,%v", got.X, got.Y)
+	}
+	if got := must(c.Group(ctx, a.ID)); got.Collapsed || got.X != 100 || got.Y != 100 {
+		t.Errorf("group a changed: %+v", got)
+	}
 }

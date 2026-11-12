@@ -4,6 +4,12 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Changed
+- Reverse DNS: a host's name is no longer dropped after a single "doesn't exist" answer. The server looks again a minute later and clears the name only after 3 such answers in a row; until then the host keeps showing its name. Hosts that have no name are still looked up once an hour. The server log says at Info level when a name is cleared, changes, or comes back.
+
+### Fixed
+- `ined-gui`: expanding a group that was already expanded (with **e**, or "Expand N groups" on a selection where only some were collapsed) moved everything inside it. Groups already in the requested state are now left alone.
+
 ## [0.3.0] - 2026-11-12
 
 ### Added

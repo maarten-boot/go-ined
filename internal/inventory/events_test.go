@@ -418,6 +418,10 @@ func TestPTRName(t *testing.T) {
 	if ev := r.take(); ev != "host.updated 1 unknown" {
 		t.Fatalf("events: %s", ev)
 	}
+	// The refresher sees the current name (SPEC-403 v0.34).
+	if ts := s.DNSTargets(); len(ts) != 1 || ts[0].PTRName != "nas.example." {
+		t.Fatalf("DNS targets: %+v", ts)
+	}
 	// Same name, a stale IP, or an unknown host: nothing happens.
 	s.SetPTRName(context.Background(), h.ID, ip, "nas.example.")
 	s.SetPTRName(context.Background(), h.ID, netip.MustParseAddr("10.0.0.2"), "x.")

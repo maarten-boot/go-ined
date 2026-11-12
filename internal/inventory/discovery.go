@@ -112,7 +112,7 @@ func (s *Service) DNSTargets() []Target {
 	out := make([]Target, 0, len(s.m.Hosts))
 	for _, id := range sortedKeys(s.m.Hosts) {
 		h := s.m.Hosts[id]
-		out = append(out, Target{ID: h.ID, IP: h.IP})
+		out = append(out, Target{ID: h.ID, IP: h.IP, PTRName: h.PTRName})
 	}
 	return out
 }

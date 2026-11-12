@@ -1,11 +1,14 @@
 package dnsname
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/netip"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -78,7 +81,11 @@ type inv struct {
 func (i *inv) DNSTargets() []inventory.Target {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	return append([]inventory.Target(nil), i.targets...)
+	out := append([]inventory.Target(nil), i.targets...)
+	for k := range out {
+		out[k].PTRName = i.ptr[out[k].ID]
+	}
+	return out
 }
 
 func (i *inv) SetPTRName(_ context.Context, id int64, _ netip.Addr, name string) error {
@@ -119,14 +126,24 @@ type rig struct {
 	clk *clock
 	r   *resolver
 	inv *inv
+	log *logBuf
 }
+
+// logBuf collects the refresher's log lines.
+type logBuf struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *logBuf) Write(p []byte) (int, error) { l.mu.Lock(); defer l.mu.Unlock(); return l.b.Write(p) }
+func (l *logBuf) String() string              { l.mu.Lock(); defer l.mu.Unlock(); return l.b.String() }
 
 func newRig(t *testing.T, cfg Config, targets ...inventory.Target) *rig {
 	t.Helper()
-	g := &rig{clk: &clock{t: time.Unix(1000, 0)}, r: &resolver{answers: map[string]func() ([]string, error){}}, inv: &inv{ptr: map[int64]string{}}}
+	g := &rig{clk: &clock{t: time.Unix(1000, 0)}, r: &resolver{answers: map[string]func() ([]string, error){}}, inv: &inv{ptr: map[int64]string{}}, log: &logBuf{}}
 	g.inv.setTargets(targets...)
 	cfg.Now, cfg.Tick = g.clk.Now, time.Millisecond
-	f := New(g.r, g.inv, cfg, nil)
+	f := New(g.r, g.inv, cfg, slog.New(slog.NewTextHandler(g.log, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { f.Run(ctx); close(done) }()
@@ -193,9 +210,88 @@ func TestKeepAndClear(t *testing.T) {
 	if n, _ := g.inv.name(1); n != "old.example." || g.inv.sets != sets {
 		t.Fatalf("temporary error changed the name to %q", n)
 	}
-	g.r.set("10.0.0.1", nil) // NXDOMAIN
-	g.clk.Advance(time.Minute)
+	g.r.set("10.0.0.1", nil) // NXDOMAIN: cleared after 3 in a row, a minute apart
+	for i := 3; i <= 5; i++ {
+		g.clk.Advance(time.Minute)
+		waitFor(t, "lookup", func() bool { return g.r.nCalls() == i })
+		settle()
+	}
 	waitFor(t, "cleared", func() bool { n, _ := g.inv.name(1); return n == "" })
+}
+
+// TC-406 (v0.34, crosscheck 2026-11-12-04 D2): a known name survives
+// "not found" answers until ClearAfter of them in a row, with a recheck
+// after Recheck instead of Refresh; a name found again resets the count;
+// clearing and the name's return are logged at Info. A host without a
+// name isn't rechecked.
+func TestClearAfterMisses(t *testing.T) {
+	g := newRig(t, Config{Refresh: time.Hour, Recheck: time.Minute, ClearAfter: 3, Sync: time.Millisecond},
+		target(1, "10.0.0.1"), target(2, "10.0.0.2"))
+	calls := func(addr string) int {
+		g.r.mu.Lock()
+		defer g.r.mu.Unlock()
+		n := 0
+		for _, c := range g.r.calls {
+			if c == addr {
+				n++
+			}
+		}
+		return n
+	}
+	g.r.set("10.0.0.1", names("nas.example."))
+	waitFor(t, "first", func() bool { n, _ := g.inv.name(1); return n == "nas.example." })
+	g.clk.Advance(time.Hour) // host 2's first lookup (spread at start), host 1's second
+	waitFor(t, "second round", func() bool { return calls("10.0.0.1") == 2 && calls("10.0.0.2") == 1 })
+	settle()
+	miss := func(want int) {
+		t.Helper()
+		g.clk.Advance(time.Minute)
+		waitFor(t, "recheck", func() bool { return calls("10.0.0.1") == want })
+		settle()
+	}
+	g.r.set("10.0.0.1", nil) // NXDOMAIN from now on
+	g.clk.Advance(time.Hour)
+	waitFor(t, "miss 1", func() bool { return calls("10.0.0.1") == 3 })
+	settle()
+	miss(4) // miss 2, one minute later
+	if n, _ := g.inv.name(1); n != "nas.example." {
+		t.Fatalf("name cleared after 2 misses: %q", n)
+	}
+	if calls("10.0.0.2") != 2 {
+		t.Errorf("host without a name rechecked: %d lookups", calls("10.0.0.2"))
+	}
+	// Found again: the count starts over.
+	g.r.set("10.0.0.1", names("nas.example."))
+	miss(5)
+	g.r.set("10.0.0.1", nil)
+	g.clk.Advance(time.Hour)
+	waitFor(t, "miss 1 again", func() bool { return calls("10.0.0.1") == 6 })
+	settle()
+	miss(7)
+	if n, _ := g.inv.name(1); n != "nas.example." {
+		t.Fatalf("count not reset: cleared after %q", n)
+	}
+	miss(8) // the third in a row
+	waitFor(t, "cleared", func() bool { n, _ := g.inv.name(1); return n == "" })
+	// Cleared: back to the hourly lookups.
+	g.clk.Advance(time.Minute)
+	settle()
+	if c := calls("10.0.0.1"); c != 8 {
+		t.Errorf("rechecked after clearing: %d lookups", c)
+	}
+	g.r.set("10.0.0.1", names("nas.example."))
+	g.clk.Advance(time.Hour)
+	waitFor(t, "back", func() bool { n, _ := g.inv.name(1); return n == "nas.example." })
+	settle()
+	log := g.log.String()
+	for _, want := range []string{"name cleared", "name=nas.example.", "name back"} {
+		if !strings.Contains(log, want) {
+			t.Errorf("log lacks %q:\n%s", want, log)
+		}
+	}
+	if strings.Count(log, "level=INFO") != 2 {
+		t.Errorf("want 2 Info lines:\n%s", log)
+	}
 }
 
 // TC-405: an IP change triggers a lookup of the new address at once.

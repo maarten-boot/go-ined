@@ -35,3 +35,10 @@
    **Claude** checked:
    - The release run 43227857742 and the CI runs on `main`, `docs/architecture` and `fix/crosscheck-10` are green.
    - The release `go-ined v0.2.0` (not a draft) has 7 archives and `SHA256SUMS`. All checksums match the downloads; the binaries print `v0.2.0` and were built with go1.26.11; the release text equals the `[0.2.0]` section (TC-011).
+6. **User**: pushed; do a crosscheck.
+   **Claude** ran crosscheck `Crosscheck-2026-11-12-02.md` (the eleventh) on the crosscheck-10 fixes and the 0.2.0 release:
+   - 220 tests pass; CI on `main` (43255976029) is green; the examples are current; the Spec ↔ Tests trace is complete.
+   - **Findings:** 0 H, 0 M, 2 L.
+     - **C1:** with a group and its member both selected, the menu says "2 items" and its Delete loses the cascade choice; the keys count only the group.
+     - **C2:** the 2-minute grace for a replaced prober isn't guaranteed to cover a round (`count` and `timeout` have no upper limit). Proposed: close it when its last round ends.
+   - No decisions needed. The fixes wait for the user's OK.

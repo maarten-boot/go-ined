@@ -845,6 +845,40 @@ func TestMultiSelectMenu(t *testing.T) {
 	eventually(t, e.ui, "deleted", func() bool { return f.done && len(must(c.Hosts(ctx))) == 0 })
 }
 
+// TC-727 (GUI): with a group and an item inside it selected, the menu acts
+// on the group only, as the keys do: its usual labels and delete dialog.
+func TestMultiSelectMenuGroupAndMember(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	lan := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "lan", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &lan.ID, X: ptr(100.0), Y: ptr(220.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h.ID) != nil })
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.GroupKey(lan.ID), mapmodel.HostKey(h.ID)})
+		items := g.menuItems(1, find(e.nodes(1), "host", h.ID), 0, 0, &h)
+		if menuItem(items, `Move group "lan" to group…`) == nil {
+			t.Fatalf("menu: %v", labels(items))
+		}
+		del := menuItem(items, `Delete group "lan"…`)
+		if del == nil {
+			t.Fatalf("menu: %v", labels(items))
+		}
+		g.lastForm = nil
+		del.Action()
+		// The group's own dialog: it offers both "move contents up" and
+		// "delete everything".
+		f := g.lastForm
+		if f == nil || len(f.form.Items) < 2 {
+			t.Fatalf("delete dialog: %+v", f)
+		}
+		if _, ok := f.form.Items[1].Widget.(*widget.RadioGroup); !ok {
+			t.Errorf("no choice for the contents: %T", f.form.Items[1].Widget)
+		}
+	})
+}
+
 // TC-726 (GUI): g groups the selection, c and e collapse and expand the
 // selected groups, Delete asks once for several items.
 func TestMultiSelectKeys(t *testing.T) {

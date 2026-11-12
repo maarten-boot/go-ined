@@ -71,4 +71,21 @@
     - All tests pass, the changed packages also with the race detector.
     - **Release 0.3.0** prepared: `Changes.md`, OpenAPI version, README; the local release build checks out (checksums, `-version` prints `v0.3.0`); annotated tag `v0.3.0`.
     - Still open: the names-to-IP report (waiting for the user's data).
+11. **User**: pushed; check the release run (four times).
+    **Claude** found that each push had sent only `main`. The branches and the tag arrived once they were named in the push command. Claude now checks every push with `git ls-remote` (saved in memory).
+12. **User**: do a crosscheck.
+    **Claude** ran crosscheck `Crosscheck-2026-11-12-04.md` (the thirteenth) on the crosscheck-12 fixes and release 0.3.0:
+    - 227 tests pass; lint is clean; the examples are current.
+    - **C1 (M):** expanding an already expanded group (key **e**, "Expand N groups") moved its contents. Found with a probe: a host went from 400,400 to 120,130.
+    - The details row and the reloads are fine.
+    - Recommended: fix C1, then release 0.3.1 (D1).
+13. **User**: after leaving the screen open for a while, the DNS names returned. Perhaps they return on the next ping scan automatically?
+    **Claude**: they return through the hourly reverse-DNS lookup, not the ping. One "doesn't exist" answer cleared a name until that next lookup, so the cause was most likely a brief DNS problem, not a regression.
+    - Proposed D2: (a) keep a name until 3 "doesn't exist" answers in a row, a minute apart; (b) log cleared and returning names at Info.
+    - P2 closed as explained.
+14. **User**: OK, all.
+    **Claude**:
+    - Verified the v0.3.0 release: all runs green; 7 archives plus `SHA256SUMS`; checksums OK; binaries print `v0.3.0`; the release text matches.
+    - Applied C1 and D2 (a+b) on `fix/crosscheck-13` (merged). Spec v0.34 (SPEC-403, 703); TC-011, 402, 726 and 727 updated.
+    - **Release 0.3.1** prepared: the local build checks out; annotated tag `v0.3.1`.
 

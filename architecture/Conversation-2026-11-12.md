@@ -31,3 +31,7 @@
    - OpenAPI `info.version` 0.2.0; README status (M1–7 done, latest release 0.2.0).
    - `make all` passes; a local `build-release.sh v0.2.0` gave 8 files, the checksums match and the binaries print `v0.2.0`.
    - Annotated tag `v0.2.0` made locally. The user pushes; then Claude checks the release run and its assets.
+5. **User**: pushed; check the release run.
+   **Claude** checked:
+   - The release run 43227857742 and the CI runs on `main`, `docs/architecture` and `fix/crosscheck-10` are green.
+   - The release `go-ined v0.2.0` (not a draft) has 7 archives and `SHA256SUMS`. All checksums match the downloads; the binaries print `v0.2.0` and were built with go1.26.11; the release text equals the `[0.2.0]` section (TC-011).

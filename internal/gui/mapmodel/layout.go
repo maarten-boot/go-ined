@@ -105,11 +105,19 @@ type Measure func(text string) (w, h float64)
 // and id. Items under a collapsed group are not shown (SPEC-112). An item
 // whose parent isn't in the view is shown at the root.
 func (m *Model) Layout(view int64, measure Measure) []Node {
+	return m.LayoutIn(view, 0, measure)
+}
+
+// LayoutIn lays out a view narrowed to one group, its focus (SPEC-726):
+// the group's subtree as if the group were the root, without the group
+// itself and also when the group is collapsed. root 0 is the whole view;
+// a root that isn't in the view gives nil.
+func (m *Model) LayoutIn(view, root int64, measure Measure) []Node {
 	vm := m.maps[view]
-	if vm == nil {
+	if vm == nil || (root != 0 && vm.Items[GroupKey(root)] == nil) {
 		return nil
 	}
-	l := &layout{vm: vm, measure: measure, children: map[int64][]*apitypes.MapItem{}, counts: vm.counts()}
+	l := &layout{vm: vm, root: root, measure: measure, children: map[int64][]*apitypes.MapItem{}, counts: vm.counts()}
 	for _, k := range sortedKeys(vm.Items) {
 		it := vm.Items[k]
 		l.children[l.parent(it)] = append(l.children[l.parent(it)], it)
@@ -117,7 +125,7 @@ func (m *Model) Layout(view int64, measure Measure) []Node {
 	if m.WrapNames {
 		l.room = roomPerItem(vm, l)
 	}
-	l.place(0, 0, map[int64]bool{})
+	l.place(root, 0, map[int64]bool{root: true})
 	slices.SortStableFunc(l.frames, func(a, b Node) int { return a.Depth - b.Depth })
 	return append(l.frames, l.icons...)
 }
@@ -125,6 +133,7 @@ func (m *Model) Layout(view int64, measure Measure) []Node {
 type layout struct {
 	room     map[Key]float64 // width a name may use before it wraps; absent: no limit
 	vm       *ViewMap
+	root     int64 // the focus group (0: the whole view)
 	measure  Measure
 	children map[int64][]*apitypes.MapItem // by parent group id (0 = root)
 	counts   map[int64]Counts
@@ -411,19 +420,24 @@ func roomPerItem(vm *ViewMap, l *layout) map[Key]float64 {
 	return room
 }
 
-// visible reports whether no group above the item is collapsed.
+// visible reports whether no group above the item is collapsed. With a
+// focus, only items below the focus group count, and groups from the
+// focus up don't matter (SPEC-726).
 func (l *layout) visible(it *apitypes.MapItem) bool {
 	for p, n := it.ParentID, 0; p != nil && n <= len(l.vm.Items); n++ {
+		if *p == l.root {
+			return true
+		}
 		g := l.vm.Items[GroupKey(*p)]
 		if g == nil {
-			return true
+			return l.root == 0
 		}
 		if g.Collapsed {
 			return false
 		}
 		p = g.ParentID
 	}
-	return true
+	return l.root == 0
 }
 
 // WrapName breaks a name into lines no wider than room: after its dots

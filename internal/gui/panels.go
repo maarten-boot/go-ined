@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -511,9 +512,20 @@ func (g *GUI) goToHost(host int64) {
 		g.mu.Lock()
 		view, expand, ok := g.model.Locate(host, cur)
 		var x, y float64
+		leave := false // the host is outside the tab's focus (SPEC-726, F7)
 		if ok {
 			it := g.model.Map(view).Items[mapmodel.HostKey(host)]
 			x, y = it.X, it.Y
+			if f := g.focus[view]; f != 0 {
+				if !g.model.InFocus(view, f, mapmodel.HostKey(host)) {
+					leave = true
+				} else { // groups from the focus up needn't be expanded
+					sub := g.model.Subtree(view, f)
+					expand = slices.DeleteFunc(expand, func(id int64) bool {
+						return id == f || !sub[mapmodel.GroupKey(id)]
+					})
+				}
+			}
 		}
 		g.mu.Unlock()
 		if !ok {
@@ -530,6 +542,10 @@ func (g *GUI) goToHost(host int64) {
 			mv := g.maps[view]
 			if mv == nil {
 				return
+			}
+			if leave {
+				g.setFocus(view, 0)
+				g.status.message("find: the host is outside the shown group; showing the whole view")
 			}
 			k := mapmodel.HostKey(host)
 			mv.Select(&k)

@@ -588,7 +588,7 @@ func TestLabelModes(t *testing.T) {
 	}
 }
 
-// TC-703 (crosscheck 2026-11-13-01 C1): a frame is wide enough for the
+// TC-725 (crosscheck 2026-11-13-01 C1): a frame is wide enough for the
 // status glyph, its label and the padding on the right, also when the
 // label is wider than the members and bold text is wider than regular.
 func TestFrameLabelWidth(t *testing.T) {

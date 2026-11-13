@@ -27,3 +27,7 @@
    **Claude** checked the push (`git ls-remote`: all three branches arrived; CI on `b7dc464` passed).
    - Applied C1 on `fix/crosscheck-16` (merged): Reflow on a collapsed group measures it as expanded, so expanded subgroups count with their whole frame. TestReflowCellCollapsed (TC-724); SPEC-723 v0.37.
    - D2: no release; `[Unreleased]` holds three fixes.
+6. **User**: pushed; do we have any open issues?; run the openapi validator.
+   **Claude** checked the push (all three branches arrived) and CI: green on `main`, `docs/architecture` (8a384c8) and `fix/crosscheck-16`.
+   - Open: no GitHub issues or PRs; the user's visual GUI checks (TC-005, 702, 705, 708) and the formal OpenAPI check.
+   - Ran `pipx run openapi-spec-validator --schema 3.1.0 internal/api/openapi.json` (version 0.9.0, installed in the scratchpad, removed afterwards): **OK**. TC-505 and the Plan are updated.

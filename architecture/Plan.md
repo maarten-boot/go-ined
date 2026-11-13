@@ -146,7 +146,7 @@ Testing: the API additions get unit and API tests as before. GUI actions are tes
 - [x] Run `staticcheck` and `govulncheck` locally first and fix what they find: one unused field; 15 reachable vulnerabilities, fixed with toolchain go1.26.11 (standard library) and `golang.org/x/image` v0.48.0 (via Fyne)
 - [x] `.github/workflows/ci.yml` and `release.yml` (pinned SHAs), `.github/dependabot.yml`; `scripts/build-release.sh` (dry run: 7 archives and SHA256SUMS) and `scripts/release-notes.sh`; repository tests in `internal/repocheck`
 - [x] First CI run on GitHub green: run 43091727389 failed (GLFW 3.4 needs the Wayland and xkbcommon headers); after adding them, run 43093370048 passed all four jobs. raw-icmp ran as root in raw mode (127.0.0.1 and ::1); all 7 archives checked
-- [x] OpenAPI document with its tests (SPEC-505). Not yet checked by a formal OpenAPI validator: installing one from PyPI was blocked in this session
+- [x] OpenAPI document with its tests (SPEC-505). Checked by a formal validator on 2026-11-13: `openapi-spec-validator` 0.9.0 (`--schema 3.1.0`) reports OK
 - [x] `[log]` config (SPEC-807)
 - [x] User report (2026-11-11): scanning as an ordinary user failed (no ICMP mode on the user's machine) and the GUI's error couldn't be copied. Fixed: copyable messages in the discovery dialog and status bar, a ping warning on connect, the server message names the commands, README "Ping permissions" (crosscheck 2026-11-11-04 U1–U5)
 - [x] Curated `[0.1.0]` section in `Changes.md` (crosscheck 2026-11-11-04 D1)

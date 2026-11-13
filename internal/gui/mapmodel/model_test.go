@@ -640,3 +640,35 @@ func TestFrameLabelWidth(t *testing.T) {
 	}
 	t.Fatal("no frame")
 }
+
+// TC-725 (crosscheck 2026-11-13-03 C1): the frame a group would have when
+// expanded is found also when a group above it is collapsed (as inside a
+// focus), is the same as with everything open, and the flags stay as
+// they were.
+func TestFrameIfExpandedUnderCollapsed(t *testing.T) {
+	items := func(top bool) []apitypes.MapItem {
+		return []apitypes.MapItem{
+			{Type: "group", ID: 9, Name: "top", X: -500, Y: -500, Collapsed: top},
+			{Type: "group", ID: 1, ParentID: p(9), Name: "A", X: 0, Y: 0, Collapsed: true},
+			{Type: "host", ID: 1, ParentID: p(1), Name: "h1", X: 600, Y: 600},
+			{Type: "host", ID: 2, ParentID: p(1), Name: "h2", X: 700, Y: 650},
+		}
+	}
+	open := New()
+	open.SetMap(apitypes.Map{ViewID: 1, Items: items(false)})
+	want, ok := open.FrameIfExpanded(1, 1, measure)
+	if !ok {
+		t.Fatal("no frame with the top group open")
+	}
+	m := New()
+	m.SetMap(apitypes.Map{ViewID: 1, Items: items(true)})
+	got, ok := m.FrameIfExpanded(1, 1, measure)
+	if !ok || got != want {
+		t.Errorf("under a collapsed group: %+v %v, want %+v", got, ok, want)
+	}
+	for _, id := range []int64{9, 1} {
+		if !m.maps[1].Items[GroupKey(id)].Collapsed {
+			t.Errorf("group %d no longer collapsed", id)
+		}
+	}
+}

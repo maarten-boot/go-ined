@@ -78,6 +78,10 @@ type MapView struct {
 	saved      map[int64]mapmodel.Viewport
 	shownFocus int64
 	fitPending bool
+	// empty is written in the middle of a map with nothing on it, such as
+	// "group "lan" is empty" for an empty focus (crosscheck 2026-11-13-03
+	// L1); "" writes nothing.
+	empty string
 }
 
 type dragMode int
@@ -545,6 +549,12 @@ func (r *mapRenderer) build() {
 		default:
 			d.icon(n, selected)
 		}
+	}
+	if len(mv.nodes) == 0 && mv.empty != "" {
+		t, m := d.pool.text(mv.empty, 14, false, nrgba(p.Text))
+		t.Move(fyne.NewPos((s.Width-m.Width)/2, (s.Height-m.Height)/2))
+		t.Resize(m)
+		d.objs = append(d.objs, t)
 	}
 	if mv.drag == dragBand { // the rubber band (SPEC-724)
 		x0, x1 := math.Min(mv.bandX0, mv.bandX1), math.Max(mv.bandX0, mv.bandX1)

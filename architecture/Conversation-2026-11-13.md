@@ -49,3 +49,10 @@
    - Checked under Xvfb `:97` (free): the list shows the indented tree; picking `servers` inside the collapsed `lan` shows its hosts; Backspace goes up to `lan`; Ctrl+L, typing "rack" and Enter switch to the Lab tab.
    - The trail's parts first looked like plain text; they are now buttons, and old trail borders are dropped on each rebuild.
    - The first PID record held a wrapper shell, so the check refused to kill it. Only processes whose executable was in the scratchpad were stopped, and Xvfb after checking its command line; the scratchpad was emptied.
+10. **User**: pushed; status ?; what jobs are running still?; you can continue.
+    **Claude** checked the push (all three branches arrived) and CI (green). No runs, background tasks or local processes were left.
+    - Ran crosscheck `Crosscheck-2026-11-13-03.md` (the seventeenth) on the key j and the group focus, with two probes as throwaway tests.
+    - **C1 (M):** inside a focus, expanding a group whose parent is collapsed on the shared map doesn't keep its corner: `FrameIfExpanded` lays out the whole view, where the group is hidden.
+    - **C2 (M):** typing a view's name in the "Show" list jumps there mid-word, and the rest of the typing goes to the map's keys.
+    - **L1:** an empty focus shows a blank map.
+    - The fixes and a release of 0.4.0 wait for the user's OK.

@@ -36,3 +36,6 @@
    - Asked two questions. The user chose: the hosts keep their places, and only hosts join (other selected groups stay, and hosts inside a selected group stay there).
    - Added the key **j** on `feature/join-key` (merged): one group acts at once; several ask which one, starting with the primary selection; only hosts or only groups give a hint. TestJoinKey (TC-729); SPEC-724 v0.38; `Changes.md` "Added", README.
    - **User (mid-turn):** an idea: every group also becomes a view, with a dropdown list instead of tabs to choose the view. Claude answered with open points; nothing is built yet (Plan, open questions).
+8. **User**: ok pushed; option 1, keep tabs and add the dropdown.
+   **Claude** checked the push: all three branches arrived; five older feature branches were pushed too. CI passed on all 8 runs.
+   - Wrote `Design-group-focus.md`: a group shown on its own in a tab (a "focus", GUI only, nothing stored), a trail above the map, and a "Show" dropdown with every view and its groups. Decisions F1–F9 wait for the user's OK.

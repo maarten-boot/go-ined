@@ -211,5 +211,5 @@ Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit test
 - [x] Release run 43227857742 green; CI on `main` (43227827366), `docs/architecture` and `fix/crosscheck-10` green. https://github.com/maarten-boot/go-ined/releases/tag/v0.2.0 has 7 archives and SHA256SUMS. Downloaded: every checksum OK; `ined-server`, `inedctl` and `ined-gui` print `v0.2.0`; built with go1.26.11; the release text equals the `[0.2.0]` section (TC-011)
 
 ## Open questions
-- **Idea (user, 2026-11-13, under discussion):** every group also becomes a view, with a dropdown list instead of tabs to choose the view. Open points are in the log of 2026-11-13, entry 7.
+- **Group as a view (user, 2026-11-13):** option 1 (the same map, narrowed to one group) and the tabs kept, plus a dropdown. Design: `Design-group-focus.md`, decisions F1–F9 wait for the user's OK.
 - The log, OpenAPI and backup questions, and the `staticcheck` / `govulncheck` question, are in the M7 decisions (M7-3, M7-6..8).

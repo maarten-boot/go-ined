@@ -419,6 +419,10 @@ func (g *GUI) onKey(ev *fyne.KeyEvent) {
 		if mv := g.currentMap(); mv != nil {
 			g.groupSelectionDialog(mv.view, mv.Selection())
 		}
+	case fyne.KeyJ: // join the selected hosts to the selected group (SPEC-724)
+		if mv := g.currentMap(); mv != nil {
+			g.joinDialog(mv.view, mv.Selection(), mv.Selected())
+		}
 	case fyne.KeyC:
 		g.setSelectedCollapsed(true)
 	case fyne.KeyE:

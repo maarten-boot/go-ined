@@ -1098,3 +1098,75 @@ func TestExpandMixedSelection(t *testing.T) {
 		t.Errorf("group a changed: %+v", got)
 	}
 }
+
+// TC-729 (SPEC-724 v0.38): j joins the selected hosts to the selected
+// group, at their places. One group: at once; several: a question that
+// starts with the primary group. Hosts inside a selected group stay there,
+// and the other groups don't move. Without a group or a host: a hint.
+func TestJoinKey(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	a := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "a", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	b := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "b", Collapsed: ptr(false), X: ptr(600.0), Y: ptr(100.0)}))
+	h1 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Name: "one", X: ptr(300.0), Y: ptr(400.0)}))
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", Name: "two", X: ptr(450.0), Y: ptr(450.0)}))
+	h3 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.3", Name: "three", ParentID: &b.ID, X: ptr(600.0), Y: ptr(220.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h3.ID) != nil })
+	in := func(h apitypes.Host, group int64) bool {
+		got := must(c.Host(ctx, h.ID))
+		return got.ParentID != nil && *got.ParentID == group && got.X == h.X && got.Y == h.Y
+	}
+
+	// One group: at once, no dialog.
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.GroupKey(a.ID), mapmodel.HostKey(h1.ID)})
+		g.lastForm = nil
+		g.onKey(&fyne.KeyEvent{Name: fyne.KeyJ})
+		if g.lastForm != nil {
+			t.Error("dialog for one group")
+		}
+	})
+	eventually(t, e.ui, "one joined a", func() bool { return in(h1, a.ID) })
+
+	// Two groups: the question starts with the primary (b); choose a.
+	var f *formDialog
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.GroupKey(a.ID), mapmodel.HostKey(h2.ID), mapmodel.HostKey(h3.ID), mapmodel.GroupKey(b.ID)})
+		g.lastForm = nil
+		g.onKey(&fyne.KeyEvent{Name: fyne.KeyJ})
+		f = g.lastForm
+		if f == nil {
+			t.Fatal("no dialog for two groups")
+		}
+		if f.form.SubmitText != "Join" {
+			t.Errorf("submit %q", f.form.SubmitText)
+		}
+		sel := f.form.Items[0].Widget.(*fyneSelect)
+		if len(sel.Options) != 2 || sel.Selected != "b ("+fmt.Sprint(b.ID)+")" {
+			t.Errorf("options %q, selected %q", sel.Options, sel.Selected)
+		}
+		sel.SetSelected("a (" + fmt.Sprint(a.ID) + ")")
+		f.Submit()
+	})
+	eventually(t, e.ui, "two joined a", func() bool { return f.done && in(h2, a.ID) })
+	if !in(h3, b.ID) {
+		t.Error("the host inside b moved")
+	}
+	if got := must(c.Group(ctx, b.ID)); got.ParentID != nil || got.X != b.X || got.Y != b.Y {
+		t.Errorf("group b moved: %+v", got)
+	}
+
+	// Only hosts, or only groups: a hint, nothing moves.
+	for _, sel := range [][]mapmodel.Key{{mapmodel.HostKey(h1.ID)}, {mapmodel.GroupKey(a.ID), mapmodel.GroupKey(b.ID)}} {
+		e.ui.Wait(func() {
+			g.maps[1].SetSelection(sel)
+			g.lastForm = nil
+			g.onKey(&fyne.KeyEvent{Name: fyne.KeyJ})
+			if g.lastForm != nil || !strings.Contains(g.status.Text(), "press j") {
+				t.Errorf("%v: form %v, status %q", sel, g.lastForm, g.status.Text())
+			}
+		})
+	}
+}

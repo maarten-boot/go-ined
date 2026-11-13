@@ -83,3 +83,38 @@ jobs:
           sha256sum -c SHA256SUMS
           tar -xzf go-ined-dev-*-linux-amd64.tar.gz --wildcards '*/ined-server'
           ./go-ined-dev-*-linux-amd64/ined-server -version | grep -q "dev-${GITHUB_SHA::12}"
+
+  # ined-gui on the other platforms (SPEC-007 v0.41). Fyne needs cgo, so
+  # each OS builds its own GUI. Only on main, where a release comes from;
+  # in a release the release workflow builds and uploads these.
+  gui:
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: windows-2025, archs: amd64 }
+          - { runner: macos-15, archs: arm64 amd64 }
+          - { runner: ubuntu-24.04-arm, archs: arm64 }
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: GUI build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $GUI_PACKAGES
+      - name: build ined-gui
+        run: scripts/build-release.sh --gui "dev-${GITHUB_SHA::12}" dist ${{ matrix.archs }}
+      - name: check the archives
+        run: |
+          cd dist
+          sha256sum -c SHA256SUMS
+          test "$(ls go-ined-gui-* | wc -l)" -eq "$(echo ${{ matrix.archs }} | wc -w)"
+          native=go-ined-gui-dev-${GITHUB_SHA::12}-$(go env GOOS)-$(go env GOARCH)
+          if [ -f "$native.zip" ]; then 7z x -bd -bso0 "$native.zip"; else tar -xzf "$native.tar.gz"; fi
+          "$native"/ined-gui* -version | grep -q "dev-${GITHUB_SHA::12}"

@@ -22,7 +22,7 @@ jobs:
     needs: ci
     runs-on: ubuntu-24.04
     permissions:
-      contents: write # create the release; only this job
+      contents: write # create the draft release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -34,7 +34,64 @@ jobs:
         run: scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
       - name: build
         run: scripts/build-release.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/dist"
-      - name: publish
+      # A draft: the GUI jobs add their archives, and "publish" makes it
+      # public once everything is there (v0.41).
+      - name: draft release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/dist/* --title "go-ined $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+        run: gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/dist/*.tar.gz "$RUNNER_TEMP"/dist/*.zip --draft --title "go-ined $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+
+  # ined-gui on the other platforms (SPEC-007/008 v0.41): Fyne needs cgo,
+  # so each OS builds its own GUI. The same matrix as ci.yml's gui job.
+  gui:
+    needs: release
+    strategy:
+      matrix:
+        include:
+          - { runner: windows-2025, archs: amd64 }
+          - { runner: macos-15, archs: arm64 amd64 }
+          - { runner: ubuntu-24.04-arm, archs: arm64 }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write # upload to the draft release
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.11" # = the toolchain line in go.mod
+      - name: GUI build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $GUI_PACKAGES
+      - name: build ined-gui
+        run: scripts/build-release.sh --gui "$GITHUB_REF_NAME" dist ${{ matrix.archs }}
+      - name: upload to the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          gh release upload "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.zip
+
+  # SHA256SUMS over every archive, then the release goes public.
+  publish:
+    needs: gui
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # finish the release
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ARCHIVES: 11 # 6 server/CLI, ined-gui for linux amd64 and arm64, windows amd64, darwin arm64 and amd64
+    steps:
+      - name: checksums and publish
+        run: |
+          mkdir "$RUNNER_TEMP/all" && cd "$RUNNER_TEMP/all"
+          gh release download "$GITHUB_REF_NAME"
+          shopt -s nullglob
+          files=(*.tar.gz *.zip)
+          test "${#files[@]}" -eq "$ARCHIVES" || { echo "expected $ARCHIVES archives, got ${#files[@]}: ${files[*]}"; exit 1; }
+          sha256sum -- "${files[@]}" >SHA256SUMS
+          gh release upload "$GITHUB_REF_NAME" SHA256SUMS
+          gh release edit "$GITHUB_REF_NAME" --draft=false

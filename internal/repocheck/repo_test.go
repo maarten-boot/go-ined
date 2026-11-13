@@ -99,21 +99,40 @@ func TestCIWorkflow(t *testing.T) {
 	}
 }
 
-// TC-012 (part): the release workflow runs CI first, has write access in
-// the release job only, and publishes the archives with the notes.
+// TC-012 (part): the release workflow runs CI first, makes a draft with
+// the archives and the notes, adds the GUI of the other platforms, writes
+// SHA256SUMS and publishes; only those jobs have write access.
 func TestReleaseWorkflow(t *testing.T) {
 	r := read(t, ".github/workflows/release.yml")
 	for _, want := range []string{
 		"tags: [\"v[0-9]+.[0-9]+.[0-9]+\"]", "uses: ./.github/workflows/ci.yml", "needs: ci",
 		"permissions:\n  contents: read", "contents: write", "scripts/release-notes.sh", "scripts/build-release.sh",
-		"gh release create", "--verify-tag",
+		"gh release create", "--verify-tag", "--draft", "\n  gui:", "needs: release", "gh release upload",
+		"\n  publish:", "needs: gui", "sha256sum", "--draft=false",
 	} {
 		if !strings.Contains(r, want) {
 			t.Errorf("release.yml lacks %q", want)
 		}
 	}
-	if strings.Count(r, "contents: write") != 1 {
-		t.Error("write access outside the release job")
+	// Write access only in the three jobs that make the release.
+	if strings.Count(r, "contents: write") != 3 {
+		t.Error("write access outside the release, gui and publish jobs")
+	}
+	// The GUI for the other platforms (v0.41): the same runners and
+	// architectures in CI and in the release, built with --gui.
+	matrix := regexp.MustCompile(`- \{ runner: .+ \}`)
+	ci := read(t, ".github/workflows/ci.yml")
+	a, b := matrix.FindAllString(ci, -1), matrix.FindAllString(r, -1)
+	if len(a) != 3 || strings.Join(a, "\n") != strings.Join(b, "\n") {
+		t.Errorf("GUI matrix differs: ci %q, release %q", a, b)
+	}
+	for _, want := range []string{"windows-2025, archs: amd64", "macos-15, archs: arm64 amd64", "ubuntu-24.04-arm, archs: arm64"} {
+		if !strings.Contains(r, want) {
+			t.Errorf("GUI matrix lacks %q", want)
+		}
+	}
+	if !strings.Contains(ci, "build-release.sh --gui") || !strings.Contains(r, "build-release.sh --gui") {
+		t.Error("the GUI jobs don't use build-release.sh --gui")
 	}
 }
 

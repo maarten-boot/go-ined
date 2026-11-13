@@ -61,3 +61,7 @@
     - Fixed C1, C2 and L1 on `fix/focus-crosscheck-03` (merged): expanding inside a focus keeps the corner when a group above is collapsed; typing in the "Show" list only filters; an empty focus says `group "X" is empty`. Each fix has a test; the C1 and C2 tests fail without their fix.
     - SPEC-726 v0.40; TC-725, 733, 734; crosscheck resolution.
     - Prepared release 0.4.0: `Changes.md`, OpenAPI version, README; a local release build in the scratchpad (checksums OK, binaries print `v0.4.0`, removed afterwards); annotated tag `v0.4.0`. The release run and TC-011 follow after the push.
+12. **User**: i pushed; pushed the tag.
+    **Claude** checked the push: the three branches arrived, the tag `v0.4.0` at first did not; after the second push it did.
+    - CI on `main`, `docs/architecture` and `fix/focus-crosscheck-03` and the release run 43511721535 passed.
+    - TC-011 on the published v0.4.0: 7 archives and SHA256SUMS, every checksum OK, the binaries print `v0.4.0` (go1.26.11), the release text equals the `[0.4.0]` section. Downloads removed from the scratchpad.

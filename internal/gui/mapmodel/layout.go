@@ -515,23 +515,9 @@ func (m *Model) ReflowCell(view int64, parent *int64, measure Measure) (w, h flo
 	// Lay out as if the group and the groups above it were expanded, so
 	// members of a collapsed group, and expanded subgroups among them, are
 	// measured as they will show (crosscheck 2026-11-13-02 C1).
-	var opened []*apitypes.MapItem
-	for seen, id := map[int64]bool{}, parent; id != nil && !seen[*id]; {
-		seen[*id] = true
-		it := vm.Items[GroupKey(*id)]
-		if it == nil {
-			break
-		}
-		if it.Collapsed {
-			it.Collapsed = false
-			opened = append(opened, it)
-		}
-		id = it.ParentID
-	}
+	restore := openUp(vm, parent)
 	nodes := m.Layout(view, measure)
-	for _, it := range opened {
-		it.Collapsed = true
-	}
+	restore()
 	m.WrapNames = wrap
 	bounds := map[Key]Rect{}
 	for _, nd := range nodes {
@@ -582,21 +568,45 @@ func CenterForCorner(x, y float64) (cx, cy float64) {
 	return x + GroupW/2, y + GroupTabH + GroupH/2
 }
 
+// openUp marks a group and the groups above it expanded, for a trial
+// layout; the returned func restores the flags.
+func openUp(vm *ViewMap, group *int64) (restore func()) {
+	var opened []*apitypes.MapItem
+	for seen, id := map[int64]bool{}, group; id != nil && !seen[*id]; {
+		seen[*id] = true
+		it := vm.Items[GroupKey(*id)]
+		if it == nil {
+			break
+		}
+		if it.Collapsed {
+			it.Collapsed = false
+			opened = append(opened, it)
+		}
+		id = it.ParentID
+	}
+	return func() {
+		for _, it := range opened {
+			it.Collapsed = true
+		}
+	}
+}
+
 // FrameIfExpanded returns the frame a group would have if it were
-// expanded now, and whether it would be visible.
+// expanded now, and whether it would have one (a group without contents
+// has none). The groups above it count as expanded too, so a group inside
+// a focus whose ancestors are collapsed on the shared map is found
+// (crosscheck 2026-11-13-03 C1).
 func (m *Model) FrameIfExpanded(view, group int64, measure Measure) (Rect, bool) {
 	vm := m.maps[view]
 	if vm == nil {
 		return Rect{}, false
 	}
-	it := vm.Items[GroupKey(group)]
-	if it == nil {
+	if vm.Items[GroupKey(group)] == nil {
 		return Rect{}, false
 	}
-	was := it.Collapsed
-	it.Collapsed = false
+	restore := openUp(vm, &group)
 	nodes := m.Layout(view, measure)
-	it.Collapsed = was
+	restore()
 	for _, n := range nodes {
 		if n.Kind == KindFrame && n.Item.ID == group {
 			return n.Bounds, true

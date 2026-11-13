@@ -15,7 +15,8 @@ import (
 // group (collapsed on the shared map, and it stays so); the trail and the
 // "Show" text follow; Backspace goes up and restores the zoom; the "Show"
 // list switches focus and tab, filters, and Enter takes the first match;
-// a trail part goes back; each tab keeps its own focus.
+// a trail part goes back; each tab keeps its own focus. Typing a label
+// letter by letter only filters (crosscheck 2026-11-13-03 C2).
 func TestFocusNavigation(t *testing.T) {
 	e := start(t)
 	c, ctx := e.c, e.ctx
@@ -99,8 +100,19 @@ func TestFocusNavigation(t *testing.T) {
 		}
 	})
 
-	// Typing filters; Enter takes the first match.
+	// Typing filters; Enter takes the first match. Typing "Lab" letter by
+	// letter only filters, although "Lab" is a whole label (crosscheck
+	// 2026-11-13-03 C2).
 	e.ui.Wait(func() {
+		for _, s := range []string{"", "L", "La", "Lab"} {
+			g.showSel.SetText(s)
+		}
+		if g.current != 1 || g.focusOf(1) != 0 {
+			t.Errorf("typing \"Lab\" switched: tab %d, focus %d", g.current, g.focusOf(1))
+		}
+		if opts := g.showOpts; len(opts) != 1 || opts[0] != "Lab" || g.showSel.Text != "Lab" {
+			t.Errorf("typing \"Lab\": options %q, text %q", opts, g.showSel.Text)
+		}
 		g.showSel.SetText("SERV")
 		if opts := g.showOpts; len(opts) != 1 || strings.TrimSpace(opts[0]) != "servers" {
 			t.Errorf("filtered %q", opts)
@@ -143,8 +155,8 @@ func TestFocusNavigation(t *testing.T) {
 // TC-734 (SPEC-726): inside a focus, new groups go into the focus group,
 // the group menu offers "Show only this group", Reflow names the focus
 // group, an item moved out disappears with a message, a deleted focus
-// group moves the focus up, and "Find host" for a host outside the focus
-// shows the whole view.
+// group moves the focus up, "Find host" for a host outside the focus
+// shows the whole view, and an empty focus says so.
 func TestFocusEditing(t *testing.T) {
 	e := start(t)
 	c, ctx := e.c, e.ctx
@@ -178,6 +190,24 @@ func TestFocusEditing(t *testing.T) {
 		}
 		if it := label(g.viewMenuItems(), "Reflow"); it == nil || it.Label != `Reflow group "lan"…` {
 			t.Errorf("reflow item %+v", it)
+		}
+	})
+
+	// An empty focus says so (crosscheck 2026-11-13-03 L1).
+	empty := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "spare", X: ptr(1500.0), Y: ptr(100.0)}))
+	eventually(t, e.ui, "spare loaded", func() bool {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		return g.item(1, mapmodel.GroupKey(empty.ID)) != nil
+	})
+	e.ui.Wait(func() {
+		g.setFocus(1, empty.ID)
+		if got := g.maps[1].empty; got != `group "spare" is empty` {
+			t.Errorf("empty focus: %q", got)
+		}
+		g.setFocus(1, lan.ID)
+		if got := g.maps[1].empty; got != "" {
+			t.Errorf("focus lan: %q", got)
 		}
 	})
 

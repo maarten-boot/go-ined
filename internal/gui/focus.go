@@ -165,13 +165,21 @@ func (g *GUI) navRow() fyne.CanvasObject {
 	return container.NewBorder(nil, nil, container.NewHBox(widget.NewLabel("Show:"), sel), nil, g.trailBox)
 }
 
-// onShowText follows typing in the "Show" list: a whole entry (picked from
-// the list) is shown, anything else filters the list (F9).
+// onShowText follows changes to the "Show" text (F9). Typing one more
+// character only filters the list, also when the text now happens to be a
+// whole label ("Lab" on the way to "Lab east", crosscheck 2026-11-13-03
+// C2); Enter takes the first match. Any other change that gives a whole
+// label, such as a pick from the list, shows that entry.
 func (g *GUI) onShowText(s string) {
-	for _, e := range g.entries {
-		if e.Label == s {
-			g.goEntry(e)
-			return
+	prev := g.showPrev
+	g.showPrev = s
+	typed := len([]rune(s)) == len([]rune(prev))+1 && strings.HasPrefix(s, prev)
+	if !typed {
+		for _, e := range g.entries {
+			if e.Label == s {
+				g.goEntry(e)
+				return
+			}
 		}
 	}
 	g.setShowOptions(entryLabels(mapmodel.FilterEntries(g.entries, s)))
@@ -179,6 +187,7 @@ func (g *GUI) onShowText(s string) {
 
 func (g *GUI) goEntry(e mapmodel.ShowEntry) {
 	g.setFocus(e.View, e.Group)
+	g.navSig = ""
 	g.syncNav() // also when nothing changed: the text and the list reset
 	g.win.Canvas().Unfocus()
 }
@@ -259,6 +268,7 @@ func (g *GUI) syncNav() {
 	g.navQuiet = true
 	g.setShowOptions(entryLabels(g.entries))
 	g.showSel.SetText(text)
+	g.showPrev = text
 	g.navQuiet = false
 
 	view := mv.view

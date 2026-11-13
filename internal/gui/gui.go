@@ -105,7 +105,8 @@ type GUI struct {
 	showSel      *widget.SelectEntry
 	showOpts     []string // what the "Show" list offers now
 	trailBox     *fyne.Container
-	navQuiet     bool // the "Show" text is being set, not typed
+	navQuiet     bool   // the "Show" text is being set, not typed
+	showPrev     string // the "Show" text before the last change, to tell typing from a pick
 	navSig       string
 	trailBorders []*canvas.Rectangle // the trail buttons' borders, in borders
 }
@@ -370,6 +371,10 @@ func (g *GUI) redraw(view int64) {
 	}
 	g.mu.Unlock()
 	g.layouts++
+	mv.empty = ""
+	if n := len(mv.trail); focus != 0 && n > 0 && len(nodes) == 0 {
+		mv.empty = fmt.Sprintf("group %q is empty", mv.trail[n-1].Name)
+	}
 	mv.SetNodes(nodes)
 	mv.shownFocus = focus
 	if mv.fitPending && len(nodes) > 0 {

@@ -17,3 +17,9 @@
    - A test comment first named TC-703, the reconnect test; it is corrected to TC-725.
    - Kept in `[Unreleased]`.
 
+4. **User**: pushed; do a crosscheck.
+   **Claude** checked the push (`git ls-remote`): only `main` arrived; `docs/architecture` is still at `2715e4b` and `fix/crosscheck-15` is missing.
+   - Ran crosscheck `Crosscheck-2026-11-13-02.md` (the sixteenth) on the crosscheck-15 fix. The fix is correct; all tests pass, and lint is clean.
+   - **C1 (M, older):** "Reflow…" on a collapsed group sizes an expanded subgroup as an icon (probe: an 80 × 92 cell instead of 480 × 428), so its frame overlaps a neighbour after expanding (SPEC-723).
+   - Dependabot PR #1 turned out to be closed already.
+   - The fix waits for the user's OK.

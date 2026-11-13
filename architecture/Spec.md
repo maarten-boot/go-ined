@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.39** (2026-11-13)
+Status: **draft v0.40** (2026-11-13)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -164,10 +164,10 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
 - **SPEC-726** SHOULD (v0.39, user request; design `Design-group-focus.md`, F1–F9): **A group as a view (focus).** Each tab shows its whole view or one group of it, its **focus**; nothing is stored on the server, and every other GUI is unaffected.
   - With a group in focus, the map shows the group's subtree laid out as if the group were the root, without the group itself. This holds also when the group or a group above it is collapsed; the `collapsed` flags don't change. Name wrapping (SPEC-722) looks only at neighbours inside the focus.
   - A **trail** above the map shows the view and the groups down to the focus (`Networks › lan › servers`); every part but the last is a button that goes there.
-  - A **"Show" list** next to the trail lists every view in tab order with its groups below it as an indented tree, siblings by name; a name used more than once gets its id. Choosing an entry switches to that view's tab and sets its focus. Typing filters the list (case and indentation ignored), Enter takes the first match, and Ctrl+L puts the cursor in it.
+  - A **"Show" list** next to the trail lists every view in tab order with its groups below it as an indented tree, siblings by name; a name used more than once gets its id. Choosing an entry switches to that view's tab and sets its focus. Typing filters the list (case and indentation ignored), Enter takes the first match, and Ctrl+L puts the cursor in it. Typing a character only filters, also when the text then equals a whole entry ("Lab" on the way to "Lab east"); any other change to a whole entry, such as a pick from the list, chooses it (v0.40, crosscheck 2026-11-13-03 C2).
   - "Show only this group" in a group's context menu and the key **o** on the primary selected group set the focus; **Backspace** goes one level up (at the top: nothing).
-  - Going down fits the map to the focus; going back up restores the zoom and pan that level had. Each tab keeps its own focus while the GUI runs; a restart shows every whole view. Changing the focus clears the selection.
-  - Inside a focus, the map works as usual with the focus group as the root: "New group here…" and "New host here…" on empty space put the item into the focus group, **g** groups inside it, the View menu's Reflow becomes "Reflow group X…" for the focus group, and "Fit all" fits the focus. An item that leaves the focus disappears from the map, and the status bar names it ("printer moved out of "lan"").
+  - Going down fits the map to the focus; going back up restores the zoom and pan that level had. Each tab keeps its own focus while the GUI runs; a restart shows every whole view. Changing the focus clears the selection. A focus with nothing in it says "group "X" is empty" in the middle of the map (v0.40).
+  - Inside a focus, the map works as usual with the focus group as the root: "New group here…" and "New host here…" on empty space put the item into the focus group, **g** groups inside it, the View menu's Reflow becomes "Reflow group X…" for the focus group, and "Fit all" fits the focus. Expanding a group keeps its corner (SPEC-703) also when a group above it is collapsed on the shared map (v0.40, crosscheck 2026-11-13-03 C1). An item that leaves the focus disappears from the map, and the status bar names it ("printer moved out of "lan"").
   - When the focus group is deleted, the focus moves to the nearest group above it that still exists, or to the whole view, and the status bar says so. "Find host" for a host outside the focus shows the whole view first; for a host inside it, only collapsed groups below the focus are expanded.
 
 ## 11. Configuration and security

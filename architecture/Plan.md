@@ -209,6 +209,9 @@ Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit test
 - [x] Crosscheck 2026-11-13-02 fix (`fix/crosscheck-16`): Reflow on a collapsed group measures expanded subgroups as frames (C1; SPEC-723 v0.37; TC-724). In `[Unreleased]`, no release yet (D2)
 - [x] User request: key **j** joins the selected hosts to the selected group at their places; asks which group when several are selected (`feature/join-key`; SPEC-724 v0.38; TC-729). In `[Unreleased]` under "Added"
 - [x] User idea: a group as a view (`feature/group-focus`; `Design-group-focus.md`, F1–F9 as recommended, "OK, all"): a focus per tab, the trail, the "Show" list (Ctrl+L, filter), the key o, Backspace, zoom restored; GUI only (SPEC-726 v0.39; TC-730..734). Checked under Xvfb `:97`. In `[Unreleased]` under "Added"
+- [x] Crosscheck 2026-11-13-03 fixes (`fix/focus-crosscheck-03`): expanding inside a focus keeps the corner under a collapsed ancestor (C1), typing in "Show" only filters (C2), an empty focus says so (L1) (SPEC-726 v0.40; TC-725, 733, 734)
+- [x] Release 0.4.0 prepared (D2): `[0.4.0] - 2026-11-13` in `Changes.md` (the focus fixes folded into "Added"), OpenAPI `info.version` 0.4.0, README status; local release build: 8 files, checksums OK, binaries print `v0.4.0`; annotated tag `v0.4.0`
+- [ ] Release run for v0.4.0 green and the release checked (TC-011), after the push
 - [x] Release run 43227857742 green; CI on `main` (43227827366), `docs/architecture` and `fix/crosscheck-10` green. https://github.com/maarten-boot/go-ined/releases/tag/v0.2.0 has 7 archives and SHA256SUMS. Downloaded: every checksum OK; `ined-server`, `inedctl` and `ined-gui` print `v0.2.0`; built with go1.26.11; the release text equals the `[0.2.0]` section (TC-011)
 
 ## Open questions

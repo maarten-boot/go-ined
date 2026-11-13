@@ -56,3 +56,8 @@
     - **C2 (M):** typing a view's name in the "Show" list jumps there mid-word, and the rest of the typing goes to the map's keys.
     - **L1:** an empty focus shows a blank map.
     - The fixes and a release of 0.4.0 wait for the user's OK.
+11. **User**: pushed; OK, all (D1, D2).
+    **Claude** checked the push (both branches arrived at `60baf5a`).
+    - Fixed C1, C2 and L1 on `fix/focus-crosscheck-03` (merged): expanding inside a focus keeps the corner when a group above is collapsed; typing in the "Show" list only filters; an empty focus says `group "X" is empty`. Each fix has a test; the C1 and C2 tests fail without their fix.
+    - SPEC-726 v0.40; TC-725, 733, 734; crosscheck resolution.
+    - Prepared release 0.4.0: `Changes.md`, OpenAPI version, README; a local release build in the scratchpad (checksums OK, binaries print `v0.4.0`, removed afterwards); annotated tag `v0.4.0`. The release run and TC-011 follow after the push.

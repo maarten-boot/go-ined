@@ -31,3 +31,8 @@
    **Claude** checked the push (all three branches arrived) and CI: green on `main`, `docs/architecture` (8a384c8) and `fix/crosscheck-16`.
    - Open: no GitHub issues or PRs; the user's visual GUI checks (TC-005, 702, 705, 708) and the formal OpenAPI check.
    - Ran `pipx run openapi-spec-validator --schema 3.1.0 internal/api/openapi.json` (version 0.9.0, installed in the scratchpad, removed afterwards): **OK**. TC-505 and the Plan are updated.
+7. **User**: pushed; when selecting a group and hosts with a rubber band, use the key j to join the hosts to the selected group; if more than one group is selected, ask which group the hosts should join.
+   **Claude** checked the push: `main` arrived; `docs/architecture` was still at `8a384c8` (the same commit is on GitHub through `main`).
+   - Asked two questions. The user chose: the hosts keep their places, and only hosts join (other selected groups stay, and hosts inside a selected group stay there).
+   - Added the key **j** on `feature/join-key` (merged): one group acts at once; several ask which one, starting with the primary selection; only hosts or only groups give a hint. TestJoinKey (TC-729); SPEC-724 v0.38; `Changes.md` "Added", README.
+   - **User (mid-turn):** an idea: every group also becomes a view, with a dropdown list instead of tabs to choose the view. Claude answered with open points; nothing is built yet (Plan, open questions).

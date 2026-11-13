@@ -207,7 +207,9 @@ Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit test
 - [x] Crosscheck 2026-11-12-05 fix (`fix/crosscheck-14`): DNS answers for an address the host no longer has are dropped, and only saved name changes are logged (C1; SPEC-403 v0.35; TC-405). In `[Unreleased]`, no release on its own
 - [x] Crosscheck 2026-11-13-01 fix (`fix/crosscheck-15`): frames fit their label (the glyph counted; map text measured bold, as drawn) (C1; SPEC-703 v0.36; TC-725). Checked under Xvfb. In `[Unreleased]`, no release yet
 - [x] Crosscheck 2026-11-13-02 fix (`fix/crosscheck-16`): Reflow on a collapsed group measures expanded subgroups as frames (C1; SPEC-723 v0.37; TC-724). In `[Unreleased]`, no release yet (D2)
+- [x] User request: key **j** joins the selected hosts to the selected group at their places; asks which group when several are selected (`feature/join-key`; SPEC-724 v0.38; TC-729). In `[Unreleased]` under "Added"
 - [x] Release run 43227857742 green; CI on `main` (43227827366), `docs/architecture` and `fix/crosscheck-10` green. https://github.com/maarten-boot/go-ined/releases/tag/v0.2.0 has 7 archives and SHA256SUMS. Downloaded: every checksum OK; `ined-server`, `inedctl` and `ined-gui` print `v0.2.0`; built with go1.26.11; the release text equals the `[0.2.0]` section (TC-011)
 
 ## Open questions
+- **Idea (user, 2026-11-13, under discussion):** every group also becomes a view, with a dropdown list instead of tabs to choose the view. Open points are in the log of 2026-11-13, entry 7.
 - The log, OpenAPI and backup questions, and the `staticcheck` / `govulncheck` question, are in the M7 decisions (M7-3, M7-6..8).

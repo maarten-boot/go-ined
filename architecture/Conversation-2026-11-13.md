@@ -39,3 +39,13 @@
 8. **User**: ok pushed; option 1, keep tabs and add the dropdown.
    **Claude** checked the push: all three branches arrived; five older feature branches were pushed too. CI passed on all 8 runs.
    - Wrote `Design-group-focus.md`: a group shown on its own in a tab (a "focus", GUI only, nothing stored), a trail above the map, and a "Show" dropdown with every view and its groups. Decisions F1–F9 wait for the user's OK.
+9. **User**: pushed; OK, all (F1–F9).
+   **Claude** checked the push (both branches arrived).
+   - Built the group focus on `feature/group-focus` (merged), GUI only:
+     - `mapmodel.LayoutIn`, `Trail`, `InFocus`, `ShowEntries` and `FilterEntries`.
+     - In the GUI: the "Show" list (a filtering combo box, Ctrl+L), the trail, the key o, Backspace, and "Show only this group".
+     - Focus-aware: new items, Reflow and Find host; a message for items that move out; a deleted focus group moves the focus up.
+   - Tests TC-730..734; SPEC-726 v0.39; `Changes.md` "Added", README.
+   - Checked under Xvfb `:97` (free): the list shows the indented tree; picking `servers` inside the collapsed `lan` shows its hosts; Backspace goes up to `lan`; Ctrl+L, typing "rack" and Enter switch to the Lab tab.
+   - The trail's parts first looked like plain text; they are now buttons, and old trail borders are dropped on each rebuild.
+   - The first PID record held a wrapper shell, so the check refused to kill it. Only processes whose executable was in the scratchpad were stopped, and Xvfb after checking its command line; the scratchpad was emptied.

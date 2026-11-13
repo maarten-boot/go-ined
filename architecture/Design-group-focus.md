@@ -1,6 +1,6 @@
 # Design note: a group as a view (focus)
 
-Status: **proposed** (2026-11-13), waiting for the user's OK on F1–F9.
+Status: **implemented** (2026-11-13): F1–F9 as recommended (user: "OK, all"), Spec SPEC-726 v0.39, TC-730..734. One detail added while building: the trail's parts are buttons styled like the toolbar's, so they look clickable.
 Origin: the user's idea (log 2026-11-13, entry 7): "every group also becomes a view … select the view we want to see not as notebook tab but as a dropdown list". The user chose option 1 (the same map, narrowed to one group; nothing new stored) and to keep the tabs and add the dropdown (entry 8).
 
 ## 1. Goal

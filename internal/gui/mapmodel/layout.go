@@ -19,6 +19,11 @@ const (
 	LabelGap    = 4.0  // between an icon and its first label line
 	FramePad    = 14.0 // inside an expanded frame, around its members
 	FrameLabelH = 24.0 // the label strip at the top of a frame
+	// FrameGlyph is the size of the status glyph in a frame's label strip,
+	// and FrameTextX where the label text starts, from the frame's left
+	// edge (crosscheck 2026-11-13-01 C1).
+	FrameGlyph  = FrameLabelH * 0.5
+	FrameTextX  = 14 + FrameGlyph
 	EmptyFrameW = 140.0
 	EmptyFrameH = 60.0
 	GroupTabH   = GroupH * 0.22 // the folder tab above a collapsed group's icon
@@ -155,9 +160,11 @@ func (l *layout) place(group int64, depth int, seen map[int64]bool) Rect {
 			if inner != (Rect{}) {
 				r = Rect{inner.X - FramePad, inner.Y - FramePad - FrameLabelH, inner.W + 2*FramePad, inner.H + 2*FramePad + FrameLabelH}
 			}
+			// Wide enough for the glyph, the label and the padding on the
+			// right (crosscheck 2026-11-13-01 C1).
 			label := frameLabel(it)
-			if w, _ := l.measure(label); r.W < w+2*FramePad {
-				r.W = w + 2*FramePad
+			if w, _ := l.measure(label); r.W < FrameTextX+w+FramePad {
+				r.W = FrameTextX + w + FramePad
 			}
 			l.frames = append(l.frames, Node{
 				Item: it, Kind: KindFrame, Bounds: r, Icon: Rect{r.X, r.Y, r.W, FrameLabelH},

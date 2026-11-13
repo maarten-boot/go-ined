@@ -5,6 +5,7 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 ## [Unreleased]
 
 ### Fixed
+- `ined-gui`: a frame's label could run past the frame's right edge (the width left out the status sign, and bold text was measured as regular). Long bold host names also get the room they need when names are wrapped or reflowed.
 - Reverse DNS: when a host's IP address changed while its name was being looked up, the server log reported a name change for the old address that was never saved. Answers for an address the host no longer has are now ignored, and only saved changes are logged.
 
 ## [0.3.1] - 2026-11-12

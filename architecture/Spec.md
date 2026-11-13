@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.40** (2026-11-13)
+Status: **draft v0.41** (2026-11-13)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -34,8 +34,9 @@ go-ined is a network monitor loosely modelled on Tkined (Scotty). It splits Tkin
   - *test*: `go test -race ./...` on Linux with the GUI libraries installed, so the GUI tests run headless;
   - *raw-icmp*: the ICMP tests run as root, so the raw-socket mode is exercised against 127.0.0.1 and ::1;
   - *build*: `ined-server` and `inedctl` without cgo for linux, darwin and windows on amd64 and arm64; `ined-gui` for linux/amd64.
+  - *gui* (v0.41, user request; on `main` only): `ined-gui` for windows/amd64, darwin/arm64 and darwin/amd64, and linux/arm64, each built on its own runner (`windows-2025`, `macos-15`, `ubuntu-24.04-arm`) because Fyne needs cgo, and the native binary's `-version` checked.
   Tools run at pinned versions (`go run tool@version`), not through third-party actions. The Go version is the `toolchain` of `go.mod` (1.26.11, v0.25), so CI, the release and local builds use the same standard library. Dependabot proposes updates of the actions and the Go modules weekly.
-- **SPEC-008** MUST (v0.24): **Release.** Pushing a tag `vX.Y.Z` runs a release workflow. It runs the same checks, builds the binaries of SPEC-007 with the version from the tag (`-version` prints it), packs each as `.tar.gz` (`.zip` for windows) together with `LICENSE`, `README.md`, `Changes.md` and `examples/`, writes `SHA256SUMS`, and publishes a GitHub release with the tag's section of `Changes.md` as its text. The token is the workflow's own `GITHUB_TOKEN` with `contents: write`, and only in the release job.
+- **SPEC-008** MUST (v0.24): **Release.** Pushing a tag `vX.Y.Z` runs a release workflow. It runs the same checks, builds the binaries of SPEC-007 with the version from the tag (`-version` prints it), packs each as `.tar.gz` (`.zip` for windows) together with `LICENSE`, `README.md`, `Changes.md` and `examples/`, writes `SHA256SUMS`, and publishes a GitHub release with the tag's section of `Changes.md` as its text. Since v0.41 the release also has `ined-gui` for the platforms of the *gui* job: the release is first made as a draft, the GUI jobs on their runners add their archives, and a last job checks that all 11 archives are there, writes `SHA256SUMS` over them and makes the release public. The token is the workflow's own `GITHUB_TOKEN` with `contents: write`, only in those three jobs.
 
 ## 4. Inventory and data model
 There are two kinds of **items**: host and group. A group with a `cidr` is a **network group**. Items form a tree, and all items share one map.

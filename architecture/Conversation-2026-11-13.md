@@ -65,3 +65,10 @@
     **Claude** checked the push: the three branches arrived, the tag `v0.4.0` at first did not; after the second push it did.
     - CI on `main`, `docs/architecture` and `fix/focus-crosscheck-03` and the release run 43511721535 passed.
     - TC-011 on the published v0.4.0: 7 archives and SHA256SUMS, every checksum OK, the binaries print `v0.4.0` (go1.26.11), the release text equals the `[0.4.0]` section. Downloads removed from the scratchpad.
+13. **User**: pushed; why is there in the release only a gui for windows?
+    **Claude** checked the push (both branches arrived). The GUI was in fact only for **Linux** amd64 (the six Windows/macOS/Linux archives hold `ined-server` and `inedctl`): Fyne needs cgo, so one Linux job can't build the GUI for other platforms (decision D19, 2026-11-11). Proposed native runners for Windows, macOS and Linux arm64.
+14. **User**: pushed; add all three as 0.4.1.
+    **Claude** checked the push (both branches arrived at `433fcde`).
+    - On `feature/gui-platforms` (merged): `build-release.sh --gui` builds the GUI for the host OS (Windows without a console window, zipped with 7-Zip; macOS both architectures with clang). CI gets a `gui` job on `main` (windows-2025, macos-15, ubuntu-24.04-arm) that builds and checks `-version`. The release is made as a draft; the GUI jobs upload; a last job checks 11 archives, writes `SHA256SUMS` and publishes. Still only the two pinned actions.
+    - Checked locally: both script modes, the Windows GUI cross-built with MinGW (a GUI PE32+), actionlint 1.7.7 clean, repocheck tests updated. The Windows and macOS runs themselves can only be checked on GitHub.
+    - SPEC-007/008 v0.41; TC-010..012; README (platforms; SmartScreen and Gatekeeper notes for the unsigned programs); release 0.4.1 prepared with tag `v0.4.1`, to be pushed after CI's gui job is green on `main`.

@@ -10,3 +10,10 @@
    - **C1 (L):** frame labels can run past the frame's right edge: the width leaves out the status glyph, and text is measured regular but drawn bold (since M5).
    - Only this session's processes were stopped, and the scratchpad was emptied.
    - The fix waits for the user's OK.
+3. **User**: pushed; OK, all.
+   **Claude** checked the push (`git ls-remote`: `main` and `docs/architecture` arrived).
+   - Applied C1 on `fix/crosscheck-15` (merged): frames count the status glyph, and map text is measured bold. TestFrameLabelWidth (TC-725); SPEC-703 v0.36.
+   - Checked under Xvfb `:97`: the label fits.
+   - A test comment first named TC-703, the reconnect test; it is corrected to TC-725.
+   - Kept in `[Unreleased]`.
+

@@ -538,6 +538,36 @@ func TestReflowCell(t *testing.T) {
 	}
 }
 
+// TC-724 (crosscheck 2026-11-13-02 C1): in a collapsed group, an expanded
+// subgroup counts with its whole frame, also when the collapsed group is
+// inside another collapsed group; the collapsed flags are kept.
+func TestReflowCellCollapsed(t *testing.T) {
+	items := func(collapsed bool) []apitypes.MapItem {
+		return []apitypes.MapItem{
+			{Type: "group", ID: 9, Name: "top", X: -500, Y: -500, Collapsed: collapsed},
+			{Type: "group", ID: 1, ParentID: p(9), Name: "A", X: 0, Y: 0, Collapsed: collapsed},
+			{Type: "group", ID: 2, ParentID: p(1), Name: "B", X: 100, Y: 100},
+			{Type: "host", ID: 1, ParentID: p(2), Name: "h1", X: 100, Y: 100},
+			{Type: "host", ID: 2, ParentID: p(2), Name: "h2", X: 500, Y: 400},
+			{Type: "host", ID: 3, ParentID: p(1), Name: "h3", X: 700, Y: 100},
+		}
+	}
+	open := New()
+	open.SetMap(apitypes.Map{ViewID: 1, Items: items(false)})
+	ow, oh, _ := open.ReflowCell(1, p(1), measure)
+	m := New()
+	m.SetMap(apitypes.Map{ViewID: 1, Items: items(true)})
+	w, h, n := m.ReflowCell(1, p(1), measure)
+	if n != 2 || w != ow || h != oh || w < 400 {
+		t.Errorf("collapsed: %g × %g for %d, expanded: %g × %g", w, h, n, ow, oh)
+	}
+	for _, id := range []int64{9, 1} {
+		if !m.maps[1].Items[GroupKey(id)].Collapsed {
+			t.Errorf("group %d no longer collapsed", id)
+		}
+	}
+}
+
 // TC-728 (GUI model): a group's label mode applies to the hosts below it
 // until a group in between sets its own; at the root hosts show names.
 func TestLabelModes(t *testing.T) {

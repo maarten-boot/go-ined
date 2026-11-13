@@ -498,7 +498,26 @@ func (m *Model) ReflowCell(view int64, parent *int64, measure Measure) (w, h flo
 	}
 	wrap := m.WrapNames
 	m.WrapNames = false
+	// Lay out as if the group and the groups above it were expanded, so
+	// members of a collapsed group, and expanded subgroups among them, are
+	// measured as they will show (crosscheck 2026-11-13-02 C1).
+	var opened []*apitypes.MapItem
+	for seen, id := map[int64]bool{}, parent; id != nil && !seen[*id]; {
+		seen[*id] = true
+		it := vm.Items[GroupKey(*id)]
+		if it == nil {
+			break
+		}
+		if it.Collapsed {
+			it.Collapsed = false
+			opened = append(opened, it)
+		}
+		id = it.ParentID
+	}
 	nodes := m.Layout(view, measure)
+	for _, it := range opened {
+		it.Collapsed = true
+	}
 	m.WrapNames = wrap
 	bounds := map[Key]Rect{}
 	for _, nd := range nodes {

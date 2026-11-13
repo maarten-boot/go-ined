@@ -23,3 +23,7 @@
    - **C1 (M, older):** "Reflow…" on a collapsed group sizes an expanded subgroup as an icon (probe: an 80 × 92 cell instead of 480 × 428), so its frame overlaps a neighbour after expanding (SPEC-723).
    - Dependabot PR #1 turned out to be closed already.
    - The fix waits for the user's OK.
+5. **User**: pushed; OK, all.
+   **Claude** checked the push (`git ls-remote`: all three branches arrived; CI on `b7dc464` passed).
+   - Applied C1 on `fix/crosscheck-16` (merged): Reflow on a collapsed group measures it as expanded, so expanded subgroups count with their whole frame. TestReflowCellCollapsed (TC-724); SPEC-723 v0.37.
+   - D2: no release; `[Unreleased]` holds three fixes.

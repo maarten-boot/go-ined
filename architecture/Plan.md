@@ -206,6 +206,7 @@ Testing: `internal/theme` and `internal/gui/mapmodel` are pure Go with unit test
 - [x] Release run 43303659200 green; CI on `main` (43303613070), `docs/architecture` and `fix/crosscheck-13` green. The v0.3.1 release has 7 archives and SHA256SUMS; downloaded: every checksum OK, the three binaries print `v0.3.1`, built with go1.26.11, and the release text equals the `[0.3.1]` section (TC-011)
 - [x] Crosscheck 2026-11-12-05 fix (`fix/crosscheck-14`): DNS answers for an address the host no longer has are dropped, and only saved name changes are logged (C1; SPEC-403 v0.35; TC-405). In `[Unreleased]`, no release on its own
 - [x] Crosscheck 2026-11-13-01 fix (`fix/crosscheck-15`): frames fit their label (the glyph counted; map text measured bold, as drawn) (C1; SPEC-703 v0.36; TC-725). Checked under Xvfb. In `[Unreleased]`, no release yet
+- [x] Crosscheck 2026-11-13-02 fix (`fix/crosscheck-16`): Reflow on a collapsed group measures expanded subgroups as frames (C1; SPEC-723 v0.37; TC-724). In `[Unreleased]`, no release yet (D2)
 - [x] Release run 43227857742 green; CI on `main` (43227827366), `docs/architecture` and `fix/crosscheck-10` green. https://github.com/maarten-boot/go-ined/releases/tag/v0.2.0 has 7 archives and SHA256SUMS. Downloaded: every checksum OK; `ined-server`, `inedctl` and `ined-gui` print `v0.2.0`; built with go1.26.11; the release text equals the `[0.2.0]` section (TC-011)
 
 ## Open questions

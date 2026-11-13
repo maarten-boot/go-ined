@@ -128,7 +128,11 @@ func (g *GUI) openMenu(view int64, n *mapmodel.Node, at fyne.Position, mx, my fl
 // (n nil or a frame), new items there; for a group or host, its actions.
 // h is the host's record for a host's menu.
 func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitypes.Host) []*fyne.MenuItem {
+	// New items go into the focus group by default (SPEC-726, F6).
 	var parent *int64
+	if f := g.focusOf(view); f != 0 {
+		parent = &f
+	}
 	if n != nil && n.Kind == mapmodel.KindFrame {
 		x, y := mx, my
 		if !n.Icon.Contains(x, y) { // a frame's body: new items go into it
@@ -223,6 +227,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	}
 	expand.Disabled, collapse.Disabled = !anyCollapsed, !anyExpanded
 	items := []*fyne.MenuItem{expand, collapse,
+		fyne.NewMenuItem("Show only this group", func() { g.setFocus(view, id) }),
 		fyne.NewMenuItem("Edit…", func() { g.editGroupDialog(view, id) }),
 		fyne.NewMenuItem(moveLabel, func() { g.moveToDialog(view, targets...) }),
 	}
@@ -401,7 +406,8 @@ func (g *GUI) setSelectedCollapsed(collapsed bool) {
 }
 
 // onKey handles keys that no widget took: Esc cancels a drag, Delete
-// deletes the selected item.
+// deletes the selected item, o shows only the selected group, Backspace
+// goes one level up from it.
 func (g *GUI) onKey(ev *fyne.KeyEvent) {
 	switch ev.Name {
 	case fyne.KeyEscape:
@@ -423,6 +429,14 @@ func (g *GUI) onKey(ev *fyne.KeyEvent) {
 		if mv := g.currentMap(); mv != nil {
 			g.joinDialog(mv.view, mv.Selection(), mv.Selected())
 		}
+	case fyne.KeyO: // show only the selected group (SPEC-726)
+		if mv := g.currentMap(); mv != nil {
+			if k := mv.Selected(); k != nil && k.Type == apitypes.TypeGroup {
+				g.setFocus(mv.view, k.ID)
+			}
+		}
+	case fyne.KeyBackspace: // one level up from a focus (SPEC-726)
+		g.focusUp()
 	case fyne.KeyC:
 		g.setSelectedCollapsed(true)
 	case fyne.KeyE:

@@ -94,6 +94,20 @@ type GUI struct {
 	wantView int64            // a new view to select once its tab exists
 	viewBtn  *widget.Button
 	wrapChk  *widget.Check
+
+	// A group as a view (SPEC-726): each tab's focus group (guarded by
+	// mu; absent: the whole view), and on the UI goroutine every group of
+	// every view, the "Show" list, the trail and its last state.
+	focus        map[int64]int64
+	groupsReload *mapmodel.Reloader
+	groupsAll    []apitypes.Group
+	entries      []mapmodel.ShowEntry
+	showSel      *widget.SelectEntry
+	showOpts     []string // what the "Show" list offers now
+	trailBox     *fyne.Container
+	navQuiet     bool // the "Show" text is being set, not typed
+	navSig       string
+	trailBorders []*canvas.Rectangle // the trail buttons' borders, in borders
 }
 
 // New builds the window. Call Start to connect, then ShowAndRun (or use
@@ -103,7 +117,7 @@ func New(a fyne.App, opt Options) *GUI {
 	g := &GUI{
 		app: a, c: opt.Client, opt: opt, model: mapmodel.New(),
 		ctx: ctx, cancel: cancel, maps: map[int64]*MapView{}, current: mapmodel.NetworkView,
-		dirty: map[int64]bool{}, jobs: map[string]bool{},
+		dirty: map[int64]bool{}, jobs: map[string]bool{}, focus: map[int64]int64{},
 	}
 	g.do = opt.Do
 	if g.do == nil {
@@ -112,6 +126,7 @@ func New(a fyne.App, opt Options) *GUI {
 	g.setContrast(opt.Contrast)
 	g.model.WrapNames = opt.WrapNames
 	g.reload = mapmodel.NewReloader(reloadDelay, g.loadMap)
+	g.groupsReload = mapmodel.NewReloader(reloadDelay, func(int64) { g.loadGroups() })
 
 	title := opt.Title
 	if title == "" {
@@ -129,7 +144,8 @@ func New(a fyne.App, opt Options) *GUI {
 
 	split := container.NewHSplit(g.tabs, g.details.obj)
 	split.Offset = 0.75
-	g.win.SetContent(container.NewBorder(g.toolbar(), g.status.obj, nil, nil, split))
+	top := container.NewVBox(g.toolbar(), g.navRow())
+	g.win.SetContent(container.NewBorder(top, g.status.obj, nil, nil, split))
 	g.win.Resize(fyne.NewSize(1200, 800))
 	g.shortcuts()
 	g.win.Canvas().SetOnTypedKey(g.onKey)
@@ -174,6 +190,7 @@ func (g *GUI) Start() {
 // Stop ends the event stream and pending reloads.
 func (g *GUI) Stop() {
 	g.reload.Stop()
+	g.groupsReload.Stop()
 	g.cancel()
 }
 
@@ -223,6 +240,7 @@ func (g *GUI) loadAll() {
 		break
 	}
 	g.do(g.rebuildTabs)
+	g.loadGroups()
 	loaded := map[int64]bool{}
 	for _, v := range views {
 		loaded[v] = true
@@ -291,6 +309,11 @@ func (g *GUI) apply(ev client.Event) {
 	if eff.ViewsChanged {
 		g.rebuildTabs()
 	}
+	switch ev.Type { // the "Show" list (SPEC-726)
+	case apitypes.EventGroupCreated, apitypes.EventGroupUpdated, apitypes.EventGroupDeleted,
+		apitypes.EventViewCreated, apitypes.EventViewUpdated, apitypes.EventViewDeleted:
+		g.groupsReload.Request(0)
+	}
 	if eff.Resync {
 		go g.loadAll()
 	}
@@ -331,19 +354,34 @@ func (g *GUI) flush() {
 	}
 }
 
-// redraw lays out a loaded view again.
+// redraw lays out a loaded view again, narrowed to the tab's focus group
+// if it has one (SPEC-726).
 func (g *GUI) redraw(view int64) {
 	mv := g.maps[view]
 	if mv == nil {
 		return
 	}
 	g.mu.Lock()
-	nodes := g.model.Layout(view, measure)
+	msg := g.checkFocus(view, mv)
+	focus := g.focus[view]
+	nodes := g.model.LayoutIn(view, focus, measure)
+	if msg == "" && focus != 0 && focus == mv.shownFocus {
+		msg = g.movedOut(view, focus, mv.Nodes(), nodes)
+	}
 	g.mu.Unlock()
 	g.layouts++
 	mv.SetNodes(nodes)
+	mv.shownFocus = focus
+	if mv.fitPending && len(nodes) > 0 {
+		mv.fitPending = false
+		mv.FitAll()
+	}
+	if msg != "" {
+		g.status.message(msg)
+	}
 	if view == g.current {
 		g.details.refreshParent()
+		g.syncNav()
 	}
 }
 
@@ -369,6 +407,9 @@ func (g *GUI) rebuildTabs() {
 	for id := range g.maps {
 		if !containsView(views, id) {
 			delete(g.maps, id)
+			g.mu.Lock()
+			delete(g.focus, id)
+			g.mu.Unlock()
 		}
 	}
 	g.tabs.OnSelected = nil
@@ -393,6 +434,9 @@ func (g *GUI) rebuildTabs() {
 		g.wantView = 0
 		g.showView(id)
 	}
+	if g.showSel != nil {
+		g.rebuildEntries()
+	}
 }
 
 func containsView(vs []apitypes.View, id int64) bool {
@@ -416,6 +460,7 @@ func (g *GUI) mapView(view int64) *MapView {
 		return mv
 	}
 	mv := NewMapView(view, func() theme.Palette { return g.palette })
+	mv.saved = map[int64]mapmodel.Viewport{}
 	mv.OnSelect = func(k *mapmodel.Key) { g.details.show(view, k) }
 	mv.OnToggle = func(group int64, expand bool) { g.setCollapsed(group, !expand) }
 	g.wireEditing(mv)
@@ -436,6 +481,7 @@ func (g *GUI) selectTab(ti *container.TabItem) {
 	g.setCurrent(mv.view)
 	g.showZoom()
 	g.details.show(mv.view, mv.Selected())
+	g.syncNav()
 	g.mu.Lock()
 	loaded := g.model.Loaded(mv.view)
 	g.mu.Unlock()
@@ -607,7 +653,7 @@ func (g *GUI) viewMenuButton() fyne.CanvasObject {
 }
 
 // shortcuts: Ctrl+= / Ctrl++ zoom in, Ctrl+- zoom out, Ctrl+0 100 %,
-// Ctrl+1 fit all, Ctrl+F find host.
+// Ctrl+1 fit all, Ctrl+F find host, Ctrl+L the "Show" list (SPEC-726).
 func (g *GUI) shortcuts() {
 	c := g.win.Canvas()
 	add := func(k fyne.KeyName, f func()) {
@@ -619,4 +665,5 @@ func (g *GUI) shortcuts() {
 	add(fyne.Key0, func() { g.zoomTo(1) })
 	add(fyne.Key1, g.fitAll)
 	add(fyne.KeyF, g.showFind)
+	add(fyne.KeyL, func() { g.win.Canvas().Focus(g.showSel) })
 }

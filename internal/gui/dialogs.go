@@ -518,6 +518,11 @@ func (g *GUI) viewMenuItems() []*fyne.MenuItem {
 	g.mu.Lock()
 	views := g.model.Views()
 	cur, _ := g.model.View(g.current)
+	// With a focus, Reflow acts on the focus group (SPEC-726, F6).
+	reflowLabel, focus := "Reflow view…", g.focus[g.current]
+	if it := g.item(g.current, mapmodel.GroupKey(focus)); focus != 0 && it != nil {
+		reflowLabel = fmt.Sprintf("Reflow group %q…", it.Name)
+	}
 	g.mu.Unlock()
 	i := 0
 	for j, v := range views {
@@ -535,7 +540,13 @@ func (g *GUI) viewMenuItems() []*fyne.MenuItem {
 		fyne.NewMenuItem("New view…", func() { g.newViewDialog() }),
 		fyne.NewMenuItem("Rename view…", func() { g.renameViewDialog() }),
 		left, right,
-		fyne.NewMenuItem("Reflow view…", func() { g.reflowDialog(cur2, nil) }),
+		fyne.NewMenuItem(reflowLabel, func() {
+			if focus != 0 {
+				g.reflowDialog(cur2, &focus)
+				return
+			}
+			g.reflowDialog(cur2, nil)
+		}),
 		fyne.NewMenuItemSeparator(), del,
 	}
 }

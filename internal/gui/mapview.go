@@ -69,6 +69,15 @@ type MapView struct {
 	dragDX                         float64 // map units
 	dragDY                         float64
 	dropTarget                     *mapmodel.Node
+
+	// The tab's focus (SPEC-726; UI goroutine): the groups from the top
+	// down to the focus group, the viewport each focus level had when it
+	// was left, the focus the current nodes were laid out for, and whether
+	// to fit the map once it has content.
+	trail      []apitypes.MapItem
+	saved      map[int64]mapmodel.Viewport
+	shownFocus int64
+	fitPending bool
 }
 
 type dragMode int

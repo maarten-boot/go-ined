@@ -739,6 +739,76 @@ func (g *GUI) groupSelectionDialog(view int64, keys []mapmodel.Key) *formDialog 
 	})
 }
 
+// joinDialog moves the selected hosts into the selected group (key j,
+// SPEC-724 v0.38). The hosts keep their places; hosts inside a selected
+// group stay where they are, and the other selected groups don't move.
+// With one group selected it acts at once (and returns nil); with several
+// it asks which one, starting with the primary selection if that is a
+// group.
+func (g *GUI) joinDialog(view int64, keys []mapmodel.Key, primary *mapmodel.Key) *formDialog {
+	var hosts []mapmodel.Key
+	for _, k := range g.topLevel(view, keys) {
+		if k.Type == apitypes.TypeHost {
+			hosts = append(hosts, k)
+		}
+	}
+	g.mu.Lock()
+	var groups []apitypes.MapItem
+	for _, k := range keys {
+		if it := g.item(view, k); it != nil && k.Type == apitypes.TypeGroup {
+			groups = append(groups, *it)
+		}
+	}
+	pos := map[mapmodel.Key][2]float64{}
+	for _, k := range hosts {
+		if it := g.item(view, k); it != nil {
+			pos[k] = [2]float64{it.X, it.Y}
+		}
+	}
+	g.mu.Unlock()
+	if len(groups) == 0 || len(hosts) == 0 {
+		g.status.message("select hosts and a group (Ctrl+click, Shift+drag), then press j")
+		return nil
+	}
+	join := func(group int64) error {
+		for _, k := range hosts {
+			p := pos[k]
+			if err := g.setParentAt(view, k, group, p[0], p[1]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if len(groups) == 1 {
+		id := groups[0].ID
+		go func() {
+			if err := join(id); err != nil {
+				g.fail(fmt.Sprintf("join group %d", id), err)
+			}
+		}()
+		return nil
+	}
+	opts := make([]string, 0, len(groups))
+	ids := map[string]int64{}
+	for _, gr := range groups {
+		o := groupOption(gr)
+		opts = append(opts, o)
+		ids[o] = gr.ID
+	}
+	sel := widget.NewSelect(opts, nil)
+	sel.SetSelected(opts[0])
+	if primary != nil && primary.Type == apitypes.TypeGroup {
+		for _, gr := range groups {
+			if gr.ID == primary.ID {
+				sel.SetSelected(groupOption(gr))
+			}
+		}
+	}
+	return g.showForm(fmt.Sprintf("Join %s", plural(len(hosts), "host")), "Join",
+		[]*widget.FormItem{widget.NewFormItem("To group", sel)},
+		func() error { return join(ids[sel.Selected]) })
+}
+
 // commonParent is the deepest group above all the items (nil: the root).
 // Caller holds g.mu.
 func (g *GUI) commonParent(view int64, keys []mapmodel.Key) *int64 {

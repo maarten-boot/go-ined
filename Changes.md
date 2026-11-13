@@ -4,6 +4,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- `ined-gui`: the key **j** joins the selected hosts to the selected group, at their places. With several groups selected it asks which one. Hosts inside a selected group stay there, and the other groups don't move.
+
 ### Fixed
 - `ined-gui`: "Reflow…" on a collapsed group sized an expanded subgroup inside it as an icon, so after expanding, the subgroup's frame could cover its neighbours. Members are now measured as they show when the group is expanded.
 - `ined-gui`: a frame's label could run past the frame's right edge (the width left out the status sign, and bold text was measured as regular). Long bold host names also get the room they need when names are wrapped or reflowed.

@@ -4,8 +4,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-13
+
 ### Added
-- `ined-gui`: **a group as a view.** A "Show" list above the map (Ctrl+L; type to filter, Enter takes the first match) has every view with its groups. Choosing a group, "Show only this group" in a group's menu, or the key **o** shows only that group's contents, at their usual places, also when it is collapsed. A trail (`Networks › lan › servers`) and Backspace go back up, with the zoom you had. New items, **g** and Reflow work inside the shown group. Nothing is stored on the server; the tabs stay.
+- `ined-gui`: **a group as a view.** A "Show" list above the map (Ctrl+L; type to filter, Enter takes the first match) has every view with its groups. Choosing a group, "Show only this group" in a group's menu, or the key **o** shows only that group's contents, at their usual places, also when it is collapsed. A trail (`Networks › lan › servers`) and Backspace go back up, with the zoom you had. New items, **g** and Reflow work inside the shown group, and an empty group says so. Nothing is stored on the server; the tabs stay.
 - `ined-gui`: the key **j** joins the selected hosts to the selected group, at their places. With several groups selected it asks which one. Hosts inside a selected group stay there, and the other groups don't move.
 
 ### Fixed

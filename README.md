@@ -14,7 +14,7 @@ Besides this **network view**, you can make **custom views**: extra maps (tabs i
 
 ## Status
 
-Early development; the latest release is [0.3.1](Changes.md) (CI and releases since 0.1.0 with M7). **Milestones 1–7 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, custom views, and the GUI with editing (long names wrapped or reflowed, multi-select with Tkined-style keys, host labels per group: name, IP address or both).
+Early development; the latest release is [0.4.0](Changes.md) (CI and releases since 0.1.0 with M7). **Milestones 1–7 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, custom views, and the GUI with editing (long names wrapped or reflowed, multi-select with Tkined-style keys, host labels per group: name, IP address or both; the key j joins hosts to a group; any group can be shown on its own).
 See [`architecture/Plan.md`](architecture/Plan.md) for the roadmap.
 
 ## Build and run

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "go-ined API",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "description": "REST and Server-Sent Events API of ined-server. Specification: architecture/Spec.md (SPEC-501..509).",
     "license": {
       "name": "MIT",

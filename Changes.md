@@ -4,6 +4,11 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-13
+
+### Added
+- Release archives of `ined-gui` for Windows (amd64), macOS (Apple silicon and Intel) and Linux on arm64, next to Linux on amd64. Each is built on its own platform, since the GUI needs cgo. The programs aren't signed: Windows SmartScreen and macOS Gatekeeper warn on the first start (see the README).
+
 ## [0.4.0] - 2026-11-13
 
 ### Added

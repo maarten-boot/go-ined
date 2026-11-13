@@ -14,7 +14,7 @@ Besides this **network view**, you can make **custom views**: extra maps (tabs i
 
 ## Status
 
-Early development; the latest release is [0.4.0](Changes.md) (CI and releases since 0.1.0 with M7). **Milestones 1–7 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, custom views, and the GUI with editing (long names wrapped or reflowed, multi-select with Tkined-style keys, host labels per group: name, IP address or both; the key j joins hosts to a group; any group can be shown on its own).
+Early development; the latest release is [0.4.1](Changes.md) (CI and releases since 0.1.0 with M7). **Milestones 1–7 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, custom views, and the GUI with editing (long names wrapped or reflowed, multi-select with Tkined-style keys, host labels per group: name, IP address or both; the key j joins hosts to a group; any group can be shown on its own).
 See [`architecture/Plan.md`](architecture/Plan.md) for the roadmap.
 
 ## Build and run
@@ -136,7 +136,7 @@ All design documents live in [`architecture/`](architecture/):
 
 The server describes its API itself: `GET /api/v1/openapi.json` (OpenAPI 3.1, no token needed).
 
-CI runs on every push (`.github/workflows/ci.yml`): gofmt, vet, `staticcheck`, `govulncheck`, the tests with the race detector, raw-socket ICMP as root, and builds for every target. A tag `vX.Y.Z` builds and publishes a release with archives and `SHA256SUMS` (`release.yml`). Locally: `make lint` and `make release-build`.
+CI runs on every push (`.github/workflows/ci.yml`): gofmt, vet, `staticcheck`, `govulncheck`, the tests with the race detector, raw-socket ICMP as root, and builds for every target. A tag `vX.Y.Z` builds and publishes a release with archives and `SHA256SUMS` (`release.yml`): `ined-server` and `inedctl` for Linux, macOS and Windows on amd64 and arm64, and `ined-gui` for Linux (amd64, arm64), Windows (amd64) and macOS (arm64, amd64). Each GUI is built on its own platform, because Fyne needs cgo. The programs aren't signed: on Windows, SmartScreen asks once ("More info" → "Run anyway"); on macOS, if the GUI was unpacked with Finder, remove the quarantine mark first with `xattr -d com.apple.quarantine ined-gui`. Locally: `make lint` and `make release-build`.
 
 Changes between releases are listed in [`Changes.md`](Changes.md).
 

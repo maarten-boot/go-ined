@@ -94,9 +94,11 @@ func NewMapView(view int64, palette func() theme.Palette) *MapView {
 	return mv
 }
 
-// measure gives text sizes at zoom 100 % for the layout.
+// measure gives text sizes at zoom 100 % for the layout. It measures bold
+// text, as names and frame labels are drawn; the status words are regular
+// and get a little room to spare (crosscheck 2026-11-13-01 C1).
 func measure(s string) (float64, float64) {
-	sz := fyne.MeasureText(s, mapTextSize, fyne.TextStyle{})
+	sz := fyne.MeasureText(s, mapTextSize, fyne.TextStyle{Bold: true})
 	return float64(sz.Width), float64(sz.Height)
 }
 
@@ -777,10 +779,10 @@ func (d *drawer) frame(n *mapmodel.Node, vis mapmodel.Rect, selected bool) {
 		d.rect(b, color.Transparent, fc, 1.5)
 	}
 	d.line(b.X, b.Y+mapmodel.FrameLabelH, b.X+b.W, b.Y+mapmodel.FrameLabelH, fc, 1)
-	g := mapmodel.FrameLabelH * 0.5
+	g := mapmodel.FrameGlyph
 	d.glyph(it, b.X+8+g/2, b.Y+mapmodel.FrameLabelH/2, g)
 	_, th := measure(n.Labels[0])
-	d.text(n.Labels[0], b.X+14+g, b.Y+(mapmodel.FrameLabelH-th)/2, nrgba(d.p.Text), false, true)
+	d.text(n.Labels[0], b.X+mapmodel.FrameTextX, b.Y+(mapmodel.FrameLabelH-th)/2, nrgba(d.p.Text), false, true)
 	if selected {
 		d.rect(mapmodel.Rect{X: b.X - 4, Y: b.Y - 4, W: b.W + 8, H: b.H + 8}, color.Transparent, nrgba(d.p.Primary), 2.5)
 	}

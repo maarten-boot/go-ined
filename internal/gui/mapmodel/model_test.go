@@ -236,7 +236,7 @@ func TestLayout(t *testing.T) {
 	// An empty expanded group gets a fixed-size frame at its position;
 	// a parent that isn't in the view counts as the root.
 	m.SetMap(apitypes.Map{ViewID: 3, Items: []apitypes.MapItem{
-		{Type: "group", ID: 9, Name: "empty", X: 0, Y: 0},
+		{Type: "group", ID: 9, Name: "e", X: 0, Y: 0}, // a label narrower than the frame
 		{Type: "host", ID: 1, ParentID: p(77), Name: "web", X: 500, Y: 500},
 	}})
 	nodes = m.Layout(3, measure)
@@ -586,4 +586,27 @@ func TestLabelModes(t *testing.T) {
 	if got := vm.GroupLabelsText(root); got != "As the parent group (Name)" {
 		t.Errorf("root group: %q", got)
 	}
+}
+
+// TC-703 (crosscheck 2026-11-13-01 C1): a frame is wide enough for the
+// status glyph, its label and the padding on the right, also when the
+// label is wider than the members and bold text is wider than regular.
+func TestFrameLabelWidth(t *testing.T) {
+	bold := func(s string) (float64, float64) { return float64(len(s)) * 9, 14 }
+	m := New()
+	m.SetMap(apitypes.Map{ViewID: 1, Items: []apitypes.MapItem{
+		{Type: "group", ID: 1, Name: "a-rather-long-group-name", X: 0, Y: 0, Status: "up"},
+		{Type: "host", ID: 1, ParentID: p(1), Name: "h", X: 0, Y: 100, Status: "up", Monitored: true},
+	}})
+	for _, n := range m.Layout(1, bold) {
+		if n.Kind != KindFrame {
+			continue
+		}
+		w, _ := bold(n.Labels[0])
+		if need := FrameTextX + w + FramePad; n.Bounds.W < need {
+			t.Errorf("frame %g wide, label needs %g", n.Bounds.W, need)
+		}
+		return
+	}
+	t.Fatal("no frame")
 }

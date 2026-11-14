@@ -33,3 +33,9 @@
 9. **User**: best move all the zoom settings in a single top menu and move the group selector to the top menu bar.
    (Read as: "tom menu" → "top menu"; "negroup selector" → "group selector", the "Show" list. To confirm.)
    **Claude** wrote `Design-toolbar.md`: one "Zoom 100 % ▾" menu button (zoom in, zoom out, 100 %, fit all; shortcuts stay), the "Show" list in the toolbar after it, the trail row only while a group is shown, no window menu bar. Decisions T1–T4 wait for the user's OK.
+10. **User**: pushed; OK, all (T1–T4).
+    **Claude** checked: `main`, `docs/architecture` and `fix/drag-foot-line` arrived; CI on `main` (43620690509) green, gui jobs included.
+    - Built T1–T4 on `feature/toolbar` (merged): "Zoom 100 % ▾" at the toolbar's left with Zoom in, Zoom out (disabled at the limits), 100 % and Fit all; the "Show" list after it; the trail row only while a group is shown; no window menu bar.
+    - Found under Xvfb: Fyne draws a menu item's shortcut at 20 % opacity (about 1.6:1 on white). The shortcuts are now part of the labels ("Zoom in (Ctrl++)"), in black.
+    - SPEC-717/726 v0.44, TC-737; README, `Changes.md` `[Unreleased]`. All GUI tests and lint pass; `TestClearAfterMisses` (dnsname) timed out once in the full run under load and passed 10 of 10 alone (in the Plan).
+    - The toolbar change is not in 0.5.0; tag `v0.5.0` stays at the drag fix.

@@ -1,6 +1,6 @@
 # Design: one Zoom menu, the "Show" list in the toolbar
 
-Status: **proposed** (2026-11-14), waiting for the user's OK. Planned for after 0.5.0.
+Status: **implemented** (2026-11-14): T1–T4 as recommended ("OK, all"), on `feature/toolbar`. One change to T1: the shortcuts are part of the menu labels ("Zoom in (Ctrl++)"), since Fyne draws a menu item's shortcut in the text colour at 20 % opacity, about 1.6:1 on white. In `[Unreleased]`, after 0.5.0.
 
 User request: "best move all the zoom settings in a single top menu and move the group selector to the top menu bar".
 Read as: "top menu" = the toolbar row at the top of the window; "group selector" = the "Show" list (SPEC-726).

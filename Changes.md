@@ -4,6 +4,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Changed
+- `ined-gui` toolbar: the five zoom items are one button, "Zoom 100 % ▾", that shows the current zoom; its menu has Zoom in, Zoom out, 100 % and Fit all, with their shortcuts. The "Show" list moved into the toolbar, next to it. The trail (`Networks › lan`) has its own row, which appears only while a single group is shown.
+
 ## [0.5.0] - 2026-11-14
 
 Update `ined-server` together with `ined-gui`: a server older than 0.5.0 refuses a bar colour ("unknown field \"color\"" in the status bar), and a new server's database can't be opened by an older one.

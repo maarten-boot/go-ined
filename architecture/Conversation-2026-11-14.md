@@ -30,3 +30,6 @@
 8. **User**: when moving a group (now with the bottom bar) the line from the bottom bar is outside the box (but on the same horizontal position); best simply don't show the line when moving.
    (Spelling corrected: "boottom" → "bottom", "dont" → "don't".)
    **Claude**: the drag copy of a frame moved its outline but not its bottom bar, so the line stayed at the old height. Fixed on `fix/drag-foot-line` (merged): no bottom bar line while dragging, back after the drop (SPEC-704 v0.43; TC-736 extended, fails without the fix). All tests, lint, fmt-check and nogui-check pass. The unpushed tag `v0.5.0` moved to include the fix.
+9. **User**: best move all the zoom settings in a single top menu and move the group selector to the top menu bar.
+   (Read as: "tom menu" → "top menu"; "negroup selector" → "group selector", the "Show" list. To confirm.)
+   **Claude** wrote `Design-toolbar.md`: one "Zoom 100 % ▾" menu button (zoom in, zoom out, 100 %, fit all; shortcuts stay), the "Show" list in the toolbar after it, the trail row only while a group is shown, no window menu bar. Decisions T1–T4 wait for the user's OK.

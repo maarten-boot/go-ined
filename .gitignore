@@ -6,6 +6,10 @@
 *.dylib
 /bin/
 /dist/
+# `go build ./cmd/...` without -o writes these into the root
+/ined-server
+/inedctl
+/ined-gui
 
 # Test / coverage output
 *.test

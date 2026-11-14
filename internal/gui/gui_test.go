@@ -520,12 +520,12 @@ func TestFindMenuToolbarDetails(t *testing.T) {
 	e.ui.Wait(func() {
 		g.zoomTo(1)
 		g.zoomBy(2)
-		if g.zoomL.Text != "200 %" || g.maps[1].Viewport().Zoom != 2 {
-			t.Errorf("zoom: %q", g.zoomL.Text)
+		if g.zoomBtn.Text != "Zoom 200 % ▾" || g.maps[1].Viewport().Zoom != 2 {
+			t.Errorf("zoom: %q", g.zoomBtn.Text)
 		}
 		g.fitAll()
-		if g.zoomL.Text != zoomLabel(g.maps[1].Viewport().Zoom) {
-			t.Errorf("zoom label after fit: %q", g.zoomL.Text)
+		if g.zoomBtn.Text != zoomButtonText(g.maps[1].Viewport().Zoom) {
+			t.Errorf("zoom label after fit: %q", g.zoomBtn.Text)
 		}
 	})
 

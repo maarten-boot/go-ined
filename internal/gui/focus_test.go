@@ -59,6 +59,9 @@ func TestFocusNavigation(t *testing.T) {
 		if got := shown(1); got != "servers,printer,web" {
 			t.Errorf("focus lan shows %q", got)
 		}
+		if !g.trailBox.Visible() {
+			t.Error("trail row hidden while a group is shown")
+		}
 		if got := g.trailText(); got != "Networks › lan" {
 			t.Errorf("trail %q", got)
 		}
@@ -88,6 +91,9 @@ func TestFocusNavigation(t *testing.T) {
 			t.Errorf("Backspace: focus %d", g.focusOf(1))
 		}
 		g.onKey(&fyne.KeyEvent{Name: fyne.KeyBackspace})
+		if g.trailBox.Visible() {
+			t.Error("trail row shown for the whole view")
+		}
 		if g.focusOf(1) != 0 || g.trailText() != "Networks" || g.showSel.Text != "Networks" {
 			t.Errorf("whole view: focus %d, trail %q, text %q", g.focusOf(1), g.trailText(), g.showSel.Text)
 		}

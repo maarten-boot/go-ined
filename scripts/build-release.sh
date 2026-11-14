@@ -22,7 +22,8 @@ if [ "${1:-}" = --gui ]; then
   shift
 fi
 version=${1:?usage: build-release.sh [--gui] VERSION [OUTDIR [ARCH...]]}
-out=$(realpath -m "${2:-dist}")
+mkdir -p "${2:-dist}"
+out=$(cd "${2:-dist}" && pwd) # macOS realpath has no -m
 shift $(($# < 2 ? $# : 2))
 cd "$(dirname "$0")/.."
 rm -rf "$out"
@@ -88,5 +89,8 @@ else
 fi
 rm -rf "$out/.work"
 
-(cd "$out" && shopt -s nullglob && sha256sum -- *.tar.gz *.zip >SHA256SUMS)
+sha256() { # macOS may lack sha256sum; shasum writes the same format
+  if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi
+}
+(cd "$out" && shopt -s nullglob && sha256 -- *.tar.gz *.zip >SHA256SUMS)
 echo "built $(ls "$out" | wc -l) files in $out"

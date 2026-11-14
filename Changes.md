@@ -5,6 +5,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 ## [Unreleased]
 
 ### Added
+- **"Connect ▸"** in a host's menu: SSH, Remote desktop (RDP), VNC and the web page (http, https). The server tries a TCP connection to ports 22, 3389, 5900–5909, 80 and 443 of each monitored host when it's added and then every 6 hours, and the menu ticks what answered; "Check services now" checks at once. Every entry stays clickable, since your machine may reach ports the server can't. The details panel has a "Services" row.
+  - SSH, RDP and VNC run a command you can set in `gui.toml` under `[connect]`, with `{ip}`, `{name}` and `{port}`; on Ubuntu the defaults are `x-terminal-emulator -e ssh {ip}` and Remmina for RDP and VNC (`sudo apt install remmina`). Commands run without a shell. Web pages open in your browser.
+  - Server: `[services]` in `server.toml` (`enabled`, `refresh`, `timeout`); `services` and `services_checked_at` on hosts; `POST /hosts/{id}/check-services`; `inedctl host services <id> [--check]`. The database gets two new columns on first start (schema 6), so an older server can't open it afterwards.
 - "Show in view ▸" on a group copies it, with its subgroups and hosts, into another custom view. The hosts stay the same hosts; only the groups are new. API: `POST /views/{id}/copy-group`; `inedctl group copy <id> --view V`.
 - `ined-gui` warns when the server is from an older release than the GUI ("ined-server v0.2.0 is older than this GUI (v0.5.0): … update and restart the server"), in a line above the status bar. An older server refuses newer changes, such as a bar colour, and until now the only sign was an error message in the status bar.
 

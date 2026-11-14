@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "88b0d6e35e446394"
+  "run_id": "7d0f1563d339db15"
 }
 ```
 
@@ -50,8 +50,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-14T18:45:10.44Z",
-  "updated_at": "2026-11-14T18:45:10.44Z"
+  "created_at": "2026-11-14T20:28:23.38Z",
+  "updated_at": "2026-11-14T20:28:23.38Z"
 }
 ```
 
@@ -78,8 +78,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-14T18:45:10.451Z",
-  "updated_at": "2026-11-14T18:45:10.451Z"
+  "created_at": "2026-11-14T20:28:23.392Z",
+  "updated_at": "2026-11-14T20:28:23.392Z"
 }
 ```
 
@@ -112,10 +112,12 @@ Response: `201`
   "views": [
     1
   ],
+  "services": null,
+  "services_checked_at": null,
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-14T18:45:10.463Z",
-  "updated_at": "2026-11-14T18:45:10.463Z"
+  "created_at": "2026-11-14T20:28:23.405Z",
+  "updated_at": "2026-11-14T20:28:23.405Z"
 }
 ```
 
@@ -148,10 +150,12 @@ Response: `200`
   "views": [
     1
   ],
+  "services": null,
+  "services_checked_at": null,
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-14T18:45:10.463Z",
-  "updated_at": "2026-11-14T18:45:10.473Z"
+  "created_at": "2026-11-14T20:28:23.405Z",
+  "updated_at": "2026-11-14T20:28:23.418Z"
 }
 ```
 
@@ -178,8 +182,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-14T18:45:10.44Z",
-  "updated_at": "2026-11-14T18:45:10.482Z"
+  "created_at": "2026-11-14T20:28:23.38Z",
+  "updated_at": "2026-11-14T20:28:23.43Z"
 }
 ```
 
@@ -340,11 +344,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: 88b0d6e35e446394-10
+id: 7d0f1563d339db15-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-14T18:45:10.871Z","updated_at":"2026-11-14T18:45:10.871Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"services":null,"services_checked_at":null,"x":40,"y":40,"created_at":"2026-11-14T20:28:23.838Z","updated_at":"2026-11-14T20:28:23.838Z"}
 
-id: 88b0d6e35e446394-11
+id: 7d0f1563d339db15-11
 event: host.deleted
 data: {"id":2}
 
@@ -360,7 +364,7 @@ Response: `202`
 
 ```json
 {
-  "id": "88b0d6e35e446394-1",
+  "id": "7d0f1563d339db15-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -369,7 +373,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-14T18:45:11.209Z",
+  "started_at": "2026-11-14T20:28:24.161Z",
   "finished_at": null
 }
 ```
@@ -377,14 +381,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/88b0d6e35e446394-1
+curl -s $INED/api/v1/discovery/7d0f1563d339db15-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "88b0d6e35e446394-1",
+  "id": "7d0f1563d339db15-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -393,8 +397,8 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-14T18:45:11.209Z",
-  "finished_at": "2026-11-14T18:45:11.216Z"
+  "started_at": "2026-11-14T20:28:24.161Z",
+  "finished_at": "2026-11-14T20:28:24.168Z"
 }
 ```
 
@@ -464,8 +468,8 @@ Collapsed:   yes
 Labels:      inherit
 Bar colour:  none
 Position:    40, 40
-Created:     2026-11-14 19:45:13
-Updated:     2026-11-14 19:45:13
+Created:     2026-11-14 21:28:26
+Updated:     2026-11-14 21:28:26
 Note:        -
 ```
 
@@ -491,10 +495,11 @@ RTT:          -
 Loss:         -
 Last seen:    -
 Last change:  -
+Services:     not checked yet
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-14 19:45:13
-Updated:      2026-11-14 19:45:13
+Created:      2026-11-14 21:28:26
+Updated:      2026-11-14 21:28:26
 Note:         2nd floor
 ```
 
@@ -553,10 +558,12 @@ inedctl --json host show 5
   "views": [
     1
   ],
+  "services": null,
+  "services_checked_at": null,
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-14T18:45:13.267Z",
-  "updated_at": "2026-11-14T18:45:13.267Z"
+  "created_at": "2026-11-14T20:28:26.231Z",
+  "updated_at": "2026-11-14T20:28:26.231Z"
 }
 ```
 
@@ -591,8 +598,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job 88b0d6e35e446394-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job 88b0d6e35e446394-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job 7d0f1563d339db15-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job 7d0f1563d339db15-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -652,8 +659,8 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-14T18:45:13.315Z",
-  "updated_at": "2026-11-14T18:45:13.315Z"
+  "created_at": "2026-11-14T20:28:26.289Z",
+  "updated_at": "2026-11-14T20:28:26.289Z"
 }
 ```
 
@@ -680,8 +687,8 @@ Response: `201`
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-14T18:45:13.324Z",
-  "updated_at": "2026-11-14T18:45:13.324Z"
+  "created_at": "2026-11-14T20:28:26.301Z",
+  "updated_at": "2026-11-14T20:28:26.301Z"
 }
 ```
 
@@ -807,8 +814,8 @@ ID:      2
 Name:    Printers
 Kind:    custom
 Order:   1
-Created: 2026-11-14 19:45:13
-Updated: 2026-11-14 19:45:13
+Created: 2026-11-14 21:28:26
+Updated: 2026-11-14 21:28:26
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6
@@ -843,8 +850,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 40,
-  "created_at": "2026-11-14T18:45:13.324Z",
-  "updated_at": "2026-11-14T18:45:13.391Z"
+  "created_at": "2026-11-14T20:28:26.301Z",
+  "updated_at": "2026-11-14T20:28:26.373Z"
 }
 ```
 
@@ -866,8 +873,8 @@ Collapsed:   no
 Labels:      inherit
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-14 19:45:13
-Updated:     2026-11-14 19:45:13
+Created:     2026-11-14 21:28:26
+Updated:     2026-11-14 21:28:26
 Note:        -
 ```
 
@@ -896,8 +903,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-14T18:45:13.324Z",
-  "updated_at": "2026-11-14T18:45:13.402Z"
+  "created_at": "2026-11-14T20:28:26.301Z",
+  "updated_at": "2026-11-14T20:28:26.383Z"
 }
 ```
 
@@ -921,10 +928,11 @@ RTT:          -
 Loss:         -
 Last seen:    -
 Last change:  -
+Services:     not checked yet
 Outside CIDR: no
 Position:     240, 40
-Created:      2026-11-14 19:45:13
-Updated:      2026-11-14 19:45:13
+Created:      2026-11-14 21:28:26
+Updated:      2026-11-14 21:28:26
 Note:         Toner replaced 2026-11
 ```
 
@@ -957,8 +965,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-14T18:45:13.324Z",
-  "updated_at": "2026-11-14T18:45:13.425Z"
+  "created_at": "2026-11-14T20:28:26.301Z",
+  "updated_at": "2026-11-14T20:28:26.408Z"
 }
 ```
 
@@ -997,8 +1005,8 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-14 19:45:13
-Updated:     2026-11-14 19:45:13
+Created:     2026-11-14 21:28:26
+Updated:     2026-11-14 21:28:26
 Note:        -
 ```
 
@@ -1031,8 +1039,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-14T18:45:13.324Z",
-  "updated_at": "2026-11-14T18:45:13.45Z"
+  "created_at": "2026-11-14T20:28:26.301Z",
+  "updated_at": "2026-11-14T20:28:26.441Z"
 }
 ```
 
@@ -1071,8 +1079,8 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-14 19:45:13
-Updated:     2026-11-14 19:45:13
+Created:     2026-11-14 21:28:26
+Updated:     2026-11-14 21:28:26
 Note:        -
 ```
 
@@ -1174,6 +1182,39 @@ inedctl group copy 4 --view 2
 
 ```text
 copied group 4 to view 2 as group 8: 1 group, 0 hosts (0 moved within the view)
+```
+
+Exit code: `0`
+
+## Services (Connect menu)
+
+The server tries a TCP connection to ports 22, 3389, 5900-5909, 80 and 443 of each monitored host (when new, then every 6 h). `POST /hosts/{id}/check-services` checks one host now and answers the host with `services` (for example `["ssh","vnc:1","https"]`; `[]` when nothing answered) and `services_checked_at`; both are `null` before the first check. This run has `services.enabled = false`, so that the output does not depend on the ports open on the machine that ran it; the server then answers 503.
+
+### Check the services of host 5 (checks turned off in this run)
+
+```bash
+curl -s -X POST "$INED/api/v1/hosts/5/check-services"
+```
+
+Response: `503`
+
+```json
+{
+  "error": {
+    "code": "unavailable",
+    "message": "service checks are turned off on the server (services.enabled = false)"
+  }
+}
+```
+
+### The services of a host with inedctl (--check checks first)
+
+```bash
+inedctl host services 5
+```
+
+```text
+not checked yet
 ```
 
 Exit code: `0`

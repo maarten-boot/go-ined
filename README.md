@@ -14,7 +14,7 @@ Besides this **network view**, you can make **custom views**: extra maps (tabs i
 
 ## Status
 
-Early development; the latest release is [0.5.0](Changes.md) (CI and releases since 0.1.0 with M7). **Milestones 1–7 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, custom views, and the GUI with editing (long names wrapped or reflowed, multi-select with Tkined-style keys, host labels per group: name, IP address or both; the key j joins hosts to a group; any group can be shown on its own; a bottom bar to drop items out of a group; a colour for a group's top bar; a group can be copied into a custom view; the map fits the window after a resize).
+Early development; the latest release is [0.5.0](Changes.md) (CI and releases since 0.1.0 with M7). **Milestones 1–7 are done**: inventory, network groups, notes, the REST API, bearer-token auth, optional TLS, the TOML config, background ping with up/down status, a live event stream (SSE), discovery of IPv4 ranges, reverse DNS, the Go client package, `inedctl`, custom views, and the GUI with editing (long names wrapped or reflowed, multi-select with Tkined-style keys, host labels per group: name, IP address or both; the key j joins hosts to a group; any group can be shown on its own; a bottom bar to drop items out of a group; a colour for a group's top bar; a group can be copied into a custom view; the map fits the window after a resize; "Connect" on a host opens SSH, RDP, VNC or its web page, with the services the server found ticked).
 See [`architecture/Plan.md`](architecture/Plan.md) for the roadmap.
 
 ## Build and run
@@ -55,7 +55,8 @@ echo "replaced disk 3" | bin/inedctl note set host 1
 bin/inedctl view add Storage                        # a custom view (id 2)
 bin/inedctl view place 2 1                          # show host 1 there too
 bin/inedctl view show 2
-bin/inedctl group shift 1 --dx 200                # move group 1 with everything in it
+bin/inedctl group shift 1 --dx 200                  # move group 1 with everything in it
+bin/inedctl host services 1 --check                 # which of SSH, RDP, VNC, HTTP(S) answer
 bin/inedctl events                                  # live events; Ctrl-C to stop
 bin/inedctl -h                                      # all commands
 ```
@@ -80,6 +81,7 @@ bin/ined-gui -url https://ined.example.org:8470 -token … -ca-cert ca.pem
 - Drag a host, a group icon or a frame (by its label) to move it; a group takes everything in it along. Drop onto a group icon or a frame label (marked "into") to move the item into that group. Esc cancels a drag.
 - Right-click empty space for "New group here…" and "New host here…"; right-click an item to edit, move ("Move to group…"), delete it, or, for a host, show it in another view ("Show in view") or remove it from the current custom view. For a group, "Show in view" copies it, with its subgroups and hosts, into another custom view. Deleting always asks first and says what goes; the Delete key deletes the selected item. When several items are selected and you right-click one of them, the menu acts on the whole selection: "Move N items to group…", "Delete N items…", and for groups "Expand", "Collapse" and "Host labels".
 
+- "Connect" in a host's right-click menu opens SSH, Remote desktop (RDP), VNC or the host's web page (http, https). Ticks show which ports answered when the server last checked: it tries TCP 22, 3389, 5900–5909, 80 and 443 when a host is added and every 6 hours after that, and "Check services now" checks at once. The details panel shows the result. Every entry works even without a tick, in case your machine can reach a port the server can't. SSH, RDP and VNC run a command from `gui.toml` `[connect]` (with `{ip}`, `{name}` and `{port}`); on Linux the defaults are `x-terminal-emulator -e ssh {ip}` and Remmina for RDP and VNC (`sudo apt install remmina`). SSH uses your `~/.ssh/config` and user name; for a fixed user set e.g. `ssh = "x-terminal-emulator -e ssh admin@{ip}"`. Commands run without a shell.
 - Host labels: "Host labels" in a group's right-click menu chooses what the hosts inside it show: the name, the IP address, or both (the IP below the name). "As the parent group" (the default) takes the mode of the group above it, shown in brackets; at the top level that is the name. The details panel shows the setting too. Without the GUI: `inedctl group labels <id> name|ip|both|inherit`, or `group add --labels`.
 - "Discover…" in the toolbar (or "Scan this network" on a network group) finds the hosts that answer ping in an IPv4 range, with progress and a cancel button; closing the dialog leaves the job running, with its progress in the status bar.
 - Long names: "Wrap names" in the toolbar (on by default) breaks a name after its dots where it would run into the next item. "Reflow…" on a group (and "Reflow view…" in the View menu) lays out its members on a grid wide enough for the longest full name; this changes the positions for everyone. Without the GUI: `inedctl view arrange <view> [--group ID] [--width N] [--height N]`.
@@ -123,7 +125,7 @@ sudo setcap cap_net_raw+ep bin/ined-server
 
 Many distributions already allow ping sockets for all groups (option A's value). Set `monitor.enabled = false` to turn background pinging off (discovery still works).
 
-Discovery probes IPv4 ranges up to `/16` (`discovery.max_prefix`) at 200 addresses per second (`discovery.rate`). The server is designed for about 5,000 hosts; a range with more addresses than that logs a warning. Reverse DNS uses the system's resolver; set `dns.enabled = false` to turn it off.
+Discovery probes IPv4 ranges up to `/16` (`discovery.max_prefix`) at 200 addresses per second (`discovery.rate`). The server is designed for about 5,000 hosts; a range with more addresses than that logs a warning. Reverse DNS uses the system's resolver; set `dns.enabled = false` to turn it off. The service check for the Connect menu (`[services]`) makes one TCP connection per port, not a port scan; set `services.enabled = false` to turn it off.
 
 ## Documentation
 

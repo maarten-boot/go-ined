@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.46** (2026-11-14)
+Status: **draft v0.47** (2026-11-14)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -92,6 +92,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
 - **SPEC-306** MUST: A host with monitoring turned off (`monitored = false`) is not pinged and is left out of group status.
 - **SPEC-307** MUST (v0.8): `host.status` is emitted only when a host's status changes or its `stale` flag clears. Changes to round-trip time or loss alone are saved but emit no event. Ping results are written to the database in batches, one transaction about every second.
 - **SPEC-308** MUST (v0.9): When a host's IP address changes, its status is reset to `unknown`, its round-trip time and loss are cleared, `last_change` is set if the status changed, and `host.status` is emitted after `host.updated`. The ping streak starts over.
+- **SPEC-309** SHOULD (v0.47, user request; design `Design-connect.md`, C1, C7): **Services.** The server finds out which of these a host offers by one TCP connect per port (timeout `services.timeout`, 1 s; no banner, so not a port scan): `ssh` (22), `rdp` (3389), `vnc` (5900), `vnc:1`…`vnc:9` (5901–5909), `http` (80), `https` (443). A monitored host is checked when it has never been checked (so at once when added or discovered) and then every `services.refresh` (6 h); at most 10 hosts at once. Any host is checked on request (SPEC-511). The result is stored with the host (`services`, the names that answered in this order, and `services_checked_at`; schema 6) and kept over a restart; a new IP address clears both (SPEC-308). `host.updated` is emitted when the list changes or on the first check, not for an unchanged periodic result. With `services.enabled = false` nothing is checked. What the server can reach may differ from what a GUI elsewhere can reach (C1); the GUI therefore never disables an entry (SPEC-730). An SNMP check with a list of community strings to try would work the same way (LATER).
 
 ## 7. Reverse DNS
 - **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20). It uses Go's resolver (the system's DNS settings), with 5 s per lookup. At startup, the refreshes of the existing hosts are spread across `dns.refresh`. A changed name is saved and emits `host.updated`. When a host's IP changes, its PTR name is cleared at once and looked up again (v0.11). `dns.enabled = false` turns reverse DNS off; PTR names then stay as stored (v0.11).
@@ -128,6 +129,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
 - **SPEC-508** MUST (v0.21): **A new parent gives a new position.** When `PATCH` changes an item's `parent_id` (or `PUT` a placement's parent) without giving `x` and `y`, the item gets a free position near its new parent (SPEC-106), as new items do; a group's subtree moves along by the same offset, announced with `group.moved` when the group isn't empty (v0.22). With `x` and `y` given, they are used, and the contents still move along with the group. A `PATCH` of `x`/`y` alone (same parent) moves only the group; `POST …/move` moves it with its contents (v0.23). This changes `inedctl host move` and `group move`, which so far kept the old position.
 - **SPEC-509** MUST (v0.21): Host JSON has `views`: the ids of the views the host is placed in, in tab order (the network view always first). It is filled in `GET /hosts` and `GET /hosts/{id}` and in host events. A placement change emits `placement.*` only, so a client that shows `views` reloads the host on `placement.*`.
 - **SPEC-510** MUST (v0.28): **Arranging members on a grid.** `POST /views/{id}/arrange` with `{"parent_id": …|null, "cell_width": …, "cell_height": …}` lays out the direct members of a group of that view (null: the view's top level) on a grid of that cell size (map units, 20–5000; 0 means the normal 100 × 80). Members keep their rough order (top to bottom, then left to right); the grid starts where new members go (SPEC-106) and has about √n columns; a member group takes everything in it along. It is one transaction with one `map.arranged` event `{"view_id", "parent_id"}`, and answers `{"view_id", "parent_id", "moved"}`. `inedctl view arrange <view> [--group ID] [--width N] [--height N]`.
+- **SPEC-511** SHOULD (v0.47): **Host services in the API.** Host JSON has `services` (array of names, SPEC-309; `[]` when checked and nothing answered, `null` while never checked) and `services_checked_at` (time or `null`). `POST /hosts/{id}/check-services` (no body) checks the host now, saves the result and answers the host; it takes about the connect timeout. Unknown host 404; a host changed or deleted during the check 409; checks turned off 503. `inedctl host services <id> [--check]` prints "ssh, vnc :1 (checked 2026-11-14 14:02:00)", "none (checked …)" or "not checked yet"; `host show` has a Services line.
 
 ## 9. Storage
 - **SPEC-601** MUST: Data is stored in SQLite through `modernc.org/sqlite` (pure Go, no cgo). The database file path is configurable.
@@ -177,12 +179,14 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - `inedctl group color <id> '#rrggbb'|none` and `group add --color`; `group show` prints the colour.
 - **SPEC-728** SHOULD (v0.45, user report: a v0.2.0 server refused bar colours without a clear sign): **Server version check.** Whenever the GUI reads `/health` (every connect and every 30 s, SPEC-717), it compares the server's `version` with its own. When both are releases (`vX.Y.Z`, also with `git describe`'s `-N-gHASH` and `-dirty`) and the server's X.Y.Z is lower, a bold line above the status bar says "ined-server <version> is older than this GUI (<version>): newer changes, such as a bar colour, are refused; update and restart the server". Builds after the same release, a newer server, and versions that aren't releases (`dev`) give no warning. The line goes away at the next check after the server is updated; "Copy" includes it.
 - **SPEC-729** SHOULD (v0.46, user request; design `Design-group-show-in-view.md`, G1–G6): **Copy a group into a custom view.** `POST /views/{id}/copy-group {"group_id": N}` copies a group of another view into custom view `id`: a new group with the same name (a network group without a name gets its CIDR as name), description, host labels, bar colour and collapsed state, at the view's root where new items go (SPEC-106); the same subgroups below it; and every host of the subtree placed in the matching new group, at the same position relative to the top group. The hosts stay the same hosts; a host already in the view moves into the copy. A CIDR is not copied. It is one transaction, with `group.created` for each new group (the top first) and `placement.updated` for each host; the answer is `{"view_id", "group_id" (the new top group), "groups", "hosts", "moved"}`. The network view, the group's own view and an unknown group are 400, an unknown view 404. The copy is not linked: later changes to the original don't follow. `inedctl group copy <id> --view V`. In the GUI a group's context menu has "Show in view ▸" with every custom view but the group's own; a view is ticked when its map is loaded in this GUI and has every host of the group; choosing a view copies the group there (also when ticked), and the status bar says what was copied ("\"lan\" copied to \"Payroll\": 2 groups, 12 hosts, 3 of them moved from elsewhere in \"Payroll\"").
+- **SPEC-730** SHOULD (v0.47, user request; design `Design-connect.md`, C2, C6): **Connect menu.** A host's context menu has "Connect ▸" with "SSH (22)", "Remote desktop (3389)", "VNC (5900)", "VNC :n (590n)" for every other display that answered, "Web (http, 80)", "Web (https, 443)", a separator and "Check services now". An entry is ticked when its port answered at the last check (SPEC-309); no entry is disabled, since the GUI may reach ports the server can't. "Check services now" asks the server (SPEC-511) and shows the result in the status bar ("Services of web: ssh, vnc :1, https · checked 14:02"). The details panel has a "Services" row in the same form ("not checked yet" before the first check; the date is added when it is not today).
+- **SPEC-731** SHOULD (v0.47; design C3–C5): **Connect commands.** SSH, RDP and VNC run a command from `gui.toml` `[connect]` `ssh`, `rdp`, `vnc`; empty means the platform's default — Linux: `x-terminal-emulator -e ssh {ip}`, `remmina -c rdp://{ip}`, `remmina -c vnc://{ip}:{port}`; macOS: `open ssh://{ip}`, `open rdp://full%20address=s:{ip}`, `open vnc://{ip}:{port}`; Windows: `cmd /c start ssh {ip}`, `mstsc /v:{ip}`, `cmd /c start vnc://{ip}:{port}`. A command is split into words like a POSIX shell would (blanks; `'…'`, `"…"` and `\` quote), then `{ip}` (the host's IP address, checked as one), `{name}` (its display name) and `{port}` are filled in within each word, and it runs without a shell, so a value is always one word. The web entries open `http://<ip>/` or `https://<ip>/` (IPv6 in brackets) in the system browser. The connection uses the IP address; SSH gets no user name, so `~/.ssh/config` applies (C4). The status bar says what was started; a missing program ("\"remmina\" is not installed (sudo apt install remmina)"), a bad command or a program that fails within 5 s (with the last line of its error output) is shown with the `gui.toml` key to change.
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.
 - **SPEC-802** MUST: Bearer-token authentication is optional, but required when the server listens on a non-loopback address: without a configured token, the server refuses to start. When a token is configured, every request without a valid token gets 401, except the reduced `/health` response (SPEC-501). Clients warn (on stderr, or in the GUI's status area) when they would send the token over plain `http://` to a host that isn't loopback (v0.15).
 - **SPEC-803** SHOULD: TLS can be turned on by configuring a certificate file and a key file.
-- **SPEC-804** MUST: The server shuts down cleanly on SIGINT or SIGTERM. It finishes database writes and closes SSE streams. Order (v0.8, v0.11): cancel discovery jobs and save the hosts found, stop reverse DNS, stop the monitor and flush its pending results, close the SSE streams, stop the HTTP server, close the database.
+- **SPEC-804** MUST: The server shuts down cleanly on SIGINT or SIGTERM. It finishes database writes and closes SSE streams. Order (v0.8, v0.11): cancel discovery jobs and save the hosts found, stop reverse DNS and the service checks (v0.47), stop the monitor and flush its pending results, close the SSE streams, stop the HTTP server, close the database.
 - **SPEC-805** MUST: Config files and defaults. Precedence: command-line flags, then environment variables (`INED_URL` and `INED_TOKEN`, clients only), then the config file, then built-in defaults. Default paths follow XDG (`$XDG_CONFIG_HOME`, falling back to `~/.config`, and `$XDG_DATA_HOME`, falling back to `~/.local/share`):
   - Server: `go-ined/server.toml`. Database: `go-ined/ined.db` under the data directory.
   - GUI: `go-ined/gui.toml`. CLI: `go-ined/ctl.toml`.
@@ -199,12 +203,15 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   | server | `discovery.max_prefix` / `rate` / `concurrency` | `16` / `200` / `64` |
   | server | `dns.enabled` | `true` (v0.11) |
   | server | `dns.refresh` / `concurrency` | `1h` / `20` |
+  | server | `services.enabled` / `refresh` / `timeout` | `true` / `6h` / `1s` (SPEC-309, v0.47) |
   | server | `events.buffer` | `1000` |
   | gui, ctl | `server.url` | `http://127.0.0.1:8470` |
   | gui, ctl | `server.token` | `""` |
   | gui, ctl | `server.ca_cert` | `""` (system roots; set a PEM file to trust a self-signed server; a relative path is relative to the config file's folder) (v0.13, v0.15) |
   | gui | `contrast.preset` | `AA` (`AA`, `AAA`, `Max` or `custom`) |
   | gui | `contrast.min_ratio` | `4.5` (used only when `preset = "custom"`, range 4.5–21) |
+  | gui | `map.wrap_names` | `true` (SPEC-722) |
+  | gui | `connect.ssh` / `rdp` / `vnc` | `""` (the platform's default, SPEC-731, v0.47) |
 - **SPEC-806** SHOULD: Every binary supports `-version`, which prints the version (set at build time) and exits.
 - **SPEC-807** SHOULD (v0.24): **Server log.** `[log] level` (`debug`, `info`, `warn`, `error`; default `info`) and `format` (`text` or `json`; default `text`) in `server.toml`, and `-log-level` on the command line. The log goes to stderr. At `debug`, every API request is logged with method, path and duration (v0.25).
 
@@ -218,6 +225,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - `health`
   - `view list|add|show|rename|order|rm|place|unplace` (SPEC-124)
   - `group shift <id> [--dx N] [--dy N]` (SPEC-507, v0.22)
+  - `host services <id> [--check]` (SPEC-511, v0.47)
 
   The server URL and token come from SPEC-805.
 
@@ -229,6 +237,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
 - A 9P front end that exposes the inventory as a file tree.
 - A ZMQ publisher for alerts.
 - TCP-port probes for hosts that block ICMP, and ARP discovery.
+- An SNMP check per host with a configurable list of community strings to try, stored like the services (SPEC-309) (v0.47, user request).
 - A **Hosts** notebook tab in the GUI (v0.11, user request): the inventory as a list with IP address and DNS name, sortable by column, with a find box to jump to an item.
 - MAC address collection (v0.9, user request). MAC addresses are only visible (ARP/NDP) from inside the host's own layer-2 segment, so remote networks need a vantage point there: either ping and ARP/neighbour-table reads over SSH on a host in that network, or a small go-ined agent that runs there and reports to the server.
 - Status history and graphs.

@@ -12,11 +12,12 @@ trap 'kill "${PID:-}" 2>/dev/null || true; rm -rf "$WORK"; rmdir /tmp/go-ined 2>
 
 go build -C "$REPO" -o "$WORK/ined-server" ./cmd/ined-server
 go build -C "$REPO" -o "$WORK/inedctl" ./cmd/inedctl
-# Monitoring and reverse DNS off: the output must not depend on which
-# example addresses answer pings or have names on the machine that runs
-# this script. Discovery probes 127.0.0.0/30, which answers on Linux.
+# Monitoring, reverse DNS and service checks off: the output must not
+# depend on which example addresses answer pings, have names or offer
+# services on the machine that runs this script. Discovery probes
+# 127.0.0.0/30, which answers on Linux.
 mkdir -p "$WORK/cfg/go-ined"
-printf '[monitor]\nenabled = false\n\n[dns]\nenabled = false\n' >"$WORK/cfg/go-ined/server.toml"
+printf '[monitor]\nenabled = false\n\n[dns]\nenabled = false\n\n[services]\nenabled = false\n' >"$WORK/cfg/go-ined/server.toml"
 XDG_CONFIG_HOME="$WORK/cfg" "$WORK/ined-server" -listen 127.0.0.1:0 -db "$WORK/ex.db" >"$WORK/server.log" 2>&1 &
 PID=$!
 
@@ -170,6 +171,12 @@ ctl "The same with inedctl, for one group" "view arrange 2 --group 6 --width 200
 ex "Copy network group 4 (lab) with everything in it into view 2" POST /views/2/copy-group '{"group_id":4}'
 ex "Error: group 6 is in view 2 already" POST /views/2/copy-group '{"group_id":6}'
 ctl "The same with inedctl" "group copy 4 --view 2" group copy 4 --view 2
+
+# Services (SPEC-309, SPEC-511): checks are off in this run (see above).
+{ echo "## Services (Connect menu)"; echo
+  echo 'The server tries a TCP connection to ports 22, 3389, 5900-5909, 80 and 443 of each monitored host (when new, then every 6 h). `POST /hosts/{id}/check-services` checks one host now and answers the host with `services` (for example `["ssh","vnc:1","https"]`; `[]` when nothing answered) and `services_checked_at`; both are `null` before the first check. This run has `services.enabled = false`, so that the output does not depend on the ports open on the machine that ran it; the server then answers 503.'; echo; } >>"$OUT"
+ex "Check the services of host 5 (checks turned off in this run)" POST /hosts/5/check-services
+ctl "The services of a host with inedctl (--check checks first)" "host services 5" host services 5
 
 {
 cat <<'EOF'

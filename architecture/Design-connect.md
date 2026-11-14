@@ -1,6 +1,6 @@
 # Design: "Connect ▸" on hosts (SSH, RDP, VNC, HTTP, HTTPS)
 
-Status: **proposed** (2026-11-14), waiting for the user's OK.
+Status: **implemented** (2026-11-14): C1–C7 as recommended ("OK, all"), on `feature/connect`. Settled in the build: at most 10 hosts are checked at once; a periodic check with an unchanged result sends no event; `POST /hosts/{id}/check-services` answers 503 when `services.enabled = false`; empty `[connect]` keys mean the platform's default (so `examples/gui.toml` is the same on every platform); a program that fails within 5 s is reported with the last line of its error output.
 
 User request: "when I right-click on a host can we also get a menu to ssh/rdp/vnc to that host; we don't need to do a full port scan, just the default tcp/22, tcp/590x and the tcp/rdp port, and port 80/443 (http/https would also be handy). Later we can add an SNMP scan for all hosts and a set of default community strings to try."
 

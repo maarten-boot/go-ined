@@ -614,6 +614,7 @@ func shifted(n *mapmodel.Node, dx, dy float64) *mapmodel.Node {
 	c.Item = &it
 	c.Icon.X, c.Icon.Y = c.Icon.X+dx, c.Icon.Y+dy
 	c.Bounds.X, c.Bounds.Y = c.Bounds.X+dx, c.Bounds.Y+dy
+	c.Foot = mapmodel.Rect{} // no bottom bar line while dragging (SPEC-704 v0.43)
 	return &c
 }
 
@@ -846,7 +847,9 @@ func (d *drawer) frame(n *mapmodel.Node, vis mapmodel.Rect, selected bool) {
 		d.rect(b, color.Transparent, fc, 1.5)
 	}
 	d.line(b.X, b.Y+mapmodel.FrameLabelH, b.X+b.W, b.Y+mapmodel.FrameLabelH, fc, 1)
-	d.line(b.X, n.Foot.Y, b.X+b.W, n.Foot.Y, fc, 1)
+	if n.Foot.H > 0 { // none on a frame being dragged
+		d.line(b.X, n.Foot.Y, b.X+b.W, n.Foot.Y, fc, 1)
+	}
 	d.glyph(it, b.X+8+g/2, b.Y+mapmodel.FrameLabelH/2, g)
 	_, th := measure(n.Labels[0])
 	d.text(n.Labels[0], b.X+mapmodel.FrameTextX, b.Y+(mapmodel.FrameLabelH-th)/2, text, false, true)

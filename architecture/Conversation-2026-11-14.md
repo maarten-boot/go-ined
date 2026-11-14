@@ -22,3 +22,8 @@
    **Claude**: no, `bin/` still held `v0.2.0-5-g812912d-dirty` from 2026-11-12; tests, CI and releases do not write `bin/`. None was running; rebuilt with `make build`: `v0.4.1-4-g217c949`.
 6. **User**: rebuild bin after every merge to main.
    **Claude** saved it as a working rule (memory) and in the Plan.
+7. **User**: pushed; prepare 0.5.0; after selecting a bar colour the bar does not show the colour and the selector check stays on None.
+   (Spelling corrected: "seletor" → "selector", "stayes" → "stays".)
+   **Claude** checked the push: not arrived (GitHub still at `217c949`).
+   - Bar colour: with the current `bin/` server and GUI (scratch database, Xvfb :97, xdotool) choosing Blue works: the bar turns blue and the details panel says "Blue". With a server built from `v0.4.1` the same click gives `group 1: invalid_argument (HTTP 400): invalid JSON body: json: unknown field "color"` in the status bar and nothing changes, which matches the report. Most likely the running `ined-server` is older than 0.5.0. Test processes stopped, files deleted.
+   - Release 0.5.0 prepared: `[0.5.0]` in `Changes.md` with a note to update server and GUI together; OpenAPI 0.5.0; README; annotated tag `v0.5.0`.

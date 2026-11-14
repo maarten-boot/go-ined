@@ -34,6 +34,7 @@ type settings struct {
 	client     client.Options
 	contrast   theme.Contrast
 	wrapNames  bool
+	connect    gui.ConnectCommands
 	configPath string // where contrast changes are saved
 	warnings   []string
 	version    bool
@@ -77,6 +78,7 @@ func resolve(args []string, stderr io.Writer) (settings, error) {
 	}
 	s.client = client.Options{URL: srv.URL, Token: srv.Token, CACert: srv.CACert}
 	s.wrapNames = cfg.Map.WrapNames
+	s.connect = gui.ConnectCommands{SSH: cfg.Connect.SSH, RDP: cfg.Connect.RDP, VNC: cfg.Connect.VNC}
 	s.contrast, err = theme.Parse(cfg.Contrast.Preset, cfg.Contrast.MinRatio)
 	if err != nil {
 		s.warnings = append(s.warnings, fmt.Sprintf("%v; using %s", err, s.contrast))
@@ -119,7 +121,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	g := gui.New(app.NewWithID(appID), gui.Options{
 		Client: c, Contrast: s.contrast, SaveContrast: save, Warnings: s.warnings,
-		WrapNames: s.wrapNames, SaveWrapNames: saveWrap, Version: version.Version,
+		WrapNames: s.wrapNames, SaveWrapNames: saveWrap, Version: version.Version, Connect: s.connect,
 		Title: "go-ined — " + c.URL(),
 	})
 	g.ShowAndRun()

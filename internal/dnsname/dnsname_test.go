@@ -151,7 +151,19 @@ func (l *logBuf) String() string              { l.mu.Lock(); defer l.mu.Unlock()
 
 func newRig(t *testing.T, cfg Config, targets ...inventory.Target) *rig {
 	t.Helper()
-	g := &rig{clk: &clock{t: time.Unix(1000, 0)}, r: &resolver{answers: map[string]func() ([]string, error){}}, inv: &inv{ptr: map[int64]string{}}, log: &logBuf{}}
+	return newRigWith(t, cfg, nil, targets...)
+}
+
+// newRigWith is newRig with answers in place before the refresher starts:
+// a host's first lookup is due at once and may run before the test's next
+// line, so an answer set after newRig can come too late (it caused the
+// "timeout waiting for first" of TestClearAfterMisses under load).
+func newRigWith(t *testing.T, cfg Config, answers map[string]func() ([]string, error), targets ...inventory.Target) *rig {
+	t.Helper()
+	if answers == nil {
+		answers = map[string]func() ([]string, error){}
+	}
+	g := &rig{clk: &clock{t: time.Unix(1000, 0)}, r: &resolver{answers: answers}, inv: &inv{ptr: map[int64]string{}}, log: &logBuf{}}
 	g.inv.setTargets(targets...)
 	cfg.Now, cfg.Tick = g.clk.Now, time.Millisecond
 	f := New(g.r, g.inv, cfg, slog.New(slog.NewTextHandler(g.log, &slog.HandlerOptions{Level: slog.LevelInfo})))
@@ -187,9 +199,8 @@ func TestName(t *testing.T) {
 // TC-403, TC-406: startup spreads lookups across the refresh period; each
 // host is looked up again after dns.refresh; a new host at once.
 func TestScheduling(t *testing.T) {
-	g := newRig(t, Config{Refresh: 4 * time.Hour, Sync: time.Second},
+	g := newRigWith(t, Config{Refresh: 4 * time.Hour, Sync: time.Second}, map[string]func() ([]string, error){"10.0.0.1": names("one.example.")},
 		target(1, "10.0.0.1"), target(2, "10.0.0.2"), target(3, "10.0.0.3"), target(4, "10.0.0.4"))
-	g.r.set("10.0.0.1", names("one.example."))
 	for i := 1; i <= 4; i++ {
 		waitFor(t, "lookup", func() bool { return g.r.nCalls() == i })
 		settle()
@@ -210,8 +221,7 @@ func TestScheduling(t *testing.T) {
 
 // TC-402: a temporary error keeps the name; NXDOMAIN clears it.
 func TestKeepAndClear(t *testing.T) {
-	g := newRig(t, Config{Refresh: time.Minute}, target(1, "10.0.0.1"))
-	g.r.set("10.0.0.1", names("old.example."))
+	g := newRigWith(t, Config{Refresh: time.Minute}, map[string]func() ([]string, error){"10.0.0.1": names("old.example.")}, target(1, "10.0.0.1"))
 	waitFor(t, "first", func() bool { n, _ := g.inv.name(1); return n == "old.example." })
 	g.r.set("10.0.0.1", func() ([]string, error) { return nil, &net.DNSError{Err: "timeout", IsTimeout: true} })
 	sets := g.inv.sets
@@ -236,7 +246,8 @@ func TestKeepAndClear(t *testing.T) {
 // clearing and the name's return are logged at Info. A host without a
 // name isn't rechecked.
 func TestClearAfterMisses(t *testing.T) {
-	g := newRig(t, Config{Refresh: time.Hour, Recheck: time.Minute, ClearAfter: 3, Sync: time.Millisecond},
+	g := newRigWith(t, Config{Refresh: time.Hour, Recheck: time.Minute, ClearAfter: 3, Sync: time.Millisecond},
+		map[string]func() ([]string, error){"10.0.0.1": names("nas.example.")},
 		target(1, "10.0.0.1"), target(2, "10.0.0.2"))
 	calls := func(addr string) int {
 		g.r.mu.Lock()
@@ -249,7 +260,6 @@ func TestClearAfterMisses(t *testing.T) {
 		}
 		return n
 	}
-	g.r.set("10.0.0.1", names("nas.example."))
 	waitFor(t, "first", func() bool { n, _ := g.inv.name(1); return n == "nas.example." })
 	g.clk.Advance(time.Hour) // host 2's first lookup (spread at start), host 1's second
 	waitFor(t, "second round", func() bool { return calls("10.0.0.1") == 2 && calls("10.0.0.2") == 1 })
@@ -379,8 +389,7 @@ func TestNoGoroutinePerWaitingHost(t *testing.T) {
 // no longer has is dropped: nothing is logged for it, and the new address
 // gets its name with a log line that names the stored one.
 func TestIPChangeDuringLookup(t *testing.T) {
-	g := newRig(t, Config{Refresh: time.Hour, Sync: time.Millisecond}, target(1, "10.0.0.1"))
-	g.r.set("10.0.0.1", names("old.example."))
+	g := newRigWith(t, Config{Refresh: time.Hour, Sync: time.Millisecond}, map[string]func() ([]string, error){"10.0.0.1": names("old.example.")}, target(1, "10.0.0.1"))
 	waitFor(t, "first", func() bool { n, _ := g.inv.name(1); return n == "old.example." })
 	g.r.set("10.0.0.1", names("other.example."))
 	g.r.mu.Lock()

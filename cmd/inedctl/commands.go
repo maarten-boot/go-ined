@@ -21,7 +21,7 @@ type command func(a *app, name string, args []string) error
 var commands = map[string]map[string]command{
 	"host": {
 		"list": hostList, "add": hostAdd, "show": hostShow, "edit": hostEdit,
-		"rm": hostRm, "move": hostMove,
+		"rm": hostRm, "move": hostMove, "services": hostServices,
 	},
 	"group": {
 		"list": groupList, "add": groupAdd, "show": groupShow, "edit": groupEdit,
@@ -119,6 +119,27 @@ func hostEdit(a *app, name string, args []string) error {
 	}
 	var h apitypes.Host
 	return a.call(http.MethodPatch, path("host", id), p, &h, func() { a.hostDetails(h) })
+}
+
+// hostServices shows the services found on a host; --check checks them
+// first (SPEC-309).
+func hostServices(a *app, name string, args []string) error {
+	fs := a.flags(name)
+	check := fs.Bool("check", false, "check the ports now (takes about a second)")
+	pos, err := a.parse(fs, args, 1, 1)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	var h apitypes.Host
+	show := func() { fmt.Fprintln(a.out, servicesText(h)) }
+	if *check {
+		return a.call(http.MethodPost, path("host", id)+"/check-services", nil, &h, show)
+	}
+	return a.call(http.MethodGet, path("host", id), nil, &h, show)
 }
 
 func hostRm(a *app, name string, args []string) error {

@@ -51,6 +51,7 @@ Commands:
   host edit <id> [--ip A] [--name N] [--description D] [--monitored=true|false]
   host rm <id>
   host move <id> <group-id|root>              (moves it next to its new parent)
+  host services <id> [--check]                (SSH, RDP, VNC, HTTP(S) found; --check checks now)
   group list [--view ID]
   group add [--cidr C] [--name N] [--description D] [--parent ID] [--note T] [--expanded] [--view ID]
             [--labels name|ip|both|inherit] [--color #rrggbb|none]

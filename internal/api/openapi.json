@@ -357,6 +357,37 @@
         ]
       }
     },
+    "/hosts/{id}/check-services": {
+      "post": {
+        "summary": "Check now which of SSH (22), RDP (3389), VNC (5900-5909), HTTP (80) and HTTPS (443) accept a TCP connection, save and return the host (SPEC-309, SPEC-511). Takes about the connect timeout (1 s). 503 when services.enabled = false.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Host"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/groups": {
       "get": {
         "summary": "Groups: all, or one view's",
@@ -983,6 +1014,24 @@
             },
             "description": "views the host is placed in, network view first (SPEC-509)"
           },
+          "services": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "services whose TCP port answered at the last check: ssh, rdp, vnc (5900), vnc:1..vnc:9 (5901-5909), http, https; null while never checked (SPEC-309)"
+          },
+          "services_checked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "time of the last service check; null = never (SPEC-309)"
+          },
           "x": {
             "type": "number",
             "format": "double"
@@ -1022,7 +1071,9 @@
           "x",
           "y",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "services",
+          "services_checked_at"
         ]
       },
       "Group": {

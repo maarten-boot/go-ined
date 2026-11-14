@@ -6,6 +6,8 @@ package testserver
 import (
 	"cmp"
 	"context"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -21,6 +23,7 @@ import (
 	"github.com/maarten-boot/go-ined/internal/events"
 	"github.com/maarten-boot/go-ined/internal/inventory"
 	"github.com/maarten-boot/go-ined/internal/monitor"
+	"github.com/maarten-boot/go-ined/internal/services"
 	"github.com/maarten-boot/go-ined/internal/store"
 )
 
@@ -40,6 +43,9 @@ type Options struct {
 	Keepalive, WriteTimeout time.Duration
 	// Version reported by /health (default "test").
 	Version string
+	// Services configures "check services" (SPEC-309). Without a Dial,
+	// every port is closed at once, so tests don't touch the network.
+	Services services.Config
 }
 
 // Server is a running test server. Its URL stays the same across Restart.
@@ -121,9 +127,13 @@ func (s *Server) boot() {
 	bus := events.New(run, 1000)
 	svc.SetNotifier(bus)
 	disc := discovery.New(svc, prober{s.opts}, "", bus, run, s.opts.Discovery, nil)
+	scfg := s.opts.Services
+	if scfg.Dial == nil {
+		scfg.Dial = func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("connection refused") }
+	}
 	var h http.Handler = api.New(svc, api.Options{
 		Token: s.opts.Token, Version: cmp.Or(s.opts.Version, "test"), RunID: run, DBPing: st.Ping, Events: bus,
-		Discovery: disc, Keepalive: s.opts.Keepalive, WriteTimeout: s.opts.WriteTimeout,
+		Discovery: disc, Services: services.New(svc, scfg, nil), Keepalive: s.opts.Keepalive, WriteTimeout: s.opts.WriteTimeout,
 		ICMP: func() api.ICMPInfo { return api.ICMPInfo{Mode: "unprivileged"} },
 	})
 	s.mu.Lock()

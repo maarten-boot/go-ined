@@ -94,6 +94,8 @@ type env struct {
 	ctx context.Context
 
 	version string // the GUI's version (Options.Version)
+	// options, if set, changes the Options before New (Connect, Start, …).
+	options func(*Options)
 
 	mu    sync.Mutex
 	saved []theme.Contrast
@@ -118,7 +120,7 @@ func startWith(t *testing.T, opts testserver.Options) *env {
 func (e *env) open() {
 	a := test.NewTempApp(e.t)
 	e.ui.Wait(func() {
-		e.g = New(a, Options{Client: e.c, Contrast: theme.Default, Do: e.ui.Do, Version: e.version,
+		opt := Options{Client: e.c, Contrast: theme.Default, Do: e.ui.Do, Version: e.version,
 			SaveContrast: func(c theme.Contrast) error {
 				e.mu.Lock()
 				defer e.mu.Unlock()
@@ -130,7 +132,11 @@ func (e *env) open() {
 				}
 				e.saved = append(e.saved, c)
 				return nil
-			}})
+			}}
+		if e.options != nil {
+			e.options(&opt)
+		}
+		e.g = New(a, opt)
 		e.g.Window().Resize(fyne.NewSize(1000, 700))
 	})
 	e.g.Start()

@@ -190,7 +190,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 			fyne.NewMenuItem(moveLabel, func() { g.moveToDialog(view, targets...) }),
 		}
 		if h != nil {
-			items = append(items, g.showInViewItem(h))
+			items = append(items, g.showInViewItem(h), g.connectItem(h))
 		}
 		if view != mapmodel.NetworkView {
 			items = append(items, fyne.NewMenuItem("Remove from this view", func() { g.unplace(view, k.ID) }))

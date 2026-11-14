@@ -440,7 +440,10 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 			ipChanged = true
 			h.IP = ip
 			h.RTTms, h.LossPct = nil, nil
-			h.PTRName = "" // looked up again for the new address (SPEC-401)
+			// Looked up and checked again for the new address (SPEC-401,
+			// SPEC-309).
+			h.PTRName = ""
+			h.Services, h.ServicesAt = nil, time.Time{}
 			if h.Status != apitypes.StatusUnknown {
 				h.Status = apitypes.StatusUnknown
 				h.LastChange = s.stamp()
@@ -986,6 +989,13 @@ func (s *Service) hostView(h *Host) apitypes.Host {
 	if !h.LastChange.IsZero() {
 		t := h.LastChange
 		v.LastChange = &t
+	}
+	if !h.ServicesAt.IsZero() {
+		t := h.ServicesAt
+		v.Services, v.ServicesCheckedAt = slices.Clone(h.Services), &t
+		if v.Services == nil {
+			v.Services = []string{}
+		}
 	}
 	return v
 }

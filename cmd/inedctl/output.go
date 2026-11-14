@@ -51,12 +51,29 @@ func (a *app) hostDetails(h apitypes.Host) {
 		{"ID", id(h.ID)}, {"IP", h.IP}, {"Name", h.Name}, {"PTR name", h.PTRName}, {"Display name", h.DisplayName},
 		{"Description", h.Description}, {"Parent", parent(h.ParentID)}, {"Monitored", yesNo(h.Monitored)},
 		{"Status", status(h.Status, h.Stale)}, {"RTT", ms(h.RTTms)}, {"Loss", loss},
-		{"Last seen", when(h.LastSeen)}, {"Last change", when(h.LastChange)},
+		{"Last seen", when(h.LastSeen)}, {"Last change", when(h.LastChange)}, {"Services", servicesText(h)},
 		{"Outside CIDR", yesNo(h.OutsideCIDR)}, {"Position", pos(h.X, h.Y)},
 		{"Created", h.CreatedAt.Local().Format(time.DateTime)}, {"Updated", h.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(h.Note)},
 	}, false)
 	a.noteBlock(h.Note)
+}
+
+// servicesText is "ssh, vnc :1 (checked 2026-11-14 14:02:00)", "none
+// (checked …)" or "not checked yet".
+func servicesText(h apitypes.Host) string {
+	if h.ServicesCheckedAt == nil {
+		return "not checked yet"
+	}
+	names := make([]string, len(h.Services))
+	for i, s := range h.Services {
+		names[i] = apitypes.ServiceLabel(s)
+	}
+	list := strings.Join(names, ", ")
+	if list == "" {
+		list = "none"
+	}
+	return list + " (checked " + h.ServicesCheckedAt.Local().Format(time.DateTime) + ")"
 }
 
 func (a *app) groupDetails(g apitypes.Group) {

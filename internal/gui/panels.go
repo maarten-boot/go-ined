@@ -229,6 +229,14 @@ func (d *details) setHost(h apitypes.Host, loadNote bool) {
 	d.setNote(h.Note, loadNote)
 }
 
+// hostChanged shows h if it is the selected host, such as after "Check
+// services now" (whose result sends no event when nothing changed).
+func (d *details) hostChanged(h apitypes.Host) {
+	if d.key != nil && *d.key == mapmodel.HostKey(h.ID) {
+		d.setHost(h, false)
+	}
+}
+
 func (d *details) setGroup(g apitypes.Group, loadNote bool) {
 	d.group, d.host = &g, nil
 	d.fill()
@@ -341,6 +349,7 @@ func (d *details) fill() {
 			{"Manual name", dash(h.Name)}, {"Status", mapmodel.StatusWord(h.Status, h.Stale)},
 			{"Stale", yesNo(h.Stale)}, {"Monitored", yesNo(h.Monitored)}, {"Round-trip time", rtt},
 			{"Packet loss", loss}, {"Last seen", when(h.LastSeen)}, {"Last change", when(h.LastChange)},
+			{"Services", servicesText(*h)},
 			{"Parent (this view)", d.parentName()}, {"Views", d.viewNames(h.Views)},
 			{"Description", dash(h.Description)},
 		}

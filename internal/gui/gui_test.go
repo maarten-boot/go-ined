@@ -93,6 +93,8 @@ type env struct {
 	g   *GUI
 	ctx context.Context
 
+	version string // the GUI's version (Options.Version)
+
 	mu    sync.Mutex
 	saved []theme.Contrast
 	aaa   int
@@ -100,7 +102,12 @@ type env struct {
 
 func start(t *testing.T) *env {
 	t.Helper()
-	e := &env{t: t, srv: testserver.Start(t, testserver.Options{}), ui: newUI(t), ctx: context.Background()}
+	return startWith(t, testserver.Options{})
+}
+
+func startWith(t *testing.T, opts testserver.Options) *env {
+	t.Helper()
+	e := &env{t: t, srv: testserver.Start(t, opts), ui: newUI(t), ctx: context.Background()}
 	var err error
 	if e.c, err = client.New(client.Options{URL: e.srv.URL()}); err != nil {
 		t.Fatal(err)
@@ -111,7 +118,7 @@ func start(t *testing.T) *env {
 func (e *env) open() {
 	a := test.NewTempApp(e.t)
 	e.ui.Wait(func() {
-		e.g = New(a, Options{Client: e.c, Contrast: theme.Default, Do: e.ui.Do,
+		e.g = New(a, Options{Client: e.c, Contrast: theme.Default, Do: e.ui.Do, Version: e.version,
 			SaveContrast: func(c theme.Contrast) error {
 				e.mu.Lock()
 				defer e.mu.Unlock()

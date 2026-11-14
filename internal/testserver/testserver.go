@@ -4,6 +4,7 @@
 package testserver
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -37,6 +38,8 @@ type Options struct {
 	Discovery discovery.Config
 	// Keepalive and WriteTimeout of the SSE stream (0 = API defaults).
 	Keepalive, WriteTimeout time.Duration
+	// Version reported by /health (default "test").
+	Version string
 }
 
 // Server is a running test server. Its URL stays the same across Restart.
@@ -119,7 +122,7 @@ func (s *Server) boot() {
 	svc.SetNotifier(bus)
 	disc := discovery.New(svc, prober{s.opts}, "", bus, run, s.opts.Discovery, nil)
 	var h http.Handler = api.New(svc, api.Options{
-		Token: s.opts.Token, Version: "test", RunID: run, DBPing: st.Ping, Events: bus,
+		Token: s.opts.Token, Version: cmp.Or(s.opts.Version, "test"), RunID: run, DBPing: st.Ping, Events: bus,
 		Discovery: disc, Keepalive: s.opts.Keepalive, WriteTimeout: s.opts.WriteTimeout,
 		ICMP: func() api.ICMPInfo { return api.ICMPInfo{Mode: "unprivileged"} },
 	})

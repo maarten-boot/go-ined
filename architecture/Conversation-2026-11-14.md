@@ -52,3 +52,6 @@
     - Found: the stray binary `inedctl` in the repo root (tracked since `07cd371`, 11 Nov) is deleted in the working tree, not by Claude; every build is `-dirty` until that is committed. Asked the user whether to `git rm` it and ignore `/inedctl`.
 15. **User**: pushed; yes, remove inedctl from git.
     **Claude** checked the push: not arrived (GitHub still at `893940e`, no `feature/version-check`). Removed `inedctl` from the index on `fix/stray-inedctl` (merged) and ignored `/ined-server`, `/inedctl` and `/ined-gui` in the root; the working tree is clean, builds are no longer `-dirty`.
+16. **User**: when opening the app with a current view, and after a resize or maximize of the window, also execute a fit-all.
+    (Read as: "maximize screen" → "maximize the window".)
+    **Claude** checked the push: `main` and `docs/architecture` arrived, `fix/stray-inedctl` didn't. Wrote `Design-fit-on-resize.md`: fit the current view at its final size on start; fit all on every size change of the map area (window resize, maximize, restore, and also the details-panel divider); in a focus it fits the group; a resize replaces your own zoom. Decisions R1–R5 wait for the user's OK.

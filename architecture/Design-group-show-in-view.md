@@ -1,6 +1,6 @@
 # Design: "Show in view ▸" on groups
 
-Status: **proposed** (2026-11-14), waiting for the user's OK.
+Status: **implemented** (2026-11-14): G1–G6 as recommended ("OK, all"), on `feature/group-copy`. Two details settled in the build: G2's events are `group.created` per new group and `placement.updated` per host (so the "Show" lists and the hosts' view lists update), not one `map.arranged`; G4's tick needs the view's map loaded in this GUI (a view not opened yet is never ticked).
 
 User request: "also show the 'Show in view' menu item on groups".
 

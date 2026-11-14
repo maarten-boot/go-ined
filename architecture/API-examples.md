@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "0b49706f5056e9d9"
+  "run_id": "88b0d6e35e446394"
 }
 ```
 
@@ -50,8 +50,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-14T11:57:53.129Z",
-  "updated_at": "2026-11-14T11:57:53.129Z"
+  "created_at": "2026-11-14T18:45:10.44Z",
+  "updated_at": "2026-11-14T18:45:10.44Z"
 }
 ```
 
@@ -78,8 +78,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-14T11:57:53.157Z",
-  "updated_at": "2026-11-14T11:57:53.157Z"
+  "created_at": "2026-11-14T18:45:10.451Z",
+  "updated_at": "2026-11-14T18:45:10.451Z"
 }
 ```
 
@@ -114,8 +114,8 @@ Response: `201`
   ],
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-14T11:57:53.181Z",
-  "updated_at": "2026-11-14T11:57:53.181Z"
+  "created_at": "2026-11-14T18:45:10.463Z",
+  "updated_at": "2026-11-14T18:45:10.463Z"
 }
 ```
 
@@ -150,8 +150,8 @@ Response: `200`
   ],
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-14T11:57:53.181Z",
-  "updated_at": "2026-11-14T11:57:53.204Z"
+  "created_at": "2026-11-14T18:45:10.463Z",
+  "updated_at": "2026-11-14T18:45:10.473Z"
 }
 ```
 
@@ -178,8 +178,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-14T11:57:53.129Z",
-  "updated_at": "2026-11-14T11:57:53.232Z"
+  "created_at": "2026-11-14T18:45:10.44Z",
+  "updated_at": "2026-11-14T18:45:10.482Z"
 }
 ```
 
@@ -340,11 +340,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: 0b49706f5056e9d9-10
+id: 88b0d6e35e446394-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-14T11:57:53.737Z","updated_at":"2026-11-14T11:57:53.737Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"x":40,"y":40,"created_at":"2026-11-14T18:45:10.871Z","updated_at":"2026-11-14T18:45:10.871Z"}
 
-id: 0b49706f5056e9d9-11
+id: 88b0d6e35e446394-11
 event: host.deleted
 data: {"id":2}
 
@@ -360,7 +360,7 @@ Response: `202`
 
 ```json
 {
-  "id": "0b49706f5056e9d9-1",
+  "id": "88b0d6e35e446394-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -369,7 +369,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-14T11:57:54.078Z",
+  "started_at": "2026-11-14T18:45:11.209Z",
   "finished_at": null
 }
 ```
@@ -377,14 +377,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/0b49706f5056e9d9-1
+curl -s $INED/api/v1/discovery/88b0d6e35e446394-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "0b49706f5056e9d9-1",
+  "id": "88b0d6e35e446394-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -393,8 +393,8 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-14T11:57:54.078Z",
-  "finished_at": "2026-11-14T11:57:54.084Z"
+  "started_at": "2026-11-14T18:45:11.209Z",
+  "finished_at": "2026-11-14T18:45:11.216Z"
 }
 ```
 
@@ -464,8 +464,8 @@ Collapsed:   yes
 Labels:      inherit
 Bar colour:  none
 Position:    40, 40
-Created:     2026-11-14 12:57:56
-Updated:     2026-11-14 12:57:56
+Created:     2026-11-14 19:45:13
+Updated:     2026-11-14 19:45:13
 Note:        -
 ```
 
@@ -493,8 +493,8 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-14 12:57:56
-Updated:      2026-11-14 12:57:56
+Created:      2026-11-14 19:45:13
+Updated:      2026-11-14 19:45:13
 Note:         2nd floor
 ```
 
@@ -555,8 +555,8 @@ inedctl --json host show 5
   ],
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-14T11:57:56.218Z",
-  "updated_at": "2026-11-14T11:57:56.218Z"
+  "created_at": "2026-11-14T18:45:13.267Z",
+  "updated_at": "2026-11-14T18:45:13.267Z"
 }
 ```
 
@@ -591,8 +591,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job 0b49706f5056e9d9-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job 0b49706f5056e9d9-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job 88b0d6e35e446394-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job 88b0d6e35e446394-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -652,8 +652,8 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-14T11:57:56.329Z",
-  "updated_at": "2026-11-14T11:57:56.329Z"
+  "created_at": "2026-11-14T18:45:13.315Z",
+  "updated_at": "2026-11-14T18:45:13.315Z"
 }
 ```
 
@@ -680,8 +680,8 @@ Response: `201`
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-14T11:57:56.351Z",
-  "updated_at": "2026-11-14T11:57:56.351Z"
+  "created_at": "2026-11-14T18:45:13.324Z",
+  "updated_at": "2026-11-14T18:45:13.324Z"
 }
 ```
 
@@ -807,8 +807,8 @@ ID:      2
 Name:    Printers
 Kind:    custom
 Order:   1
-Created: 2026-11-14 12:57:56
-Updated: 2026-11-14 12:57:56
+Created: 2026-11-14 19:45:13
+Updated: 2026-11-14 19:45:13
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6
@@ -843,8 +843,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 40,
-  "created_at": "2026-11-14T11:57:56.351Z",
-  "updated_at": "2026-11-14T11:57:56.493Z"
+  "created_at": "2026-11-14T18:45:13.324Z",
+  "updated_at": "2026-11-14T18:45:13.391Z"
 }
 ```
 
@@ -866,8 +866,8 @@ Collapsed:   no
 Labels:      inherit
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-14 12:57:56
-Updated:     2026-11-14 12:57:56
+Created:     2026-11-14 19:45:13
+Updated:     2026-11-14 19:45:13
 Note:        -
 ```
 
@@ -896,8 +896,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-14T11:57:56.351Z",
-  "updated_at": "2026-11-14T11:57:56.515Z"
+  "created_at": "2026-11-14T18:45:13.324Z",
+  "updated_at": "2026-11-14T18:45:13.402Z"
 }
 ```
 
@@ -923,8 +923,8 @@ Last seen:    -
 Last change:  -
 Outside CIDR: no
 Position:     240, 40
-Created:      2026-11-14 12:57:56
-Updated:      2026-11-14 12:57:56
+Created:      2026-11-14 19:45:13
+Updated:      2026-11-14 19:45:13
 Note:         Toner replaced 2026-11
 ```
 
@@ -957,8 +957,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-14T11:57:56.351Z",
-  "updated_at": "2026-11-14T11:57:56.567Z"
+  "created_at": "2026-11-14T18:45:13.324Z",
+  "updated_at": "2026-11-14T18:45:13.425Z"
 }
 ```
 
@@ -997,8 +997,8 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-14 12:57:56
-Updated:     2026-11-14 12:57:56
+Created:     2026-11-14 19:45:13
+Updated:     2026-11-14 19:45:13
 Note:        -
 ```
 
@@ -1031,8 +1031,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-14T11:57:56.351Z",
-  "updated_at": "2026-11-14T11:57:56.625Z"
+  "created_at": "2026-11-14T18:45:13.324Z",
+  "updated_at": "2026-11-14T18:45:13.45Z"
 }
 ```
 
@@ -1071,8 +1071,8 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-14 12:57:56
-Updated:     2026-11-14 12:57:56
+Created:     2026-11-14 19:45:13
+Updated:     2026-11-14 19:45:13
 Note:        -
 ```
 
@@ -1123,6 +1123,57 @@ inedctl view arrange 2 --group 6 --width 200
 
 ```text
 arranged 1 member
+```
+
+Exit code: `0`
+
+## Copying a group
+
+Copies a group of another view into a custom view: the same group, its subgroups and its hosts at the same relative positions. The hosts stay the same hosts; only the groups are new. A network group's CIDR is not copied.
+
+### Copy network group 4 (lab) with everything in it into view 2
+
+```bash
+curl -s -X POST $INED/api/v1/views/2/copy-group -d '{"group_id":4}'
+```
+
+Response: `200`
+
+```json
+{
+  "view_id": 2,
+  "group_id": 7,
+  "groups": 1,
+  "hosts": 0,
+  "moved": 0
+}
+```
+
+### Error: group 6 is in view 2 already
+
+```bash
+curl -s -X POST $INED/api/v1/views/2/copy-group -d '{"group_id":6}'
+```
+
+Response: `400`
+
+```json
+{
+  "error": {
+    "code": "invalid_argument",
+    "message": "group 6 is in view 2 already"
+  }
+}
+```
+
+### The same with inedctl
+
+```bash
+inedctl group copy 4 --view 2
+```
+
+```text
+copied group 4 to view 2 as group 8: 1 group, 0 hosts (0 moved within the view)
 ```
 
 Exit code: `0`

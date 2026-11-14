@@ -1,6 +1,6 @@
 # Design: fit all on start and after a resize
 
-Status: **proposed** (2026-11-14), waiting for the user's OK.
+Status: **implemented** (2026-11-14): R1–R5 as recommended ("OK, all"), on `feature/fit-on-resize`. Note: "fit all" never zooms above 100 %, so a small map is centred at 100 % after a resize.
 
 User request: "when opening the app with a current view and after a resize or maximize screen also execute a fit-all".
 Read as: when the GUI starts, the current view is fitted, and so is the map after the window is resized or maximized.

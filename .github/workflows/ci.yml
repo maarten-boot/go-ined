@@ -113,7 +113,7 @@ jobs:
       - name: check the archives
         run: |
           cd dist
-          sha256sum -c SHA256SUMS
+          if command -v sha256sum >/dev/null; then sha256sum -c SHA256SUMS; else shasum -a 256 -c SHA256SUMS; fi
           test "$(ls go-ined-gui-* | wc -l)" -eq "$(echo ${{ matrix.archs }} | wc -w)"
           native=go-ined-gui-dev-${GITHUB_SHA::12}-$(go env GOOS)-$(go env GOARCH)
           if [ -f "$native.zip" ]; then 7z x -bd -bso0 "$native.zip"; else tar -xzf "$native.tar.gz"; fi

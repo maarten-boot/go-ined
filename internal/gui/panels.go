@@ -38,6 +38,7 @@ func ConnText(st client.StreamState) string {
 type statusBar struct {
 	obj                       fyne.CanvasObject
 	connL, msgL, warnL, pingL *widget.Label
+	verL                      *widget.Label // the server is older than the GUI (SPEC-728)
 	copyB                     *widget.Button
 	clip                      func() fyne.Clipboard
 	log                       []string // recent messages with their time, newest last
@@ -54,6 +55,7 @@ func newStatusBar(url string, tokenInClear bool, clip func() fyne.Clipboard) *st
 		msgL:  widget.NewLabel(""),
 		warnL: widget.NewLabel(""),
 		pingL: widget.NewLabel(""),
+		verL:  widget.NewLabel(""),
 		clip:  clip,
 	}
 	s.msgL.Truncation = fyne.TextTruncateEllipsis
@@ -61,25 +63,30 @@ func newStatusBar(url string, tokenInClear bool, clip func() fyne.Clipboard) *st
 	s.pingL.TextStyle.Bold = true
 	s.pingL.Truncation = fyne.TextTruncateEllipsis
 	s.pingL.Hide()
+	s.verL.TextStyle.Bold = true
+	s.verL.Truncation = fyne.TextTruncateEllipsis
+	s.verL.Hide()
 	if tokenInClear {
 		s.warnL.SetText("Warning: the token is sent unencrypted; use https")
 		s.warnL.TextStyle.Bold = true
 	}
 	s.copyB = widget.NewButton("Copy", s.copyLog)
-	s.obj = container.NewBorder(s.pingL, nil,
+	s.obj = container.NewBorder(container.NewVBox(s.verL, s.pingL), nil,
 		container.NewHBox(widget.NewLabel(url), widget.NewSeparator(), s.connL, widget.NewSeparator()),
 		container.NewHBox(s.warnL, s.copyB), s.msgL)
 	return s
 }
 
-// copyLog puts the recent messages (and a ping warning) on the clipboard.
+// copyLog puts the recent messages (and the warnings) on the clipboard.
 func (s *statusBar) copyLog() {
 	if s.clip == nil {
 		return
 	}
 	lines := s.log
-	if s.pingL.Text != "" {
-		lines = append([]string{s.pingL.Text}, lines...)
+	for _, w := range []*widget.Label{s.pingL, s.verL} {
+		if w.Text != "" {
+			lines = append([]string{w.Text}, lines...)
+		}
 	}
 	s.clip().SetContent(strings.Join(lines, "\n"))
 }
@@ -92,6 +99,17 @@ func (s *statusBar) ping(warning string) {
 		return
 	}
 	s.pingL.Show()
+}
+
+// version shows (or with "" hides) the warning that the server is older
+// than the GUI (SPEC-728).
+func (s *statusBar) version(warning string) {
+	s.verL.SetText(warning)
+	if warning == "" {
+		s.verL.Hide()
+		return
+	}
+	s.verL.Show()
 }
 
 func (s *statusBar) conn(st client.StreamState) { s.connL.SetText(ConnText(st)) }
@@ -109,7 +127,7 @@ func (s *statusBar) message(m string) {
 
 // Text returns everything the status bar shows (for tests).
 func (s *statusBar) Text() string {
-	return strings.Join([]string{s.connL.Text, s.msgL.Text, s.warnL.Text, s.pingL.Text}, " | ")
+	return strings.Join([]string{s.connL.Text, s.msgL.Text, s.warnL.Text, s.pingL.Text, s.verL.Text}, " | ")
 }
 
 // pingWarning is the status-bar warning for a server that can't ping, or

@@ -119,7 +119,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	g := gui.New(app.NewWithID(appID), gui.Options{
 		Client: c, Contrast: s.contrast, SaveContrast: save, Warnings: s.warnings,
-		WrapNames: s.wrapNames, SaveWrapNames: saveWrap,
+		WrapNames: s.wrapNames, SaveWrapNames: saveWrap, Version: version.Version,
 		Title: "go-ined — " + c.URL(),
 	})
 	g.ShowAndRun()

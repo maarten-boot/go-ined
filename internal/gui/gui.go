@@ -37,6 +37,8 @@ type Options struct {
 	// SaveContrast stores a changed contrast setting (SPEC-005); nil
 	// means it isn't saved.
 	SaveContrast func(theme.Contrast) error
+	// Version is the GUI's version, compared with the server's (SPEC-728).
+	Version string
 	// WrapNames is the start value of the "Wrap names" toggle (SPEC-722);
 	// SaveWrapNames, if set, stores a change.
 	WrapNames     bool
@@ -202,10 +204,14 @@ func (g *GUI) Stop() {
 // the warning goes away once the server finds ICMP (v0.27).
 const healthEvery = 30 * time.Second
 
-// checkHealth updates the ping warning from /health.
+// checkHealth updates the ping warning and the version warning (SPEC-728)
+// from /health.
 func (g *GUI) checkHealth() {
 	if h, err := g.c.Health(g.ctx); err == nil {
-		g.do(func() { g.status.ping(pingWarning(h)) })
+		g.do(func() {
+			g.status.ping(pingWarning(h))
+			g.status.version(versionWarning(h.Version, g.opt.Version))
+		})
 	}
 }
 

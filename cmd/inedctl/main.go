@@ -63,6 +63,7 @@ Commands:
   group expand <id>
   group labels <id> name|ip|both|inherit      (what the GUI shows under the hosts in it)
   group color <id> '#rrggbb'|none              (the colour of its top bar in the GUI)
+  group copy <id> --view V                     (copy it with its subgroups and hosts into custom view V)
   note get|set|clear host|group <id> [text...]   (set reads stdin when no text is given)
   view list
   view add <name> [--order N]

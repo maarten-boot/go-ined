@@ -306,6 +306,13 @@ func (c *Client) MoveGroup(ctx context.Context, groupID int64, dx, dy float64) (
 	return g, c.Do(ctx, http.MethodPost, "/groups/"+id(groupID)+"/move", apitypes.GroupMove{DX: dx, DY: dy}, &g)
 }
 
+// CopyGroup copies a group of another view, with its subgroups and host
+// placements, into a custom view (SPEC-729).
+func (c *Client) CopyGroup(ctx context.Context, viewID, groupID int64) (apitypes.GroupCopyResult, error) {
+	var r apitypes.GroupCopyResult
+	return r, c.Do(ctx, http.MethodPost, "/views/"+id(viewID)+"/copy-group", apitypes.GroupCopy{GroupID: groupID}, &r)
+}
+
 // Arrange lays out the members of a group (in.ParentID nil: the view's
 // root) on a grid (SPEC-510).
 func (c *Client) Arrange(ctx context.Context, viewID int64, in apitypes.Arrange) (apitypes.ArrangeResult, error) {

@@ -215,6 +215,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	}
 	labels := g.labelsItem(view, groups)
 	colour := g.colorItem(groups)
+	copyTo := g.copyToViewItem(view, n.Item)
 	g.mu.Unlock()
 	setAll := func(collapsed bool) {
 		for _, it := range groups {
@@ -232,6 +233,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		fyne.NewMenuItem("Show only this group", func() { g.setFocus(view, id) }),
 		fyne.NewMenuItem("Edit…", func() { g.editGroupDialog(view, id) }),
 		fyne.NewMenuItem(moveLabel, func() { g.moveToDialog(view, targets...) }),
+		copyTo,
 	}
 	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }), labels, colour)
 	if cidr := n.Item.CIDR; cidr != "" {
@@ -321,6 +323,64 @@ func (g *GUI) showInViewItem(h *apitypes.Host) *fyne.MenuItem {
 	}
 	item.ChildMenu = fyne.NewMenu("", sub...)
 	return item
+}
+
+// copyToViewItem is "Show in view ▸" on a group (SPEC-729): every custom
+// view but the group's own; choosing one copies the group with its
+// subgroups and host placements there. A view is ticked when its map is
+// loaded in this GUI and has every host of the group already. Caller
+// holds g.mu.
+func (g *GUI) copyToViewItem(view int64, grp *apitypes.MapItem) *fyne.MenuItem {
+	var hosts []mapmodel.Key
+	if vm := g.model.Map(view); vm != nil {
+		for k := range vm.Items {
+			if k.Type == apitypes.TypeHost && g.model.InFocus(view, grp.ID, k) {
+				hosts = append(hosts, k)
+			}
+		}
+	}
+	id, name := grp.ID, grp.Name
+	var sub []*fyne.MenuItem
+	for _, v := range g.model.Views() {
+		if v.ID == mapmodel.NetworkView || v.ID == view {
+			continue
+		}
+		vid, vname := v.ID, v.Name
+		it := fyne.NewMenuItem(vname, func() { g.copyGroup(vid, vname, id, name) })
+		if tvm := g.model.Map(vid); tvm != nil && len(hosts) > 0 {
+			it.Checked = true
+			for _, k := range hosts {
+				if tvm.Items[k] == nil {
+					it.Checked = false
+					break
+				}
+			}
+		}
+		sub = append(sub, it)
+	}
+	item := fyne.NewMenuItem("Show in view", nil)
+	if len(sub) == 0 {
+		item.Disabled = true
+		return item
+	}
+	item.ChildMenu = fyne.NewMenu("", sub...)
+	return item
+}
+
+// copyGroup copies a group into a custom view and says what it did.
+func (g *GUI) copyGroup(view int64, vname string, group int64, gname string) {
+	go func() {
+		r, err := g.c.CopyGroup(g.ctx, view, group)
+		if err != nil {
+			g.fail(fmt.Sprintf("copy group %d to view %d", group, view), err)
+			return
+		}
+		msg := fmt.Sprintf("%q copied to %q: %s, %s", gname, vname, plural(r.Groups, "group"), plural(r.Hosts, "host"))
+		if r.Moved > 0 {
+			msg += fmt.Sprintf(", %d of them moved from elsewhere in %q", r.Moved, vname)
+		}
+		g.do(func() { g.status.message(msg) })
+	}()
 }
 
 func (g *GUI) place(view, host int64) {

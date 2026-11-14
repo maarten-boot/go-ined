@@ -83,6 +83,7 @@ func TestOpenAPI(t *testing.T) {
 		"GroupStatusEvent": apitypes.GroupStatusEvent{}, "GroupMovedEvent": apitypes.GroupMovedEvent{},
 		"PlacementDeletedEvent": apitypes.PlacementDeletedEvent{}, "ResyncEvent": apitypes.ResyncEvent{},
 		"Arrange": apitypes.Arrange{}, "ArrangeResult": apitypes.ArrangeResult{}, "MapArrangedEvent": apitypes.MapArrangedEvent{},
+		"GroupCopy": apitypes.GroupCopy{}, "GroupCopyResult": apitypes.GroupCopyResult{},
 	} {
 		sc, ok := doc.Components.Schemas[name]
 		if !ok {
@@ -112,8 +113,8 @@ func TestOpenAPI(t *testing.T) {
 			}
 		}
 	}
-	if len(doc.Components.Schemas) != 27 {
-		t.Errorf("%d schemas, want the 27 checked", len(doc.Components.Schemas))
+	if len(doc.Components.Schemas) != 29 {
+		t.Errorf("%d schemas, want the 29 checked", len(doc.Components.Schemas))
 	}
 
 	// Served without a token, as JSON.

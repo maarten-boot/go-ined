@@ -135,6 +135,7 @@ func newServer(svc *inventory.Service, opts Options) (*server, http.Handler) {
 	route("/views/{id}", map[string]http.HandlerFunc{"GET": s.getView, "PATCH": s.patchView, "DELETE": s.deleteView})
 	route("/views/{id}/hosts/{host_id}", map[string]http.HandlerFunc{"PUT": s.placeHost, "DELETE": s.unplaceHost})
 	route("/views/{id}/arrange", map[string]http.HandlerFunc{"POST": s.arrange})
+	route("/views/{id}/copy-group", map[string]http.HandlerFunc{"POST": s.copyGroup})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, apitypes.CodeNotFound, "no such endpoint: "+r.URL.Path)
 	})

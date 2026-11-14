@@ -302,6 +302,24 @@ type ArrangeResult struct {
 	Moved    int    `json:"moved"`
 }
 
+// GroupCopy is the body of POST /views/{id}/copy-group (SPEC-729): copy a
+// group of another view, with its subgroups and host placements, into this
+// custom view.
+type GroupCopy struct {
+	GroupID int64 `json:"group_id"`
+}
+
+// GroupCopyResult is the answer of POST /views/{id}/copy-group: the new
+// top group, how many groups and host placements were made, and how many
+// of those hosts were in the view already and moved into the copy.
+type GroupCopyResult struct {
+	ViewID  int64 `json:"view_id"`
+	GroupID int64 `json:"group_id"`
+	Groups  int   `json:"groups"`
+	Hosts   int   `json:"hosts"`
+	Moved   int   `json:"moved"`
+}
+
 // Host label modes of a group (SPEC-725): what the GUI shows under the
 // hosts inside it. LabelsInherit takes the parent group's mode; at the
 // root that is LabelsName.

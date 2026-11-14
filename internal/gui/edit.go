@@ -3,6 +3,7 @@ package gui
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -163,10 +164,13 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		}
 	}
 	moveLabel, delLabel := "Move to group…", "Delete "+k.Type+"…"
+	removeLabel, showLabel := "Remove from this view", "Show in view"
 	switch {
 	case len(targets) > 1:
 		moveLabel = fmt.Sprintf("Move %d items to group…", len(targets))
 		delLabel = fmt.Sprintf("Delete %d items…", len(targets))
+		removeLabel = fmt.Sprintf("Remove %d items from this view", len(targets))
+		showLabel = fmt.Sprintf("Show %d items in view", len(targets))
 	case targets[0] != k: // only the selected group this item is in
 		g.mu.Lock()
 		name := ""
@@ -176,6 +180,14 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		g.mu.Unlock()
 		what := fmt.Sprintf("%s %q", targets[0].Type, name)
 		moveLabel, delLabel = "Move "+what+" to group…", "Delete "+what+"…"
+		removeLabel, showLabel = "Remove "+what+" from this view", "Show "+what+" in view"
+	}
+	// "Show in view ▸" and "Remove from this view" act on the selection
+	// too (D4, D5); removing exists in custom views only (D3).
+	onSelection := len(targets) > 1 || targets[0] != k
+	var remove *fyne.MenuItem
+	if view != mapmodel.NetworkView {
+		remove = fyne.NewMenuItem(removeLabel, func() { g.removeFromView(view, targets) })
 	}
 	deleteTargets := func() {
 		if len(targets) == 1 {
@@ -189,11 +201,17 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 			fyne.NewMenuItem("Edit…", func() { g.editHostDialog(k.ID) }),
 			fyne.NewMenuItem(moveLabel, func() { g.moveToDialog(view, targets...) }),
 		}
-		if h != nil {
-			items = append(items, g.showInViewItem(h), g.connectItem(h))
+		switch {
+		case onSelection:
+			items = append(items, g.showManyInViewItem(view, targets, showLabel))
+		case h != nil:
+			items = append(items, g.showInViewItem(h))
 		}
-		if view != mapmodel.NetworkView {
-			items = append(items, fyne.NewMenuItem("Remove from this view", func() { g.unplace(view, k.ID) }))
+		if h != nil {
+			items = append(items, g.connectItem(h))
+		}
+		if remove != nil {
+			items = append(items, remove)
 		}
 		return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem(delLabel, deleteTargets))
 	}
@@ -215,8 +233,15 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	}
 	labels := g.labelsItem(view, groups)
 	colour := g.colorItem(groups)
-	copyTo := g.copyToViewItem(view, n.Item)
 	g.mu.Unlock()
+	var copyTo *fyne.MenuItem
+	if onSelection {
+		copyTo = g.showManyInViewItem(view, targets, showLabel)
+	} else {
+		g.mu.Lock()
+		copyTo = g.copyToViewItem(view, n.Item)
+		g.mu.Unlock()
+	}
 	setAll := func(collapsed bool) {
 		for _, it := range groups {
 			g.setCollapsed(it.ID, collapsed)
@@ -240,6 +265,9 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		scan := fyne.NewMenuItem("Scan this network", func() { g.openDiscovery(cidr) })
 		scan.Disabled = strings.Contains(cidr, ":") // IPv6 (SPEC-707)
 		items = append(items, scan)
+	}
+	if remove != nil {
+		items = append(items, remove)
 	}
 	if parent != nil {
 		items = append(items, fyne.NewMenuItemSeparator())
@@ -391,14 +419,171 @@ func (g *GUI) place(view, host int64) {
 	}()
 }
 
-// unplace removes a host from a custom view; no question, as the host
-// stays (SPEC-721).
-func (g *GUI) unplace(view, host int64) {
-	go func() {
-		if err := g.c.UnplaceHost(g.ctx, view, host); err != nil {
-			g.fail(fmt.Sprintf("remove host %d from view %d", host, view), err)
+// showManyInViewItem is "Show in view ▸" on a selection (D5): every
+// custom view but this one. Choosing one places the selected hosts there
+// and copies the selected groups (SPEC-729). A view is ticked when its map
+// is loaded in this GUI and has every host of the selection, those inside
+// the selected groups included.
+func (g *GUI) showManyInViewItem(view int64, keys []mapmodel.Key, label string) *fyne.MenuItem {
+	g.mu.Lock()
+	var hosts []mapmodel.Key
+	for _, k := range keys {
+		if k.Type == apitypes.TypeHost {
+			hosts = append(hosts, k)
+			continue
 		}
+		for s := range g.model.Subtree(view, k.ID) {
+			if s.Type == apitypes.TypeHost {
+				hosts = append(hosts, s)
+			}
+		}
+	}
+	var sub []*fyne.MenuItem
+	for _, v := range g.model.Views() {
+		if v.ID == mapmodel.NetworkView || v.ID == view {
+			continue
+		}
+		vid, vname := v.ID, v.Name
+		it := fyne.NewMenuItem(vname, func() { g.showManyInView(view, vid, vname, keys) })
+		if tvm := g.model.Map(vid); tvm != nil && len(hosts) > 0 {
+			it.Checked = true
+			for _, k := range hosts {
+				if tvm.Items[k] == nil {
+					it.Checked = false
+					break
+				}
+			}
+		}
+		sub = append(sub, it)
+	}
+	g.mu.Unlock()
+	item := fyne.NewMenuItem(label, nil)
+	if len(sub) == 0 {
+		item.Disabled = true
+		return item
+	}
+	item.ChildMenu = fyne.NewMenu("", sub...)
+	return item
+}
+
+// showManyInView places the hosts among keys in view to (at its root,
+// unless they are there already) and copies the groups there, then sums it
+// up in the status bar (D5).
+func (g *GUI) showManyInView(from, to int64, vname string, keys []mapmodel.Key) {
+	go func() {
+		var placed, there, copied, groups, hosts int
+		var nHosts int
+		for _, k := range keys {
+			if k.Type != apitypes.TypeHost {
+				continue
+			}
+			nHosts++
+			h, err := g.c.Host(g.ctx, k.ID)
+			if err == nil && slices.Contains(h.Views, to) {
+				there++
+				continue
+			}
+			if err == nil {
+				_, err = g.c.PlaceHost(g.ctx, to, k.ID, apitypes.PlacementSet{})
+			}
+			if err != nil {
+				g.fail(fmt.Sprintf("show host %d in view %d", k.ID, to), err)
+				return
+			}
+			placed++
+		}
+		for _, k := range keys {
+			if k.Type != apitypes.TypeGroup {
+				continue
+			}
+			r, err := g.c.CopyGroup(g.ctx, to, k.ID)
+			if err != nil {
+				g.fail(fmt.Sprintf("copy group %d to view %d", k.ID, to), err)
+				return
+			}
+			copied++
+			groups += r.Groups
+			hosts += r.Hosts
+		}
+		var parts []string
+		if nHosts > 0 {
+			p := "placed " + plural(placed, "host")
+			if there > 0 {
+				p += fmt.Sprintf(" (%d already there)", there)
+			}
+			parts = append(parts, p)
+		}
+		if copied > 0 {
+			parts = append(parts, fmt.Sprintf("copied %s (%s, %s in all)", plural(copied, "group"), plural(groups, "group"), plural(hosts, "host")))
+		}
+		msg := fmt.Sprintf("%q: %s", vname, strings.Join(parts, ", "))
+		g.do(func() { g.status.message(msg) })
 	}()
+}
+
+// removeFromView takes items out of a custom view (D3, D4): hosts are
+// unplaced, groups are deleted with everything in them, which in a custom
+// view only removes their hosts from it (SPEC-120). The hosts stay in the
+// network view and in other views. It asks first when a group has
+// contents (the dialog is returned for tests); otherwise it goes at once.
+func (g *GUI) removeFromView(view int64, keys []mapmodel.Key) *formDialog {
+	g.mu.Lock()
+	vname := strconv.FormatInt(view, 10)
+	if v, ok := g.model.View(view); ok {
+		vname = v.Name
+	}
+	var hosts, groups, inHosts, inGroups int // selected, and inside the selected groups
+	for _, k := range keys {
+		if k.Type == apitypes.TypeHost {
+			hosts++
+			continue
+		}
+		groups++
+		h, gs := g.model.Contents(view, k.ID)
+		inHosts, inGroups = inHosts+h, inGroups+gs
+	}
+	what := fmt.Sprintf("%d items (%s, %s in all)", len(keys), plural(groups+inGroups, "group"), plural(hosts+inHosts, "host"))
+	if len(keys) == 1 {
+		name := ""
+		if it := g.item(view, keys[0]); it != nil {
+			name = it.Name
+		}
+		what = fmt.Sprintf("%s %q", keys[0].Type, name)
+		if groups == 1 && inHosts+inGroups > 0 {
+			what += fmt.Sprintf(" (%s, %s)", plural(inGroups, "subgroup"), plural(inHosts, "host"))
+		}
+	}
+	g.mu.Unlock()
+	done := fmt.Sprintf("Removed %s from %q", what, vname)
+	run := func() error {
+		for _, k := range keys { // hosts first, then groups
+			if k.Type == apitypes.TypeHost {
+				if err := g.c.UnplaceHost(g.ctx, view, k.ID); err != nil {
+					return fmt.Errorf("host %d: %w", k.ID, err)
+				}
+			}
+		}
+		for _, k := range keys {
+			if k.Type == apitypes.TypeGroup {
+				if err := g.c.DeleteGroup(g.ctx, k.ID, apitypes.ChildrenCascade); err != nil {
+					return fmt.Errorf("group %d: %w", k.ID, err)
+				}
+			}
+		}
+		g.do(func() { g.status.message(done) })
+		return nil
+	}
+	if inHosts+inGroups == 0 { // only hosts and empty groups: no question
+		go func() {
+			if err := run(); err != nil {
+				g.fail(fmt.Sprintf("remove from view %q", vname), err)
+			}
+		}()
+		return nil
+	}
+	l := widget.NewLabel(fmt.Sprintf("Remove %s from %q? The hosts stay in the network view and in the other views they are in.", what, vname))
+	l.Wrapping = fyne.TextWrapWord
+	return g.showForm("Remove from this view", "Remove", []*widget.FormItem{widget.NewFormItem("", l)}, run)
 }
 
 // deleteSelected asks to delete the selected items of the current tab

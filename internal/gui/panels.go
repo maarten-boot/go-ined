@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	fynetheme "fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/maarten-boot/go-ined/internal/gui/mapmodel"
@@ -149,6 +150,7 @@ type details struct {
 	obj   fyne.CanvasObject
 	title *widget.Label
 	form  *fyne.Container
+	body  *fyne.Container // the rows, then the note (D2)
 	note  *widget.Entry
 	save  *widget.Button
 
@@ -163,6 +165,7 @@ type details struct {
 func newDetails(g *GUI) *details {
 	d := &details{g: g, title: widget.NewLabel("Nothing selected"), form: container.New(layout.NewFormLayout())}
 	d.title.TextStyle.Bold = true
+	d.title.Selectable = true // D1: can be copied
 	d.note = widget.NewMultiLineEntry()
 	d.note.SetPlaceHolder("Note")
 	d.note.Wrapping = fyne.TextWrapWord
@@ -170,9 +173,51 @@ func newDetails(g *GUI) *details {
 	d.save = widget.NewButton("Save note", d.saveNote)
 	d.note.Disable()
 	d.save.Disable()
-	d.obj = container.NewBorder(d.title, container.NewVBox(widget.NewLabel("Note"), d.note, g.bordered(d.save)), nil, nil,
-		container.NewVScroll(d.form))
+	// The note follows the rows and takes the rest of the height (D2).
+	d.body = container.New(growLayout{grow: 2}, d.form, widget.NewLabel("Note"), d.note, g.bordered(d.save))
+	d.obj = container.NewBorder(d.title, nil, nil, nil, container.NewVScroll(d.body))
 	return d
+}
+
+// growLayout stacks its objects at their minimum heights, like a VBox,
+// and gives the rest of the height to the object at index grow. In a
+// vertical scroll this fills the viewport, and scrolls once the minimum
+// heights don't fit.
+type growLayout struct{ grow int }
+
+func (l growLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	var s fyne.Size
+	n := 0
+	for _, o := range objs {
+		if !o.Visible() {
+			continue
+		}
+		m := o.MinSize()
+		s.Width = max(s.Width, m.Width)
+		s.Height += m.Height
+		n++
+	}
+	if n > 1 {
+		s.Height += float32(n-1) * fynetheme.Padding()
+	}
+	return s
+}
+
+func (l growLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	extra := max(0, size.Height-l.MinSize(objs).Height)
+	y := float32(0)
+	for i, o := range objs {
+		if !o.Visible() {
+			continue
+		}
+		h := o.MinSize().Height
+		if i == l.grow {
+			h += extra
+		}
+		o.Move(fyne.NewPos(0, y))
+		o.Resize(fyne.NewSize(size.Width, h))
+		y += h + fynetheme.Padding()
+	}
 }
 
 func (d *details) clear() {
@@ -393,6 +438,7 @@ func (d *details) fill() {
 		k.TextStyle.Bold = true
 		v := widget.NewLabel(r[1])
 		v.Wrapping = fyne.TextWrapWord
+		v.Selectable = true // D1: select and copy with Ctrl+C
 		objs = append(objs, k, v)
 	}
 	d.form.Objects = objs

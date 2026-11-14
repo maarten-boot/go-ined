@@ -257,6 +257,13 @@ func (c *Client) Host(ctx context.Context, hostID int64) (apitypes.Host, error) 
 	return h, c.Do(ctx, http.MethodGet, "/hosts/"+id(hostID), nil, &h)
 }
 
+// CheckServices checks a host's services now and returns the host with
+// the result (SPEC-309). It takes about a second.
+func (c *Client) CheckServices(ctx context.Context, hostID int64) (apitypes.Host, error) {
+	var h apitypes.Host
+	return h, c.Do(ctx, http.MethodPost, "/hosts/"+id(hostID)+"/check-services", nil, &h)
+}
+
 // CreateHost adds a host.
 func (c *Client) CreateHost(ctx context.Context, in apitypes.HostCreate) (apitypes.Host, error) {
 	var h apitypes.Host

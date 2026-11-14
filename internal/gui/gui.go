@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"net/url"
 	"sync"
 	"time"
 
@@ -43,6 +44,13 @@ type Options struct {
 	// SaveWrapNames, if set, stores a change.
 	WrapNames     bool
 	SaveWrapNames func(bool) error
+	// Connect holds the commands of the host menu's "Connect" (SPEC-731);
+	// empty ones are the platform's defaults. Start runs such a command
+	// and OpenURL opens a web page; nil = the real ones (tests replace
+	// them).
+	Connect ConnectCommands
+	Start   func(argv []string, failed func(error)) error
+	OpenURL func(*url.URL) error
 	// Warnings are shown in the status bar at start (config problems).
 	Warnings []string
 	// Title of the window; default "go-ined".

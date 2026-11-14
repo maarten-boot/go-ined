@@ -28,6 +28,11 @@ enabled     = true           # false = no reverse lookups; PTR names stay as sto
 refresh     = "1h"           # PTR refresh interval.
 concurrency = 20             # Lookups running at the same time.
 
+[services]                   # SPEC-309: which of SSH, RDP, VNC (5900-5909), HTTP, HTTPS a host offers.
+enabled = true               # false = no checks, not even on request; the Connect menu shows no ticks.
+refresh = "6h"               # Time between checks of a monitored host. New hosts are checked at once.
+timeout = "1s"               # How long one TCP connect may take.
+
 [events]                     # SPEC-503
 buffer = 1000                # Events kept for Last-Event-ID replay.
 

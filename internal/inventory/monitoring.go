@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"net/netip"
+	"slices"
 	"time"
 
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -108,4 +109,64 @@ func (s *Service) ApplyObservations(ctx context.Context, obs []Observation) erro
 	}
 	s.emitGroupStatus(before)
 	return nil
+}
+
+// ServiceTarget is a host for the service check (SPEC-309).
+type ServiceTarget struct {
+	ID        int64
+	IP        netip.Addr
+	Monitored bool
+	CheckedAt time.Time // zero = never checked
+}
+
+// ServiceTargets returns every host with the time of its last service
+// check, ordered by ID.
+func (s *Service) ServiceTargets() []ServiceTarget {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]ServiceTarget, 0, len(s.m.Hosts))
+	for _, id := range sortedKeys(s.m.Hosts) {
+		h := s.m.Hosts[id]
+		out = append(out, ServiceTarget{ID: h.ID, IP: h.IP, Monitored: h.Monitored, CheckedAt: h.ServicesAt})
+	}
+	return out
+}
+
+// ServiceTarget returns one host for a check on request, or a not-found
+// error.
+func (s *Service) ServiceTarget(id int64) (ServiceTarget, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	h := s.m.Hosts[id]
+	if h == nil {
+		return ServiceTarget{}, notFoundf("host %d not found", id)
+	}
+	return ServiceTarget{ID: h.ID, IP: h.IP, Monitored: h.Monitored, CheckedAt: h.ServicesAt}, nil
+}
+
+// SetServices records the result of a service check of ip at time at
+// (SPEC-309). A result for a host that is gone or has another IP by now is
+// dropped (ok = false). The time is always saved; host.updated is emitted
+// only when the list changes or the host had never been checked, so the
+// periodic check of an unchanged host sends nothing.
+func (s *Service) SetServices(ctx context.Context, id int64, ip netip.Addr, services []string, at time.Time) (h apitypes.Host, ok bool, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cur := s.m.Hosts[id]
+	if cur == nil || cur.IP != ip {
+		return apitypes.Host{}, false, nil
+	}
+	n := *cur
+	n.Services = slices.Clone(services)
+	n.ServicesAt = at.UTC().Truncate(time.Millisecond)
+	if err := s.repo.Apply(ctx, Changes{Hosts: []Host{n}}); err != nil {
+		return apitypes.Host{}, false, err
+	}
+	changed := cur.ServicesAt.IsZero() || !slices.Equal(cur.Services, n.Services)
+	*cur = n
+	v := s.hostView(cur)
+	if changed {
+		s.notify.Publish(apitypes.EventHostUpdated, v)
+	}
+	return v, true, nil
 }

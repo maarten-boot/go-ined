@@ -41,6 +41,9 @@ type Options struct {
 	ICMP func() ICMPInfo
 	// Discovery runs discovery jobs; nil = the endpoints answer 404.
 	Discovery Discovery
+	// Services checks a host's services on request (SPEC-309); nil = the
+	// endpoint answers 503 (services.enabled = false).
+	Services ServiceChecker
 	// Keepalive is the SSE keepalive interval; 0 = 30 s (SPEC-502).
 	Keepalive time.Duration
 	// WriteTimeout disconnects an SSE client that accepts no data for this
@@ -53,6 +56,11 @@ type Discovery interface {
 	Start(ctx context.Context, in apitypes.DiscoveryCreate) (apitypes.Discovery, error)
 	Get(id string) (apitypes.Discovery, error)
 	Cancel(id string) (apitypes.Discovery, error)
+}
+
+// ServiceChecker is what the API needs from services.Checker.
+type ServiceChecker interface {
+	Check(ctx context.Context, id int64) (apitypes.Host, error)
 }
 
 // ICMPInfo is the ICMP state shown by /health. Error set and Mode
@@ -128,6 +136,7 @@ func newServer(svc *inventory.Service, opts Options) (*server, http.Handler) {
 	}
 	route("/hosts", map[string]http.HandlerFunc{"GET": s.listHosts, "POST": s.createHost})
 	route("/hosts/{id}", map[string]http.HandlerFunc{"GET": s.getHost, "PATCH": s.patchHost, "DELETE": s.deleteHost})
+	route("/hosts/{id}/check-services", map[string]http.HandlerFunc{"POST": s.checkServices})
 	route("/groups", map[string]http.HandlerFunc{"GET": s.listGroups, "POST": s.createGroup})
 	route("/groups/{id}", map[string]http.HandlerFunc{"GET": s.getGroup, "PATCH": s.patchGroup, "DELETE": s.deleteGroup})
 	route("/groups/{id}/move", map[string]http.HandlerFunc{"POST": s.moveGroup})
@@ -224,6 +233,26 @@ func (s *server) getHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h, err := s.svc.Host(id)
+	s.respond(w, http.StatusOK, h, err)
+}
+
+// checkServices checks a host's services now and answers the host
+// (SPEC-309, SPEC-511). It takes about the connect timeout (1 s).
+func (s *server) checkServices(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if s.opts.Services == nil {
+		if _, err := s.svc.Host(id); err != nil {
+			s.respond(w, http.StatusOK, nil, err)
+			return
+		}
+		writeError(w, http.StatusServiceUnavailable, apitypes.CodeUnavailable,
+			"service checks are turned off on the server (services.enabled = false)")
+		return
+	}
+	h, err := s.opts.Services.Check(r.Context(), id)
 	s.respond(w, http.StatusOK, h, err)
 }
 

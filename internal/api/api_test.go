@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/maarten-boot/go-ined/internal/events"
 	"github.com/maarten-boot/go-ined/internal/inventory"
@@ -29,7 +31,15 @@ type env struct {
 	svc   *inventory.Service
 	bus   *events.Bus
 	runs  int // number of starts; the run id is "run<runs>"
+	// services, if set, is what a service check finds (SPEC-309); nil =
+	// checks are turned off.
+	services []string
 }
+
+// checkerFunc is an api.ServiceChecker.
+type checkerFunc func(ctx context.Context, id int64) (apitypes.Host, error)
+
+func (f checkerFunc) Check(ctx context.Context, id int64) (apitypes.Host, error) { return f(ctx, id) }
 
 // newEnv starts a real server (SQLite store + inventory + HTTP).
 func newEnv(t *testing.T, token string) *env {
@@ -53,7 +63,18 @@ func (e *env) start() {
 	run := "run" + strconv.Itoa(e.runs)
 	e.st, e.svc, e.bus = st, svc, events.New(run, 1000)
 	svc.SetNotifier(e.bus)
-	e.srv = httptest.NewServer(New(svc, Options{Token: e.token, Version: "test", RunID: run, DBPing: st.Ping, Events: e.bus}))
+	var checker ServiceChecker
+	if e.services != nil {
+		checker = checkerFunc(func(ctx context.Context, id int64) (apitypes.Host, error) {
+			t, err := svc.ServiceTarget(id)
+			if err != nil {
+				return apitypes.Host{}, err
+			}
+			h, _, err := svc.SetServices(ctx, id, t.IP, e.services, time.Now())
+			return h, err
+		})
+	}
+	e.srv = httptest.NewServer(New(svc, Options{Token: e.token, Version: "test", RunID: run, DBPing: st.Ping, Events: e.bus, Services: checker}))
 	e.t.Cleanup(e.stop)
 }
 
@@ -598,5 +619,43 @@ func TestGroupColor(t *testing.T) {
 	e.want(200, "PATCH", "/groups/"+itoa(g.ID), `{"color": ""}`, &g)
 	if g.Color != "" {
 		t.Errorf("cleared: %+v", g)
+	}
+}
+
+// TC-510: POST /hosts/{id}/check-services answers the host with its
+// services and the time of the check; GET shows them after a restart;
+// 503 while checks are turned off, 404 for an unknown host (SPEC-511).
+func TestCheckServicesAPI(t *testing.T) {
+	e := newEnv(t, "")
+	var h apitypes.Host
+	e.want(201, "POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1"}, &h)
+	if h.Services != nil || h.ServicesCheckedAt != nil {
+		t.Fatalf("new host: %v %v", h.Services, h.ServicesCheckedAt)
+	}
+	e.wantErr(503, apitypes.CodeUnavailable, "POST", "/hosts/"+itoa(h.ID)+"/check-services", nil)
+	e.wantErr(404, "not_found", "POST", "/hosts/99/check-services", nil)
+
+	e.services = []string{"ssh", "vnc:1"}
+	e.restart()
+	e.want(200, "POST", "/hosts/"+itoa(h.ID)+"/check-services", nil, &h)
+	if !slices.Equal(h.Services, []string{"ssh", "vnc:1"}) || h.ServicesCheckedAt == nil {
+		t.Fatalf("checked: %v %v", h.Services, h.ServicesCheckedAt)
+	}
+	e.wantErr(404, "not_found", "POST", "/hosts/99/check-services", nil)
+	e.wantErr(405, "method_not_allowed", "GET", "/hosts/"+itoa(h.ID)+"/check-services", nil)
+	e.restart()
+	var got apitypes.Host
+	e.want(200, "GET", "/hosts/"+itoa(h.ID), nil, &got)
+	if !slices.Equal(got.Services, h.Services) || !got.ServicesCheckedAt.Equal(*h.ServicesCheckedAt) {
+		t.Fatalf("after restart: %v %v", got.Services, got.ServicesCheckedAt)
+	}
+	// No ports open: [] (checked), not null (never checked).
+	e.services = []string{}
+	e.restart()
+	var raw json.RawMessage
+	e.want(200, "POST", "/hosts/"+itoa(h.ID)+"/check-services", nil, &raw)
+	var flat bytes.Buffer
+	if err := json.Compact(&flat, raw); err != nil || !strings.Contains(flat.String(), `"services":[]`) {
+		t.Fatalf("empty result: %s", raw)
 	}
 }

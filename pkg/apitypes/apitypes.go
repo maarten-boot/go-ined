@@ -181,10 +181,15 @@ type Host struct {
 	Stale       bool       `json:"stale"`
 	OutsideCIDR bool       `json:"outside_cidr"`
 	Views       []int64    `json:"views"` // views the host is placed in, network view first (v0.21, SPEC-509)
-	X           float64    `json:"x"`
-	Y           float64    `json:"y"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	// Services whose TCP port answered at the last check (SPEC-309), such
+	// as "ssh", "rdp", "vnc" (5900), "vnc:1" (5901), "http" and "https";
+	// null and services_checked_at null while never checked (v0.47).
+	Services          []string   `json:"services"`
+	ServicesCheckedAt *time.Time `json:"services_checked_at"`
+	X                 float64    `json:"x"`
+	Y                 float64    `json:"y"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 // Group is a group as returned by the API (SPEC-102). CIDR is empty for an
@@ -462,3 +467,12 @@ func (o *Opt[T]) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON implements json.Marshaler.
 func (o Opt[T]) MarshalJSON() ([]byte, error) { return json.Marshal(o.Value) }
+
+// ServiceLabel is how a service name from Host.Services is shown: "vnc:1"
+// becomes "vnc :1"; other names are unchanged (SPEC-309).
+func ServiceLabel(name string) string {
+	if d, ok := strings.CutPrefix(name, "vnc:"); ok {
+		return "vnc :" + d
+	}
+	return name
+}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/maarten-boot/go-ined/internal/services"
 	"github.com/maarten-boot/go-ined/internal/testserver"
 	"github.com/maarten-boot/go-ined/internal/version"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -559,5 +561,32 @@ func TestViewArrange(t *testing.T) {
 	contains(t, ok(t, u, "host", "show", "2"), "Position:", "340, 160")
 	if r := ctl(t, u, "view", "arrange", "1", "--width", "3"); r.code != 1 {
 		t.Errorf("bad width: %+v", r)
+	}
+}
+
+// TC-510 (CLI): host services shows "not checked yet", --check checks the
+// ports and shows what answered; host show has a Services line.
+func TestHostServices(t *testing.T) {
+	isolate(t)
+	open := map[string]bool{"192.0.2.1:22": true, "192.0.2.1:5901": true}
+	s := testserver.Start(t, testserver.Options{Services: services.Config{
+		Dial: func(_ context.Context, _, addr string) (net.Conn, error) {
+			if open[addr] {
+				c, _ := net.Pipe()
+				return c, nil
+			}
+			return nil, errors.New("connection refused")
+		},
+	}})
+	u := "--url=" + s.URL()
+	ok(t, u, "host", "add", "192.0.2.1")
+	contains(t, ok(t, u, "host", "services", "1"), "not checked yet\n")
+	contains(t, ok(t, u, "host", "services", "1", "--check"), "ssh, vnc :1 (checked ")
+	contains(t, ok(t, u, "host", "show", "1"), "Services:", "ssh, vnc :1 (checked ")
+	if r := ctl(t, u, "host", "services", "9", "--check"); r.code != 1 {
+		t.Errorf("unknown host: %+v", r)
+	}
+	if r := ctl(t, u, "host", "services"); r.code != 2 {
+		t.Errorf("no id: %+v", r)
 	}
 }

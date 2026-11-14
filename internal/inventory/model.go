@@ -66,9 +66,14 @@ type Host struct {
 	LastSeen    time.Time // zero = never
 	LastChange  time.Time // zero = never
 	Stale       bool      // not persisted (SPEC-603)
-	X, Y        float64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// Services lists the services whose TCP port answered at the last
+	// check, such as "ssh" or "vnc:1"; ServicesAt is when that was (zero =
+	// never checked) (SPEC-309).
+	Services   []string
+	ServicesAt time.Time
+	X, Y       float64
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // Group is a node of the tree (SPEC-102). A group with a valid CIDR is a

@@ -31,6 +31,7 @@ import (
 	"github.com/maarten-boot/go-ined/internal/events"
 	"github.com/maarten-boot/go-ined/internal/inventory"
 	"github.com/maarten-boot/go-ined/internal/monitor"
+	"github.com/maarten-boot/go-ined/internal/services"
 	"github.com/maarten-boot/go-ined/internal/store"
 	"github.com/maarten-boot/go-ined/internal/version"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -191,7 +192,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 		return ""
 	}
 
-	// Background work: monitoring and reverse DNS.
+	// Background work: monitoring, reverse DNS and service checks.
 	bgCtx, bgStop := context.WithCancel(context.Background())
 	defer bgStop()
 	var bgWG sync.WaitGroup
@@ -231,6 +232,14 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	} else {
 		log.Info("reverse DNS disabled by config (dns.enabled = false)")
 	}
+	var checker api.ServiceChecker // nil: the endpoint answers 503
+	if cfg.Services.Enabled {
+		c := services.New(svc, services.Config{Refresh: cfg.Services.Refresh, Timeout: cfg.Services.Timeout}, log)
+		goBG(c.Run)
+		checker = c
+	} else {
+		log.Info("service checks disabled by config (services.enabled = false)")
+	}
 	disc := discovery.New(svc, prober, "", bus, runID, discovery.Config{
 		MaxPrefix: cfg.Discovery.MaxPrefix, Rate: cfg.Discovery.Rate,
 		Concurrency: cfg.Discovery.Concurrency, Timeout: cfg.Monitor.Timeout,
@@ -250,7 +259,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 
 	handler := api.New(svc, api.Options{
 		Token: cfg.Server.Token, Version: version.Version, RunID: runID, DBPing: st.Ping, Logger: log,
-		Events: bus, Discovery: disc,
+		Events: bus, Discovery: disc, Services: checker,
 		ICMP: func() api.ICMPInfo {
 			icmpMu.Lock()
 			defer icmpMu.Unlock()

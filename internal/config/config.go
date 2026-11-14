@@ -30,6 +30,7 @@ type Server struct {
 	Monitor   MonitorSection   `toml:"monitor"`
 	Discovery DiscoverySection `toml:"discovery"`
 	DNS       DNSSection       `toml:"dns"`
+	Services  ServicesSection  `toml:"services"`
 	Events    EventsSection    `toml:"events"`
 	Log       LogSection       `toml:"log"`
 }
@@ -71,6 +72,13 @@ type DNSSection struct {
 	Concurrency int           `toml:"concurrency"`
 }
 
+// ServicesSection holds the service check settings (SPEC-309).
+type ServicesSection struct {
+	Enabled bool          `toml:"enabled"`
+	Refresh time.Duration `toml:"refresh"`
+	Timeout time.Duration `toml:"timeout"`
+}
+
 // EventsSection holds the event buffer settings (SPEC-503).
 type EventsSection struct {
 	Buffer int `toml:"buffer"`
@@ -109,6 +117,16 @@ type GUI struct {
 	Server   ClientServer    `toml:"server"`
 	Contrast ContrastSection `toml:"contrast"`
 	Map      MapSection      `toml:"map"`
+	Connect  ConnectSection  `toml:"connect"`
+}
+
+// ConnectSection holds the commands of a host's "Connect" menu (SPEC-731).
+// Each is split into words like a shell would, without running a shell;
+// {ip}, {name} and {port} are filled in. Empty = the platform's default.
+type ConnectSection struct {
+	SSH string `toml:"ssh"`
+	RDP string `toml:"rdp"`
+	VNC string `toml:"vnc"`
 }
 
 // MapSection holds the map display settings of the GUI.
@@ -132,6 +150,7 @@ func DefaultServer() Server {
 		Monitor:   MonitorSection{Enabled: true, Interval: 60 * time.Second, Count: 3, Timeout: time.Second, DownAfter: 2},
 		Discovery: DiscoverySection{MaxPrefix: 16, Rate: 200, Concurrency: 64},
 		DNS:       DNSSection{Enabled: true, Refresh: time.Hour, Concurrency: 20},
+		Services:  ServicesSection{Enabled: true, Refresh: 6 * time.Hour, Timeout: time.Second},
 		Events:    EventsSection{Buffer: 1000},
 		Log:       LogSection{Level: "info", Format: "text"},
 	}
@@ -292,6 +311,9 @@ func (c Server) Validate() error {
 	}
 	if c.DNS.Refresh <= 0 || c.DNS.Concurrency < 1 {
 		errs = append(errs, errors.New("dns.refresh must be positive and dns.concurrency at least 1"))
+	}
+	if c.Services.Refresh <= 0 || c.Services.Timeout <= 0 {
+		errs = append(errs, errors.New("services.refresh and services.timeout must be positive"))
 	}
 	if c.Events.Buffer < 1 {
 		errs = append(errs, errors.New("events.buffer must be at least 1"))

@@ -84,7 +84,7 @@ type GUI struct {
 	details   *details
 	status    *statusBar
 	contrSel  *widget.Select
-	zoomL     *widget.Label       // the current map's zoom (crosscheck 2026-11-11-02 I1)
+	zoomBtn   *widget.Button      // "Zoom 100 % ▾": the current map's zoom and the zoom menu (SPEC-717 v0.44)
 	borders   []*canvas.Rectangle // button borders, shown in Max contrast (D1)
 
 	// Editing (M6).
@@ -148,7 +148,7 @@ func New(a fyne.App, opt Options) *GUI {
 
 	split := container.NewHSplit(g.tabs, g.details.obj)
 	split.Offset = 0.75
-	top := container.NewVBox(g.toolbar(), g.navRow())
+	top := container.NewVBox(g.toolbar(), g.trailRow())
 	g.win.SetContent(container.NewBorder(top, g.status.obj, nil, nil, split))
 	g.win.Resize(fyne.NewSize(1200, 800))
 	g.shortcuts()
@@ -595,8 +595,8 @@ func (g *GUI) colourBorders() {
 
 // showZoom shows the zoom of the current tab's map.
 func (g *GUI) showZoom() {
-	if mv := g.currentMap(); mv != nil && g.zoomL != nil {
-		g.zoomL.SetText(zoomLabel(mv.Viewport().Zoom))
+	if mv := g.currentMap(); mv != nil && g.zoomBtn != nil {
+		g.zoomBtn.SetText(zoomButtonText(mv.Viewport().Zoom))
 	}
 }
 
@@ -604,13 +604,9 @@ func (g *GUI) toolbar() fyne.CanvasObject {
 	btn := func(label string, f func()) fyne.CanvasObject { return g.bordered(widget.NewButton(label, f)) }
 	g.contrSel = widget.NewSelect(contrastOptions(), func(s string) { g.pickContrast(s) })
 	g.contrSel.SetSelected(g.contrast.String())
-	g.zoomL = widget.NewLabel(zoomLabel(1))
 	return container.NewHBox(
-		btn("Zoom −", func() { g.zoomBy(1 / zoomStep) }),
-		g.zoomL,
-		btn("Zoom +", func() { g.zoomBy(zoomStep) }),
-		btn("100 %", func() { g.zoomTo(1) }),
-		btn("Fit all", g.fitAll),
+		g.zoomButton(),
+		g.showList(),
 		widget.NewSeparator(),
 		btn("Find host…", g.showFind),
 		btn("Discover…", func() { g.openDiscovery("") }),
@@ -620,6 +616,38 @@ func (g *GUI) toolbar() fyne.CanvasObject {
 		g.wrapToggle(),
 		widget.NewLabel("Contrast:"), g.bordered(g.contrSel),
 	)
+}
+
+// zoomButton is "Zoom 100 % ▾": it shows the current map's zoom and opens
+// the zoom menu below itself (SPEC-717 v0.44, Design-toolbar.md T1).
+func (g *GUI) zoomButton() fyne.CanvasObject {
+	g.zoomBtn = widget.NewButton(zoomButtonText(1), nil)
+	g.zoomBtn.OnTapped = func() {
+		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(g.zoomBtn)
+		pos.Y += g.zoomBtn.Size().Height
+		widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", g.zoomMenuItems()...), g.win.Canvas(), pos)
+	}
+	return g.bordered(g.zoomBtn)
+}
+
+func zoomButtonText(z float64) string { return "Zoom " + zoomLabel(z) + " ▾" }
+
+// zoomMenuItems: zoom in and out (disabled at the limits), 100 % and fit
+// all. The shortcut is part of the label: Fyne draws a menu item's
+// Shortcut at 20 % opacity, far below 4.5:1.
+func (g *GUI) zoomMenuItems() []*fyne.MenuItem {
+	z := 1.0
+	if mv := g.currentMap(); mv != nil {
+		z = mv.Viewport().Zoom
+	}
+	in := fyne.NewMenuItem("Zoom in (Ctrl++)", func() { g.zoomBy(zoomStep) })
+	out := fyne.NewMenuItem("Zoom out (Ctrl+−)", func() { g.zoomBy(1 / zoomStep) })
+	in.Disabled = z >= mapmodel.MaxZoom-1e-9
+	out.Disabled = z <= mapmodel.MinZoom+1e-9
+	return []*fyne.MenuItem{in, out,
+		fyne.NewMenuItem("100 % (Ctrl+0)", func() { g.zoomTo(1) }),
+		fyne.NewMenuItem("Fit all (Ctrl+1)", g.fitAll),
+	}
 }
 
 // wrapToggle is the "Wrap names" check box (SPEC-722).

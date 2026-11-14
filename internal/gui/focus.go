@@ -146,8 +146,9 @@ func (g *GUI) movedOut(view, focus int64, before, after []mapmodel.Node) string 
 	return fmt.Sprintf("%d items moved out of %s", len(names), name)
 }
 
-// navRow is the row above the map: the "Show" list and the trail.
-func (g *GUI) navRow() fyne.CanvasObject {
+// showList is the "Show" list, in the toolbar (SPEC-726 v0.44,
+// Design-toolbar.md T2).
+func (g *GUI) showList() fyne.CanvasObject {
 	g.showSel = widget.NewSelectEntry(nil)
 	g.showSel.SetPlaceHolder("view or group (Ctrl+L)")
 	g.showSel.OnChanged = func(s string) {
@@ -160,9 +161,16 @@ func (g *GUI) navRow() fyne.CanvasObject {
 			g.goEntry(m[0])
 		}
 	}
+	sel := container.NewGridWrap(fyne.NewSize(240, g.showSel.MinSize().Height), g.showSel)
+	return container.NewHBox(widget.NewLabel("Show:"), sel)
+}
+
+// trailRow is the row below the toolbar with the trail; it is hidden
+// while a whole view is shown (T3).
+func (g *GUI) trailRow() fyne.CanvasObject {
 	g.trailBox = container.NewHBox()
-	sel := container.NewGridWrap(fyne.NewSize(300, g.showSel.MinSize().Height), g.showSel)
-	return container.NewBorder(nil, nil, container.NewHBox(widget.NewLabel("Show:"), sel), nil, g.trailBox)
+	g.trailBox.Hide()
+	return g.trailBox
 }
 
 // onShowText follows changes to the "Show" text (F9). Typing one more
@@ -294,6 +302,11 @@ func (g *GUI) syncNav() {
 		g.trailBorders = append(g.trailBorders, g.borders[len(g.borders)-1])
 	}
 	g.trailBox.Objects = objs
+	if len(parts) > 1 {
+		g.trailBox.Show()
+	} else {
+		g.trailBox.Hide()
+	}
 	g.trailBox.Refresh()
 }
 

@@ -13,3 +13,12 @@
    - Tests TC-735, 736; SPEC-704 v0.42, SPEC-727; `Changes.md`, README.
    - Rendered a map with coloured bars to PNG (a throwaway test, deleted) for AA and Max: as designed.
    - Found: TestDiscoveryDialog fails 6–7 of 10 runs under `-race`, on `main` before this feature too (checked in a temporary worktree, removed). Put in the Plan; not fixed yet.
+3. **User**: pushed.
+   **Claude** checked: `main`, `docs/architecture`, `fix/macos-release-build` and `feature/group-bars` arrived. CI on `main` (43604749905) green, including the gui jobs for macOS (arm64, amd64), Windows amd64 and Linux arm64.
+4. **User**: pushed the tag.
+   **Claude** checked: `v0.4.1` on GitHub at `f4d4146`. Release run 43618686176 green; the release has 11 archives and SHA256SUMS, every checksum OK, `inedctl` prints `v0.4.1`, the GUI binaries are of the right architecture (TC-011). Downloads deleted.
+5. **User**: were the files in bin rebuilt?
+   (Spelling corrected: "rebuild" → "rebuilt".)
+   **Claude**: no, `bin/` still held `v0.2.0-5-g812912d-dirty` from 2026-11-12; tests, CI and releases do not write `bin/`. None was running; rebuilt with `make build`: `v0.4.1-4-g217c949`.
+6. **User**: rebuild bin after every merge to main.
+   **Claude** saved it as a working rule (memory) and in the Plan.

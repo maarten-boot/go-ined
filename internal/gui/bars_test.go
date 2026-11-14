@@ -221,7 +221,7 @@ func TestCopyToView(t *testing.T) {
 	pay := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "Payroll"}))
 	e.open()
 	g := e.g
-	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "group", lan.ID) != nil && len(g.model.Views()) == 2 })
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "group", lan.ID) != nil && e.viewCount() == 2 })
 	item := func() *fyne.MenuItem {
 		fr := find(e.nodes(1), "group", lan.ID)
 		return menuItem(g.menuItems(1, fr, fr.Icon.X+2, fr.Icon.Y+2, nil), "Show in view")

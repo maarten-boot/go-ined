@@ -35,6 +35,7 @@ type MapView struct {
 	nodes   []mapmodel.Node
 	vp      mapmodel.Viewport
 	placed  bool                  // the viewport has been set ("fit all" on the first layout)
+	fitSize fyne.Size             // the size of the last layout; a new size fits all (SPEC-713 v0.46)
 	sel     *mapmodel.Key         // the primary selection (shown in the details)
 	sels    map[mapmodel.Key]bool // everything selected (SPEC-724)
 	mods    fyne.KeyModifier      // modifier keys held at the last mouse press
@@ -132,9 +133,10 @@ func (mv *MapView) Nodes() []mapmodel.Node { return mv.nodes }
 // Viewport returns the current viewport.
 func (mv *MapView) Viewport() mapmodel.Viewport { return mv.vp }
 
-// SetViewport sets the viewport.
+// SetViewport sets the viewport, for the map's current size: only a later
+// size change fits all again.
 func (mv *MapView) SetViewport(v mapmodel.Viewport) {
-	mv.vp, mv.placed = v, true
+	mv.vp, mv.placed, mv.fitSize = v, true, mv.Size()
 	mv.Refresh()
 	mv.viewportChanged()
 }
@@ -541,11 +543,14 @@ func (r *mapRenderer) build() {
 	if s.Width <= 0 || s.Height <= 0 {
 		return
 	}
-	if !mv.placed && len(mv.nodes) > 0 {
+	// Fit all on the first layout and whenever the map's size changes:
+	// start, maximize, resize, the details panel's divider (R1-R3).
+	if len(mv.nodes) > 0 && (!mv.placed || s != mv.fitSize) {
 		mv.vp = mapmodel.Fit(mapmodel.Extent(mv.nodes), float64(s.Width), float64(s.Height))
 		mv.placed = true
 		defer mv.viewportChanged()
 	}
+	mv.fitSize = s
 	p := mv.palette()
 	r.pool.reset()
 	d := &drawer{vp: mv.vp, p: p, pool: &r.pool, objs: r.objs[:0]}

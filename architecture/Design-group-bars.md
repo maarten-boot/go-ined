@@ -1,6 +1,6 @@
 # Design note: a bottom bar to leave a group, and a colour for the top bar
 
-Status: **proposed** (2026-11-14); decisions B1–B8 wait for the user's OK.
+Status: **implemented** (2026-11-14): B1–B8 as recommended (user: "OK, all"), SPEC-704 v0.42 and SPEC-727, TC-735 and 736. Additions while building: the status bar names what moved out, and the details panel has a "Bar colour" row.
 Origin: the user's request (log 2026-11-14, entry 1): "give the group also a bottom bar (can be half the size of the top bar); moving an item to the bottom bar makes the item leave the group. Allow the user to select a colour for the top bar of the group, a fixed palette of 16 or so colours and a custom colour selector."
 
 ## 1. Today

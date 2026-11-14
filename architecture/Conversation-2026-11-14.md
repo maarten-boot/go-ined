@@ -7,3 +7,9 @@
 2. **User**: pushed; OK, all (B1–B8).
    **Claude** checked the push: the three branches arrived at `2d21de0` (without the design note `0f656b4`). CI on `main` (43589541992): every job passed except `gui (macos-15)`: `realpath: illegal option -- m`.
    - Fixed on `fix/macos-release-build` (merged): the output folder is resolved with `cd … && pwd`, and `shasum -a 256` is used where `sha256sum` is missing (script and CI check). The unpushed tag `v0.4.1` moved to the new `main`.
+   - Built the bottom bar and the bar colour on `feature/group-bars` (merged), B1–B8 as recommended:
+     - server: `color` on groups (migration 5), validated, upper case, in `/map`, OpenAPI and the API examples; `inedctl group color` and `group add --color`;
+     - GUI: a 12-unit bottom bar on every frame; dropping items from inside onto it moves them to the group's parent just below the frame, marked "out" while dragging; "Bar colour ▸" with None, 16 swatches and Custom… (Fyne's colour picker); black or white label, AAA adjusts the bar, Max draws none; a "Bar colour" row in the details panel.
+   - Tests TC-735, 736; SPEC-704 v0.42, SPEC-727; `Changes.md`, README.
+   - Rendered a map with coloured bars to PNG (a throwaway test, deleted) for AA and Max: as designed.
+   - Found: TestDiscoveryDialog fails 6–7 of 10 runs under `-race`, on `main` before this feature too (checked in a temporary worktree, removed). Put in the Plan; not fixed yet.

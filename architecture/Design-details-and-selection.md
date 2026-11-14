@@ -1,6 +1,6 @@
 # Design: selectable details, the note below them, and actions on a selection
 
-Status: **proposed** (2026-11-14), waiting for the user's OK.
+Status: **implemented** (2026-11-14): D1–D6 as recommended ("OK, all"), on `feature/details-selection`. Settled in the build: on a selection the entry reads "Show N items in view ▸" (like "Move N items to group…"), and the status texts are "Removed 3 items (1 group, 3 hosts in all) from \"Payroll\"" and "\"Payroll\": placed 1 host (1 already there), copied 1 group (1 group, 2 hosts in all)".
 
 User request: "text in the left info pane should be selectable, the notes editable text can start directly under the last info item from the inventory. Currently only hosts have 'Remove from this view', that should also apply to groups. When selecting multiple items and executing 'Remove from this view' or 'Show in view', it should apply to all selected items."
 

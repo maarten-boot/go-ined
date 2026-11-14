@@ -80,3 +80,8 @@
     - D5: "Show in view" on a selection places hosts and copies groups.
     - D6: no new keys.
     - GUI only. Decisions D1–D6 wait for the user's OK.
+21. **User**: pushed; OK, all (D1–D6).
+    **Claude** checked the push: `main`, `docs/architecture` and `feature/connect` arrived.
+    - Built D1–D6 on `feature/details-selection` (merged), GUI only: the details title and values are selectable; the note follows the rows in the same scroll area and takes the rest of the height (a small layout, `growLayout`); "Remove from this view" on groups of custom views (cascade delete, asks when the group has contents); "Remove N items from this view" and "Show N items in view ▸" on a selection, with ticks and a status-bar summary. SPEC-708, 721, 724 (Spec v0.48); TC-743–746; `Changes.md`.
+    - A first run of the new tests hung: one opened the menu before the map had drawn the host, and `t.Fatalf` on the UI thread blocks instead of failing. Both fixed in the tests. The full `-race` run then found that the new tests, and the older `TestCopyToView`, read the GUI's model without its lock; fixed.
+    - All tests and lint pass. The look is not checked under Xvfb.

@@ -5,6 +5,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 ## [Unreleased]
 
 ### Added
+- `ined-gui` details panel: the title and the values can be selected and copied (Ctrl+C). The note now follows right after the last row and takes the rest of the height.
+- "Remove from this view" on groups in a custom view. It takes the group, its subgroups and their hosts out of that view; the hosts stay in the network view and in other views. It asks first when the group isn't empty.
+- With several items selected, "Remove N items from this view" and "Show N items in view ▸" act on all of them: hosts are placed in the chosen view, groups are copied there.
 - **"Connect ▸"** in a host's menu: SSH, Remote desktop (RDP), VNC and the web page (http, https). The server tries a TCP connection to ports 22, 3389, 5900–5909, 80 and 443 of each monitored host when it's added and then every 6 hours, and the menu ticks what answered; "Check services now" checks at once. Every entry stays clickable, since your machine may reach ports the server can't. The details panel has a "Services" row.
   - SSH, RDP and VNC run a command you can set in `gui.toml` under `[connect]`, with `{ip}`, `{name}` and `{port}`; on Ubuntu the defaults are `x-terminal-emulator -e ssh {ip}` and Remmina for RDP and VNC (`sudo apt install remmina`). Commands run without a shell. Web pages open in your browser.
   - Server: `[services]` in `server.toml` (`enabled`, `refresh`, `timeout`); `services` and `services_checked_at` on hosts; `POST /hosts/{id}/check-services`; `inedctl host services <id> [--check]`. The database gets two new columns on first start (schema 6), so an older server can't open it afterwards.

@@ -27,3 +27,6 @@
    **Claude** checked the push: not arrived (GitHub still at `217c949`).
    - Bar colour: with the current `bin/` server and GUI (scratch database, Xvfb :97, xdotool) choosing Blue works: the bar turns blue and the details panel says "Blue". With a server built from `v0.4.1` the same click gives `group 1: invalid_argument (HTTP 400): invalid JSON body: json: unknown field "color"` in the status bar and nothing changes, which matches the report. Most likely the running `ined-server` is older than 0.5.0. Test processes stopped, files deleted.
    - Release 0.5.0 prepared: `[0.5.0]` in `Changes.md` with a note to update server and GUI together; OpenAPI 0.5.0; README; annotated tag `v0.5.0`.
+8. **User**: when moving a group (now with the bottom bar) the line from the bottom bar is outside the box (but on the same horizontal position); best simply don't show the line when moving.
+   (Spelling corrected: "boottom" → "bottom", "dont" → "don't".)
+   **Claude**: the drag copy of a frame moved its outline but not its bottom bar, so the line stayed at the old height. Fixed on `fix/drag-foot-line` (merged): no bottom bar line while dragging, back after the drop (SPEC-704 v0.43; TC-736 extended, fails without the fix). All tests, lint, fmt-check and nogui-check pass. The unpushed tag `v0.5.0` moved to include the fix.

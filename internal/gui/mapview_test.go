@@ -303,3 +303,44 @@ func BenchmarkLayoutAndDraw5000(b *testing.B) {
 		mv.FitAll()
 	}
 }
+
+// TC-739 (SPEC-713 v0.46): the map fits all on its first layout and after
+// every size change (window resize or maximize, the panel divider); your
+// own zoom stays while the size doesn't change.
+func TestFitOnResize(t *testing.T) {
+	p := theme.NewPalette(theme.Default)
+	test.NewTempApp(t)
+	m := mapmodel.New()
+	m.SetMap(apitypes.Map{ViewID: 1, Items: []apitypes.MapItem{
+		{Type: apitypes.TypeHost, ID: 1, X: 100, Y: 100, Name: "a"},
+		{Type: apitypes.TypeHost, ID: 2, X: 1500, Y: 900, Name: "b"},
+	}})
+	mv := NewMapView(1, func() theme.Palette { return p })
+	nodes := m.Layout(1, measure)
+	mv.SetNodes(nodes)
+	fit := func(w, h float32) mapmodel.Viewport {
+		return mapmodel.Fit(mapmodel.Extent(nodes), float64(w), float64(h))
+	}
+	layout := func(w, h float32) {
+		mv.Resize(fyne.NewSize(w, h))
+		test.WidgetRenderer(mv).Layout(mv.Size())
+	}
+	layout(1200, 800) // start
+	if mv.Viewport() != fit(1200, 800) {
+		t.Errorf("start: %+v", mv.Viewport())
+	}
+	layout(1900, 1050) // maximized
+	if mv.Viewport() != fit(1900, 1050) {
+		t.Errorf("maximized: %+v, want %+v", mv.Viewport(), fit(1900, 1050))
+	}
+	mv.ZoomTo(2)
+	own := mv.Viewport()
+	layout(1900, 1050) // same size: your zoom stays
+	if mv.Viewport() != own {
+		t.Errorf("same size: %+v", mv.Viewport())
+	}
+	layout(1400, 1050) // the divider moved
+	if mv.Viewport() != fit(1400, 1050) {
+		t.Errorf("divider: %+v", mv.Viewport())
+	}
+}

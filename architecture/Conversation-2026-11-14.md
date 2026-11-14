@@ -55,3 +55,5 @@
 16. **User**: when opening the app with a current view, and after a resize or maximize of the window, also execute a fit-all.
     (Read as: "maximize screen" → "maximize the window".)
     **Claude** checked the push: `main` and `docs/architecture` arrived, `fix/stray-inedctl` didn't. Wrote `Design-fit-on-resize.md`: fit the current view at its final size on start; fit all on every size change of the map area (window resize, maximize, restore, and also the details-panel divider); in a focus it fits the group; a resize replaces your own zoom. Decisions R1–R5 wait for the user's OK.
+17. **User**: also show the "Show in view" menu item on groups.
+    **Claude**: a group belongs to one view, unlike a host, so it can't be placed in a second view. Wrote `Design-group-show-in-view.md`: "Show in view ▸" on a group copies its structure (groups, subgroups, host placements at the same relative positions) into the chosen custom view, as one server call (`POST /views/{id}/copy-group`, `inedctl group copy`); hosts already in that view move into the copy; network groups become ordinary groups. Decisions G1–G6 wait for the user's OK, as do R1–R5 (fit on resize).

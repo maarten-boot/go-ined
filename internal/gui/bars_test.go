@@ -17,7 +17,7 @@ import (
 // group's bottom bar moves it out to the group's parent, just below the
 // frame at the x where it was dropped; while dragging, the bar is marked
 // "out"; an item from deeper down leaves the whole group; an item from
-// outside only moves.
+// outside only moves; a dragged group shows no bottom bar line.
 func TestDropOut(t *testing.T) {
 	e := start(t)
 	c, ctx := e.c, e.ctx
@@ -81,7 +81,48 @@ func TestDropOut(t *testing.T) {
 		h := must(c.Host(ctx, other.ID))
 		return h.ParentID == nil && h.X != 600
 	})
+
+	// While site is dragged, its bottom bar line isn't drawn, neither at
+	// the old nor at the new height (SPEC-704 v0.43); after the drop it is.
+	footLine := func(mv *MapView, x, y, w float64) bool {
+		sx, sy := mv.vp.ToScreen(x, y)
+		for _, o := range testObjects(mv) {
+			if l, ok := o.(*canvas.Line); ok && l.Position1.Y == l.Position2.Y &&
+				abs(float64(l.Position1.Y)-sy) < 0.5 && abs(float64(l.Position1.X)-sx) < 0.5 &&
+				abs(float64(l.Position2.X-l.Position1.X)-w*mv.vp.Zoom) < 0.5 {
+				return true
+			}
+		}
+		return false
+	}
+	const dy = 80.0
+	var f mapmodel.Node
+	e.ui.Wait(func() {
+		mv := g.maps[1]
+		f = *find(e.nodes(1), "group", site.ID)
+		if !footLine(mv, f.Bounds.X, f.Foot.Y, f.Bounds.W) {
+			t.Error("no bottom bar line before the drag")
+		}
+		sx, sy := mv.vp.ToScreen(f.Icon.X+f.Icon.W/2, f.Icon.Y+f.Icon.H/2)
+		for i := 1; i <= 4; i++ {
+			mv.Dragged(&fyne.DragEvent{
+				PointEvent: fyne.PointEvent{Position: fyne.NewPos(float32(sx), float32(sy+dy*float64(i)/4))},
+				Dragged:    fyne.Delta{DY: float32(dy / 4)},
+			})
+		}
+		mv.Refresh()
+		if footLine(mv, f.Bounds.X, f.Foot.Y, f.Bounds.W) || footLine(mv, f.Bounds.X, f.Foot.Y+dy, f.Bounds.W) {
+			t.Error("bottom bar line drawn while dragging")
+		}
+		mv.DragEnd()
+	})
+	eventually(t, e.ui, "site dropped, line back", func() bool {
+		n := find(e.nodes(1), "group", site.ID)
+		return n != nil && n.Bounds.Y > f.Bounds.Y && footLine(g.maps[1], n.Bounds.X, n.Foot.Y, n.Bounds.W)
+	})
 }
+
+func abs(v float64) float64 { return max(v, -v) }
 
 // TC-735 (GUI, SPEC-727): "Bar colour ▸" offers None, 16 colours and
 // Custom…; a choice is saved and checked, the top bar is filled with it

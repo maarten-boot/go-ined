@@ -4,6 +4,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-14
+
+Update `ined-server` together with `ined-gui`: a server older than 0.5.0 refuses a bar colour ("unknown field \"color\"" in the status bar), and a new server's database can't be opened by an older one.
+
 ### Added
 - `ined-gui`: an expanded group has a **bottom bar**. Dropping something from inside the group onto it moves it out, to the group's parent, just below the frame; while you drag, the bar says "out".
 - A **colour for a group's top bar**: "Bar colour ▸" in a group's menu has 16 colours and "Custom…" (a colour picker). The colour is saved on the server and is the same in every GUI. The group name on the bar is black or white, whichever reads better; under the Max contrast preset bars aren't coloured. API: `color` on groups (`"#RRGGBB"` or `""`); `inedctl group color <id> '#rrggbb'|none`, `group add --color`. The database gets a new column on first start (schema 5).

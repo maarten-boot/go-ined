@@ -529,6 +529,24 @@ func TestGroupShift(t *testing.T) {
 	contains(t, ok(t, u, "group", "move", "2", "1"), "Parent:", "1", "Position:", "0, 220")
 }
 
+// TC-740 (CLI): group copy.
+func TestGroupCopy(t *testing.T) {
+	isolate(t)
+	s := testserver.Start(t, testserver.Options{})
+	u := "--url=" + s.URL()
+	ok(t, u, "group", "add", "--name", "lan")
+	ok(t, u, "host", "add", "192.0.2.1", "--parent", "1")
+	ok(t, u, "view", "add", "Payroll")
+	contains(t, ok(t, u, "group", "copy", "1", "--view", "2"), "copied group 1 to view 2 as group 2: 1 group, 1 host (0 moved within the view)\n")
+	contains(t, ok(t, u, "group", "show", "2"), "lan", "View:", "2")
+	if r := ctl(t, u, "group", "copy", "1"); r.code != 2 {
+		t.Errorf("no --view: %+v", r)
+	}
+	if r := ctl(t, u, "group", "copy", "1", "--view", "1"); r.code != 1 {
+		t.Errorf("network view: %+v", r)
+	}
+}
+
 // TC-724 (CLI): view arrange.
 func TestViewArrange(t *testing.T) {
 	isolate(t)

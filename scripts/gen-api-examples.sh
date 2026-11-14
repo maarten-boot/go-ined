@@ -164,6 +164,13 @@ ex "Arrange the root of the network view on 160 × 80 cells" POST /views/1/arran
 ex "Error: cell size out of range" POST /views/1/arrange '{"cell_width":5,"cell_height":80}'
 ctl "The same with inedctl, for one group" "view arrange 2 --group 6 --width 200" view arrange 2 --group 6 --width 200
 
+# Copying a group into a custom view (SPEC-729, "Show in view" on a group in the GUI).
+{ echo "## Copying a group"; echo
+  echo 'Copies a group of another view into a custom view: the same group, its subgroups and its hosts at the same relative positions. The hosts stay the same hosts; only the groups are new. A network group'"'"'s CIDR is not copied.'; echo; } >>"$OUT"
+ex "Copy network group 4 (lab) with everything in it into view 2" POST /views/2/copy-group '{"group_id":4}'
+ex "Error: group 6 is in view 2 already" POST /views/2/copy-group '{"group_id":6}'
+ctl "The same with inedctl" "group copy 4 --view 2" group copy 4 --view 2
+
 {
 cat <<'EOF'
 # API examples — go-ined

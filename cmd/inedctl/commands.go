@@ -27,7 +27,7 @@ var commands = map[string]map[string]command{
 		"list": groupList, "add": groupAdd, "show": groupShow, "edit": groupEdit,
 		"rm": groupRm, "move": groupMove, "shift": groupShift,
 		"collapse": groupCollapse(true), "expand": groupCollapse(false),
-		"labels": groupLabels, "color": groupColor,
+		"labels": groupLabels, "color": groupColor, "copy": groupCopy,
 	},
 	"note": {"get": noteGet, "set": noteSet, "clear": noteClear},
 	"view": {
@@ -347,6 +347,37 @@ func groupColor(a *app, name string, args []string) error {
 	var g apitypes.Group
 	return a.call(http.MethodPatch, path("group", gid), apitypes.GroupPatch{Color: apitypes.Some(c)}, &g,
 		func() { a.groupDetails(g) })
+}
+
+// groupCopy copies a group, with its subgroups and host placements, into
+// a custom view (SPEC-729).
+func groupCopy(a *app, name string, args []string) error {
+	fs := a.flags(name)
+	view := fs.Int64("view", 0, "the custom view to copy into (required)")
+	pos, err := a.parse(fs, args, 1, 1)
+	if err != nil {
+		return err
+	}
+	gid, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	if *view < 1 {
+		return usagef("%s: --view must be a custom view id", name)
+	}
+	var r apitypes.GroupCopyResult
+	return a.call(http.MethodPost, "/views/"+id(*view)+"/copy-group", apitypes.GroupCopy{GroupID: gid}, &r, func() {
+		fmt.Fprintf(a.out, "copied group %d to view %d as group %d: %s, %s (%d moved within the view)\n",
+			gid, r.ViewID, r.GroupID, plural(r.Groups, "group"), plural(r.Hosts, "host"), r.Moved)
+	})
+}
+
+// plural writes a count with its noun: "1 group", "2 groups".
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 // colorArg turns a bar colour as typed (none for no colour) into its API

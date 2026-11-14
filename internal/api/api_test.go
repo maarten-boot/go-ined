@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -532,6 +533,31 @@ func TestArrangeAPI(t *testing.T) {
 	e.wantErr(404, "not_found", "POST", "/views/9/arrange", apitypes.Arrange{})
 	e.wantErr(400, "invalid_argument", "POST", "/views/1/arrange", apitypes.Arrange{CellWidth: 1})
 	e.wantErr(405, "method_not_allowed", "GET", "/views/1/arrange", nil)
+}
+
+// TC-740 (API part): POST /views/{id}/copy-group copies a group into a
+// custom view; errors (SPEC-729).
+func TestCopyGroupAPI(t *testing.T) {
+	e := newEnv(t, "")
+	var g apitypes.Group
+	e.want(201, "POST", "/groups", apitypes.GroupCreate{Name: "lan", X: ptr(100.0), Y: ptr(100.0)}, &g)
+	e.want(201, "POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1", ParentID: &g.ID}, nil)
+	var v apitypes.View
+	e.want(201, "POST", "/views", apitypes.ViewCreate{Name: "Payroll"}, &v)
+	var r apitypes.GroupCopyResult
+	e.want(200, "POST", fmt.Sprintf("/views/%d/copy-group", v.ID), apitypes.GroupCopy{GroupID: g.ID}, &r)
+	if r.ViewID != v.ID || r.GroupID == g.ID || r.Groups != 1 || r.Hosts != 1 || r.Moved != 0 {
+		t.Errorf("result: %+v", r)
+	}
+	var m apitypes.Map
+	e.want(200, "GET", fmt.Sprintf("/map?view=%d", v.ID), nil, &m)
+	if len(m.Items) != 2 {
+		t.Errorf("map: %+v", m.Items)
+	}
+	e.wantErr(404, "not_found", "POST", "/views/9/copy-group", apitypes.GroupCopy{GroupID: g.ID})
+	e.wantErr(400, "invalid_argument", "POST", "/views/1/copy-group", apitypes.GroupCopy{GroupID: g.ID})
+	e.wantErr(400, "invalid_argument", "POST", fmt.Sprintf("/views/%d/copy-group", v.ID), apitypes.GroupCopy{GroupID: r.GroupID})
+	e.wantErr(405, "method_not_allowed", "GET", fmt.Sprintf("/views/%d/copy-group", v.ID), nil)
 }
 
 // TC-735 (API part): a group's bar colour is set on create and by PATCH,

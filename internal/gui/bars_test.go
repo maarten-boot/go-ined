@@ -208,3 +208,48 @@ func TestBarColorMenu(t *testing.T) {
 		return must(c.Group(ctx, lan.ID)).Color == "#3CB44B" && must(c.Group(ctx, lab.ID)).Color == "#3CB44B"
 	})
 }
+
+// TC-740 (GUI, SPEC-729): "Show in view ▸" on a group lists the custom
+// views but its own; choosing one copies the group there and says so; once
+// that view's map is loaded and has all the group's hosts, it is ticked.
+func TestCopyToView(t *testing.T) {
+	e := start(t)
+	c, ctx := e.c, e.ctx
+	lan := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "lan", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &lan.ID}))
+	must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", ParentID: &lan.ID}))
+	pay := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "Payroll"}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "group", lan.ID) != nil && len(g.model.Views()) == 2 })
+	item := func() *fyne.MenuItem {
+		fr := find(e.nodes(1), "group", lan.ID)
+		return menuItem(g.menuItems(1, fr, fr.Icon.X+2, fr.Icon.Y+2, nil), "Show in view")
+	}
+	e.ui.Wait(func() {
+		it := item()
+		if it == nil || it.ChildMenu == nil || len(it.ChildMenu.Items) != 1 || it.ChildMenu.Items[0].Label != "Payroll" || it.ChildMenu.Items[0].Checked {
+			t.Errorf("menu: %+v", it)
+			return
+		}
+		it.ChildMenu.Items[0].Action()
+	})
+	eventually(t, e.ui, "copied", func() bool {
+		gs, _ := c.Groups(ctx)
+		n := 0
+		for _, gr := range gs {
+			if gr.ViewID == pay.ID && gr.Name == "lan" {
+				n++
+			}
+		}
+		return n == 1 && strings.Contains(g.status.Text(), `"lan" copied to "Payroll": 1 group, 2 hosts`)
+	})
+	e.ui.Wait(func() { g.tabs.SelectIndex(1) })
+	eventually(t, e.ui, "Payroll loaded", func() bool { return len(e.nodes(pay.ID)) == 3 })
+	e.ui.Wait(func() {
+		g.tabs.SelectIndex(0)
+		if it := item(); !it.ChildMenu.Items[0].Checked {
+			t.Error("Payroll not ticked")
+		}
+	})
+}

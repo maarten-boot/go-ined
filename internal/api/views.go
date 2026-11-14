@@ -94,3 +94,16 @@ func (s *server) arrange(w http.ResponseWriter, r *http.Request) {
 	n, err := s.svc.Arrange(r.Context(), view, in.ParentID, in.CellWidth, in.CellHeight)
 	s.respond(w, http.StatusOK, apitypes.ArrangeResult{ViewID: view, ParentID: in.ParentID, Moved: n}, err)
 }
+
+func (s *server) copyGroup(w http.ResponseWriter, r *http.Request) {
+	view, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in apitypes.GroupCopy
+	if !decode(w, r, &in) {
+		return
+	}
+	res, err := s.svc.CopyGroup(r.Context(), view, in.GroupID)
+	s.respond(w, http.StatusOK, res, err)
+}

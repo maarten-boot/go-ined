@@ -830,6 +830,47 @@
           }
         }
       }
+    },
+    "/views/{id}/copy-group": {
+      "post": {
+        "summary": "Copy a group of another view, with its subgroups and host placements, into this custom view (SPEC-729)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupCopy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupCopyResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1876,6 +1917,51 @@
         "required": [
           "view_id",
           "parent_id"
+        ]
+      },
+      "GroupCopy": {
+        "type": "object",
+        "description": "Body of POST /views/{id}/copy-group (SPEC-729): the group to copy; it must belong to another view.",
+        "properties": {
+          "group_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "group_id"
+        ]
+      },
+      "GroupCopyResult": {
+        "type": "object",
+        "description": "Answer of POST /views/{id}/copy-group: the new top group, the groups and host placements made, and how many of those hosts were in the view already and moved into the copy.",
+        "properties": {
+          "view_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "group_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "groups": {
+            "type": "integer"
+          },
+          "hosts": {
+            "type": "integer"
+          },
+          "moved": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "view_id",
+          "group_id",
+          "groups",
+          "hosts",
+          "moved"
         ]
       }
     }

@@ -63,7 +63,7 @@ func (a *app) groupDetails(g apitypes.Group) {
 	a.details([][2]string{
 		{"ID", id(g.ID)}, {"Name", g.Name}, {"CIDR", dash(g.CIDR)}, {"Description", g.Description},
 		{"View", id(g.ViewID)}, {"Parent", parent(g.ParentID)}, {"Status", g.Status}, {"Collapsed", yesNo(g.Collapsed)},
-		{"Labels", labelsText(g.Labels)}, {"Position", pos(g.X, g.Y)},
+		{"Labels", labelsText(g.Labels)}, {"Bar colour", colorText(g.Color)}, {"Position", pos(g.X, g.Y)},
 		{"Created", g.CreatedAt.Local().Format(time.DateTime)}, {"Updated", g.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(g.Note)},
 	}, false)
@@ -202,4 +202,12 @@ func labelsText(mode string) string {
 	default:
 		return mode
 	}
+}
+
+// colorText describes a group's bar colour (SPEC-727).
+func colorText(c string) string {
+	if c == "" {
+		return "none"
+	}
+	return c
 }

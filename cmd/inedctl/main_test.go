@@ -121,7 +121,10 @@ func TestCommands(t *testing.T) {
 	contains(t, ok(t, u, "group", "expand", "2"), "Collapsed:   no", "Labels:      inherit")
 	contains(t, ok(t, u, "group", "labels", "2", "ip"), "Labels:      ip")
 	contains(t, ok(t, u, "group", "labels", "2", "both"), "Labels:      name and IP")
-	contains(t, ok(t, u, "group", "labels", "2", "inherit"), "Labels:      inherit")
+	contains(t, ok(t, u, "group", "labels", "2", "inherit"), "Labels:      inherit", "Bar colour:  none")
+	contains(t, ok(t, u, "group", "color", "2", "#f58231"), "Bar colour:  #F58231")
+	contains(t, ok(t, u, "group", "color", "2", "none"), "Bar colour:  none")
+	contains(t, ok(t, u, "group", "add", "--name", "red", "--color", "#e6194b"), "Bar colour:  #E6194B")
 	contains(t, ok(t, u, "group", "add", "--name", "ips", "--labels", "ip"), "Name:        ips", "Labels:      ip")
 	contains(t, ok(t, u, "group", "edit", "2", "--name", "lab2"), "Name:        lab2")
 	contains(t, ok(t, u, "group", "move", "2", "root"), "Parent:      root")
@@ -212,6 +215,9 @@ func TestExitCodes(t *testing.T) {
 		{2, []string{u, "group", "add", "--name", "x", "--labels", "dns"}},
 		{2, []string{u, "group", "labels", "1"}},
 		{2, []string{u, "group", "labels", "1", "dns"}},
+		{2, []string{u, "group", "color", "1"}},
+		{2, []string{u, "group", "color", "1", "red"}},
+		{2, []string{u, "group", "add", "--name", "x", "--color", "#12345"}},
 		{2, []string{u, "group", "rm", "1", "--reparent", "--cascade"}},
 		{2, []string{u, "note", "get", "router", "1"}},
 		{2, []string{u, "discover", "start"}},

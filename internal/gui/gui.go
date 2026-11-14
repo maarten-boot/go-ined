@@ -88,12 +88,15 @@ type GUI struct {
 	borders   []*canvas.Rectangle // button borders, shown in Max contrast (D1)
 
 	// Editing (M6).
-	lastForm *formDialog      // the form opened last (for tests)
-	disc     *discoveryDialog // the open discovery dialog
-	jobs     map[string]bool  // discovery jobs started here, still running
-	wantView int64            // a new view to select once its tab exists
-	viewBtn  *widget.Button
-	wrapChk  *widget.Check
+	lastForm *formDialog // the form opened last (for tests)
+	// colorPicked is the callback of the colour picker opened last (for
+	// tests).
+	colorPicked func(color.Color)
+	disc        *discoveryDialog // the open discovery dialog
+	jobs        map[string]bool  // discovery jobs started here, still running
+	wantView    int64            // a new view to select once its tab exists
+	viewBtn     *widget.Button
+	wrapChk     *widget.Check
 
 	// A group as a view (SPEC-726): each tab's focus group (guarded by
 	// mu; absent: the whole view), and on the UI goroutine every group of

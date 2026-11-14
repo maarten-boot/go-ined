@@ -207,6 +207,16 @@ func TestLayout(t *testing.T) {
 	if f.Icon.H != FrameLabelH || f.Icon.Y != f.Bounds.Y || f.Labels[0] != "10.0.0.0/24 · down" {
 		t.Errorf("frame label: %+v %q", f.Icon, f.Labels)
 	}
+	// The bottom bar (SPEC-704 v0.42): half the label strip, at the
+	// frame's bottom, below the padding around the members.
+	if f.Foot != (Rect{f.Bounds.X, f.Bounds.Y + f.Bounds.H - FrameFootH, f.Bounds.W, FrameLabelH / 2}) {
+		t.Errorf("bottom bar %+v of frame %+v", f.Foot, f.Bounds)
+	}
+	for _, k := range []Key{GroupKey(2), HostKey(3)} {
+		if b := byID[k].Bounds; b.Y+b.H+FramePad > f.Foot.Y+0.01 {
+			t.Errorf("%v %+v reaches into the bottom bar %+v", k, b, f.Foot)
+		}
+	}
 	g := byID[GroupKey(2)]
 	if g.Kind != KindGroup || g.Counts != (Counts{Up: 1, Down: 1}) || !slices.Equal(g.Labels, []string{"servers", "down", "1 down · 1 up"}) {
 		t.Errorf("collapsed group: %+v", g)
@@ -240,7 +250,7 @@ func TestLayout(t *testing.T) {
 		{Type: "host", ID: 1, ParentID: p(77), Name: "web", X: 500, Y: 500},
 	}})
 	nodes = m.Layout(3, measure)
-	if len(nodes) != 2 || nodes[0].Bounds != (Rect{-GroupW / 2, -GroupH/2 - GroupTabH, EmptyFrameW, EmptyFrameH}) || nodes[1].Icon.X != 486 {
+	if len(nodes) != 2 || nodes[0].Bounds != (Rect{-GroupW / 2, -GroupH/2 - GroupTabH, EmptyFrameW, EmptyFrameH + FrameFootH}) || nodes[1].Icon.X != 486 {
 		t.Errorf("empty frame / orphan: %+v", nodes)
 	}
 	if m.Layout(99, measure) != nil {

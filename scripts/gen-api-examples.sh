@@ -150,6 +150,13 @@ ex "Show IP addresses under the hosts in group 6" PATCH /groups/6 '{"labels":"ip
 ex "Error: unknown label mode" PATCH /groups/6 '{"labels":"dns"}'
 ctl "The same with inedctl: names and IP addresses" "group labels 6 both" group labels 6 both
 
+# The colour of a group's top bar (SPEC-727).
+{ echo "## Bar colour"; echo
+  echo 'A group can give its top bar in the GUI a colour: `"#rrggbb"` (stored in upper case), or `""` for none.'; echo; } >>"$OUT"
+ex "Colour the top bar of group 6 blue" PATCH /groups/6 '{"color":"#4363d8"}'
+ex "Error: not a #rrggbb colour" PATCH /groups/6 '{"color":"blue"}'
+ctl "The same with inedctl: no colour" "group color 6 none" group color 6 none
+
 # Arranging a group's members on a wider grid (SPEC-510, "Reflow" in the GUI).
 { echo "## Arranging"; echo
   echo 'Lays out the direct members of a group (or of the view'"'"'s root) on a grid, so long names have room. One `map.arranged` event; the response says how many members moved.'; echo; } >>"$OUT"

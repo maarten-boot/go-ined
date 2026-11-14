@@ -355,7 +355,8 @@ func (d *details) fill() {
 		rows = [][2]string{
 			{"ID", strconv.FormatInt(gr.ID, 10)}, {"Name", gr.Name}, {"CIDR", dash(gr.CIDR)},
 			{"Status", mapmodel.StatusWord(gr.Status, false)}, {"Hosts", counts},
-			{"Collapsed", yesNo(gr.Collapsed)}, {"Host labels", labels}, {"Parent (this view)", d.parentName()},
+			{"Collapsed", yesNo(gr.Collapsed)}, {"Host labels", labels}, {"Bar colour", theme.BarName(gr.Color)},
+			{"Parent (this view)", d.parentName()},
 			{"View", dash(view.Name)}, {"Description", dash(gr.Description)},
 		}
 	}

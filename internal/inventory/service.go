@@ -321,7 +321,7 @@ func (s *Service) MapOf(view int64) (apitypes.Map, error) {
 		it := apitypes.MapItem{
 			Type: apitypes.TypeGroup, ID: g.ID, ParentID: parentPtr(g.ParentID),
 			X: g.X, Y: g.Y, Name: g.Name, Status: agg[id].Status(),
-			HasNote: g.Note != "", Collapsed: g.Collapsed, Labels: g.Labels,
+			HasNote: g.Note != "", Collapsed: g.Collapsed, Labels: g.Labels, Color: g.Color,
 		}
 		if g.IsNetwork() {
 			it.CIDR = g.CIDR.String()
@@ -526,7 +526,7 @@ func (s *Service) CreateGroup(ctx context.Context, in apitypes.GroupCreate) (api
 	}
 	g := Group{
 		Name: strings.TrimSpace(in.Name), Description: in.Description, Note: in.Note,
-		CIDR: cidr, Collapsed: true, Labels: in.Labels,
+		CIDR: cidr, Collapsed: true, Labels: in.Labels, Color: in.Color,
 	}
 	if g.Name == "" && cidr.IsValid() {
 		g.Name = cidr.String()
@@ -612,6 +612,9 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	}
 	if p.Labels.Set {
 		g.Labels = p.Labels.Value
+	}
+	if p.Color.Set {
+		g.Color = p.Color.Value
 	}
 	if p.ParentID.Set {
 		parent := Root
@@ -1007,7 +1010,7 @@ func (s *Service) hostViews(id int64) []int64 {
 func groupView(g *Group, c Counts) apitypes.Group {
 	v := apitypes.Group{
 		ID: g.ID, Name: g.Name, Description: g.Description, Note: g.Note,
-		ViewID: g.ViewID, ParentID: parentPtr(g.ParentID), Collapsed: g.Collapsed, Labels: g.Labels, Status: c.Status(),
+		ViewID: g.ViewID, ParentID: parentPtr(g.ParentID), Collapsed: g.Collapsed, Labels: g.Labels, Color: g.Color, Status: c.Status(),
 		X: g.X, Y: g.Y, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt,
 	}
 	if g.IsNetwork() {
@@ -1039,6 +1042,11 @@ func checkGroupText(g *Group) error {
 	if !apitypes.ValidLabels(g.Labels) {
 		return invalidf("labels must be name, ip, both or empty (as the parent group), not %q", g.Labels)
 	}
+	c, ok := apitypes.NormColor(g.Color)
+	if !ok {
+		return invalidf("color must be #rrggbb or empty (none), not %q", g.Color)
+	}
+	g.Color = c
 	return checkText("note", g.Note, MaxNoteBytes)
 }
 

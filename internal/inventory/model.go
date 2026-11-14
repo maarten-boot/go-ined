@@ -83,6 +83,7 @@ type Group struct {
 	ParentID    int64
 	Collapsed   bool
 	Labels      string // host label mode, SPEC-725
+	Color       string // the top bar's colour, "#RRGGBB" or "", SPEC-727
 	X, Y        float64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time

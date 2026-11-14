@@ -53,7 +53,7 @@ Commands:
   host move <id> <group-id|root>              (moves it next to its new parent)
   group list [--view ID]
   group add [--cidr C] [--name N] [--description D] [--parent ID] [--note T] [--expanded] [--view ID]
-            [--labels name|ip|both|inherit]
+            [--labels name|ip|both|inherit] [--color #rrggbb|none]
   group show <id>
   group edit <id> [--name N] [--cidr C] [--description D]
   group rm <id> [--reparent | --cascade]
@@ -62,6 +62,7 @@ Commands:
   group collapse <id>
   group expand <id>
   group labels <id> name|ip|both|inherit      (what the GUI shows under the hosts in it)
+  group color <id> '#rrggbb'|none              (the colour of its top bar in the GUI)
   note get|set|clear host|group <id> [text...]   (set reads stdin when no text is given)
   view list
   view add <name> [--order N]

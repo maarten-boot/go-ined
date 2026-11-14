@@ -1029,6 +1029,11 @@
             ],
             "description": "Host label mode (SPEC-725): what the GUI shows under the hosts inside the group. \"\" = as the parent group (at the root: \"name\"); \"name\" = the display name; \"ip\" = the IP address; \"both\" = the display name and the IP address"
           },
+          "color": {
+            "type": "string",
+            "pattern": "^(#[0-9A-Fa-f]{6})?$",
+            "description": "The colour of the group's top bar in the GUI (SPEC-727): \"#RRGGBB\" (stored in upper case) or \"\" (none: the usual frame colour)"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -1065,6 +1070,7 @@
           "parent_id",
           "collapsed",
           "labels",
+          "color",
           "status",
           "x",
           "y",
@@ -1145,6 +1151,11 @@
               "both"
             ],
             "description": "groups only (SPEC-725); left out when empty"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^(#[0-9A-Fa-f]{6})?$",
+            "description": "groups only (SPEC-727): the top bar's colour, \"#RRGGBB\"; left out when none"
           },
           "cidr": {
             "type": "string",
@@ -1302,6 +1313,11 @@
             ],
             "description": "Host label mode (SPEC-725): what the GUI shows under the hosts inside the group. \"\" = as the parent group (at the root: \"name\"); \"name\" = the display name; \"ip\" = the IP address; \"both\" = the display name and the IP address. Default \"\""
           },
+          "color": {
+            "type": "string",
+            "pattern": "^(#[0-9A-Fa-f]{6})?$",
+            "description": "The colour of the group's top bar in the GUI (SPEC-727): \"#rrggbb\" (stored in upper case) or \"\" (none). Default \"\""
+          },
           "x": {
             "type": "number",
             "format": "double"
@@ -1348,6 +1364,11 @@
               "both"
             ],
             "description": "Host label mode (SPEC-725): what the GUI shows under the hosts inside the group. \"\" = as the parent group (at the root: \"name\"); \"name\" = the display name; \"ip\" = the IP address; \"both\" = the display name and the IP address"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^(#[0-9A-Fa-f]{6})?$",
+            "description": "The colour of the group's top bar in the GUI (SPEC-727): \"#rrggbb\" (stored in upper case) or \"\" (none)"
           },
           "x": {
             "type": "number",

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -198,6 +199,7 @@ type Group struct {
 	ParentID    *int64    `json:"parent_id"`
 	Collapsed   bool      `json:"collapsed"`
 	Labels      string    `json:"labels"` // SPEC-725: "" (as the parent), "name", "ip" or "both"
+	Color       string    `json:"color"`  // SPEC-727: the top bar's colour, "#RRGGBB" or "" (none)
 	Status      string    `json:"status"`
 	X           float64   `json:"x"`
 	Y           float64   `json:"y"`
@@ -222,6 +224,7 @@ type MapItem struct {
 	Collapsed   bool    `json:"collapsed"`        // groups only, false for hosts
 	CIDR        string  `json:"cidr,omitempty"`   // network groups only
 	Labels      string  `json:"labels,omitempty"` // groups only (SPEC-725)
+	Color       string  `json:"color,omitempty"`  // groups only (SPEC-727)
 }
 
 // Map is the response of GET /map: the items of one view (SPEC-122).
@@ -268,6 +271,7 @@ type GroupCreate struct {
 	ParentID    *int64   `json:"parent_id,omitempty"`
 	Collapsed   *bool    `json:"collapsed,omitempty"`
 	Labels      string   `json:"labels,omitempty"` // SPEC-725
+	Color       string   `json:"color,omitempty"`  // SPEC-727
 	X           *float64 `json:"x,omitempty"`
 	Y           *float64 `json:"y,omitempty"`
 }
@@ -317,6 +321,23 @@ func ValidLabels(s string) bool {
 	return false
 }
 
+// NormColor checks a group's bar colour (SPEC-727): "" (none) or
+// "#rrggbb" in either case. It returns the colour in upper case.
+func NormColor(s string) (string, bool) {
+	if s == "" {
+		return "", true
+	}
+	if len(s) != 7 || s[0] != '#' {
+		return "", false
+	}
+	for _, c := range s[1:] {
+		if !('0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F') {
+			return "", false
+		}
+	}
+	return strings.ToUpper(s), true
+}
+
 // GroupPatch is the body of PATCH /groups/{id}. "cidr": "" turns a network
 // group into an ordinary group; "parent_id": null moves it to the root.
 type GroupPatch struct {
@@ -327,6 +348,7 @@ type GroupPatch struct {
 	ParentID    Opt[*int64]  `json:"parent_id,omitzero"`
 	Collapsed   Opt[bool]    `json:"collapsed,omitzero"`
 	Labels      Opt[string]  `json:"labels,omitzero"` // SPEC-725; "" = as the parent
+	Color       Opt[string]  `json:"color,omitzero"`  // SPEC-727; "" = none
 	X           Opt[float64] `json:"x,omitzero"`
 	Y           Opt[float64] `json:"y,omitzero"`
 }

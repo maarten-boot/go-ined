@@ -27,7 +27,7 @@ var commands = map[string]map[string]command{
 		"list": groupList, "add": groupAdd, "show": groupShow, "edit": groupEdit,
 		"rm": groupRm, "move": groupMove, "shift": groupShift,
 		"collapse": groupCollapse(true), "expand": groupCollapse(false),
-		"labels": groupLabels,
+		"labels": groupLabels, "color": groupColor,
 	},
 	"note": {"get": noteGet, "set": noteSet, "clear": noteClear},
 	"view": {
@@ -169,11 +169,15 @@ func groupAdd(a *app, name string, args []string) error {
 	expanded := fs.Bool("expanded", false, "create the group expanded")
 	view := fs.Int64("view", 0, "view of the group (default: the network view)")
 	labels := fs.String("labels", "inherit", "what the GUI shows under its hosts: name, ip, both or inherit")
+	color := fs.String("color", "none", "the colour of its top bar in the GUI: #rrggbb or none")
 	if _, err := a.parse(fs, args, 0, 0); err != nil {
 		return err
 	}
 	var err error
 	if in.Labels, err = labelsArg(*labels); err != nil {
+		return err
+	}
+	if in.Color, err = colorArg(*color); err != nil {
 		return err
 	}
 	if set(fs)["view"] {
@@ -323,6 +327,39 @@ func groupLabels(a *app, name string, args []string) error {
 	var g apitypes.Group
 	return a.call(http.MethodPatch, path("group", gid), apitypes.GroupPatch{Labels: apitypes.Some(mode)}, &g,
 		func() { a.groupDetails(g) })
+}
+
+// groupColor sets the colour of a group's top bar in the GUI (SPEC-727):
+// #rrggbb, or none.
+func groupColor(a *app, name string, args []string) error {
+	pos, err := a.parse(a.flags(name), args, 2, 2)
+	if err != nil {
+		return err
+	}
+	gid, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := colorArg(pos[1])
+	if err != nil {
+		return err
+	}
+	var g apitypes.Group
+	return a.call(http.MethodPatch, path("group", gid), apitypes.GroupPatch{Color: apitypes.Some(c)}, &g,
+		func() { a.groupDetails(g) })
+}
+
+// colorArg turns a bar colour as typed (none for no colour) into its API
+// value.
+func colorArg(s string) (string, error) {
+	if s == "none" {
+		return "", nil
+	}
+	c, ok := apitypes.NormColor(s)
+	if !ok || c == "" {
+		return "", usagef("color must be #rrggbb or none, not %q", s)
+	}
+	return c, nil
 }
 
 // labelsArg turns a label mode as typed (inherit for the parent's) into

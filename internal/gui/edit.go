@@ -38,6 +38,7 @@ func (g *GUI) wireEditing(mv *MapView) {
 			g.moveInto(view, k, &group)
 		}
 	}
+	mv.OnDropOut = func(keys []mapmodel.Key, group int64, dx, dy float64) { g.dropOut(view, keys, group, dx) }
 	mv.Subtree = func(k mapmodel.Key) map[mapmodel.Key]bool {
 		if k.Type == apitypes.TypeHost {
 			return map[mapmodel.Key]bool{k: true}
@@ -197,7 +198,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem(delLabel, deleteTargets))
 	}
 	id := n.Item.ID
-	// Expand, Collapse and Host labels act on every selected group, as
+	// Expand, Collapse, Host labels and Bar colour act on every selected group, as
 	// the keys c and e do (crosscheck 2026-11-12-03 C1).
 	groups := []*apitypes.MapItem{n.Item}
 	anyCollapsed, anyExpanded := n.Kind != mapmodel.KindFrame, n.Kind == mapmodel.KindFrame
@@ -213,6 +214,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		}
 	}
 	labels := g.labelsItem(view, groups)
+	colour := g.colorItem(groups)
 	g.mu.Unlock()
 	setAll := func(collapsed bool) {
 		for _, it := range groups {
@@ -231,7 +233,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		fyne.NewMenuItem("Edit…", func() { g.editGroupDialog(view, id) }),
 		fyne.NewMenuItem(moveLabel, func() { g.moveToDialog(view, targets...) }),
 	}
-	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }), labels)
+	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }), labels, colour)
 	if cidr := n.Item.CIDR; cidr != "" {
 		scan := fyne.NewMenuItem("Scan this network", func() { g.openDiscovery(cidr) })
 		scan.Disabled = strings.Contains(cidr, ":") // IPv6 (SPEC-707)

@@ -369,3 +369,38 @@ func TestMigration4(t *testing.T) {
 		t.Fatalf("saved mode: %+v %v", st.Groups, err)
 	}
 }
+
+// TC-735 (store part): migration 5 upgrades a schema-4 database: every
+// group gets no bar colour; a colour is saved and read (SPEC-727).
+func TestMigration5(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v4.db")
+	db, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(ctx, db, migrations[:4]); err != nil {
+		t.Fatal(err)
+	}
+	ts := "2026-11-01T10:00:00Z"
+	if _, err := db.Exec(`INSERT INTO groups (id, name, parent_id, labels, x, y, created_at, updated_at) VALUES (3, 'lan', 0, 'ip', 5, 6, ?1, ?1)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s, err := Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	st, err := s.Load(ctx)
+	if err != nil || len(st.Groups) != 1 || st.Groups[0].Color != "" || st.Groups[0].Labels != "ip" {
+		t.Fatalf("groups after migration: %+v %v", st.Groups, err)
+	}
+	g := st.Groups[0]
+	g.Color = "#3CB44B"
+	if err := s.Apply(ctx, inventory.Changes{Groups: []inventory.Group{g}}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err = s.Load(ctx); err != nil || st.Groups[0].Color != "#3CB44B" {
+		t.Fatalf("saved colour: %+v %v", st.Groups, err)
+	}
+}

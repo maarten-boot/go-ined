@@ -533,3 +533,44 @@ func TestArrangeAPI(t *testing.T) {
 	e.wantErr(400, "invalid_argument", "POST", "/views/1/arrange", apitypes.Arrange{CellWidth: 1})
 	e.wantErr(405, "method_not_allowed", "GET", "/views/1/arrange", nil)
 }
+
+// TC-735 (API part): a group's bar colour is set on create and by PATCH,
+// checked, stored in upper case, kept over a restart, given in /map and
+// cleared with "" (SPEC-727).
+func TestGroupColor(t *testing.T) {
+	e := newEnv(t, "")
+	var g apitypes.Group
+	e.want(201, "POST", "/groups", apitypes.GroupCreate{Name: "lan", Color: "#e6194b"}, &g)
+	if g.Color != "#E6194B" {
+		t.Fatalf("created: %+v", g)
+	}
+	var plain apitypes.Group
+	e.want(201, "POST", "/groups", apitypes.GroupCreate{Name: "plain"}, &plain)
+	if plain.Color != "" {
+		t.Errorf("default: %q", plain.Color)
+	}
+	for _, bad := range []string{"red", "#12345", "#1234567", "123456#", "#GGGGGG"} {
+		e.wantErr(400, "invalid_argument", "POST", "/groups", apitypes.GroupCreate{Name: "x", Color: bad})
+		e.wantErr(400, "invalid_argument", "PATCH", "/groups/"+itoa(g.ID), `{"color": "`+bad+`"}`)
+	}
+	e.want(200, "PATCH", "/groups/"+itoa(g.ID), `{"color": "#4363d8"}`, &g)
+	if g.Color != "#4363D8" {
+		t.Errorf("patched: %+v", g)
+	}
+	e.restart()
+	e.want(200, "GET", "/groups/"+itoa(g.ID), nil, &g)
+	if g.Color != "#4363D8" {
+		t.Errorf("after restart: %+v", g)
+	}
+	var m apitypes.Map
+	e.want(200, "GET", "/map", nil, &m)
+	for _, it := range m.Items {
+		if it.Type == apitypes.TypeGroup && (it.ID == g.ID && it.Color != "#4363D8" || it.ID == plain.ID && it.Color != "") {
+			t.Errorf("map item: %+v", it)
+		}
+	}
+	e.want(200, "PATCH", "/groups/"+itoa(g.ID), `{"color": ""}`, &g)
+	if g.Color != "" {
+		t.Errorf("cleared: %+v", g)
+	}
+}

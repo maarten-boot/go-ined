@@ -19,6 +19,11 @@ const (
 	LabelGap    = 4.0  // between an icon and its first label line
 	FramePad    = 14.0 // inside an expanded frame, around its members
 	FrameLabelH = 24.0 // the label strip at the top of a frame
+	// FrameFootH is the bottom bar of a frame: dropping an item from
+	// inside the group onto it moves the item out (SPEC-704 v0.42).
+	FrameFootH = FrameLabelH / 2
+	// OutGap is the space between a frame and an item that left it.
+	OutGap = 16.0
 	// FrameGlyph is the size of the status glyph in a frame's label strip,
 	// and FrameTextX where the label text starts, from the frame's left
 	// edge (crosscheck 2026-11-13-01 C1).
@@ -88,6 +93,7 @@ type Node struct {
 	Item   *apitypes.MapItem
 	Kind   Kind
 	Icon   Rect     // host or collapsed-group icon; for a frame, the label strip
+	Foot   Rect     // frames only: the bottom bar (SPEC-704 v0.42)
 	Bounds Rect     // everything the node covers: icon and labels, or the whole frame
 	Labels []string // text lines under an icon, or the frame's label
 	// NameLines is how many of Labels hold the name (more than 1 when
@@ -165,9 +171,9 @@ func (l *layout) place(group int64, depth int, seen map[int64]bool) Rect {
 			inner := l.place(it.ID, depth+1, seen)
 			// An empty frame starts where the icon starts (v0.29).
 			ax, ay := IconCorner(it)
-			r := Rect{ax, ay, EmptyFrameW, EmptyFrameH}
+			r := Rect{ax, ay, EmptyFrameW, EmptyFrameH + FrameFootH}
 			if inner != (Rect{}) {
-				r = Rect{inner.X - FramePad, inner.Y - FramePad - FrameLabelH, inner.W + 2*FramePad, inner.H + 2*FramePad + FrameLabelH}
+				r = Rect{inner.X - FramePad, inner.Y - FramePad - FrameLabelH, inner.W + 2*FramePad, inner.H + 2*FramePad + FrameLabelH + FrameFootH}
 			}
 			// Wide enough for the glyph, the label and the padding on the
 			// right (crosscheck 2026-11-13-01 C1).
@@ -177,6 +183,7 @@ func (l *layout) place(group int64, depth int, seen map[int64]bool) Rect {
 			}
 			l.frames = append(l.frames, Node{
 				Item: it, Kind: KindFrame, Bounds: r, Icon: Rect{r.X, r.Y, r.W, FrameLabelH},
+				Foot:   Rect{r.X, r.Y + r.H - FrameFootH, r.W, FrameFootH},
 				Labels: []string{label}, Depth: depth, Counts: l.counts[it.ID],
 			})
 			all = all.Union(r)

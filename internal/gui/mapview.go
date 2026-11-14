@@ -52,6 +52,9 @@ type MapView struct {
 	OnMoved func(keys []mapmodel.Key, dx, dy float64)
 	// OnDropInto: items were dropped onto a group (SPEC-704).
 	OnDropInto func(keys []mapmodel.Key, group int64, dx, dy float64)
+	// OnDropOut: items inside a group were dropped onto its bottom bar, to
+	// leave it (SPEC-704 v0.42).
+	OnDropOut func(keys []mapmodel.Key, group int64, dx, dy float64)
 	// Subtree returns the keys that move with a dragged item: the item,
 	// and for a group everything below it.
 	Subtree func(k mapmodel.Key) map[mapmodel.Key]bool
@@ -69,6 +72,7 @@ type MapView struct {
 	dragDX                         float64 // map units
 	dragDY                         float64
 	dropTarget                     *mapmodel.Node
+	dropOut                        bool // the target is a bottom bar: out of the group
 
 	// The tab's focus (SPEC-726; UI goroutine): the groups from the top
 	// down to the focus group, the viewport each focus level had when it
@@ -359,7 +363,7 @@ func (mv *MapView) Dragged(ev *fyne.DragEvent) {
 		mv.dragDX += dx / mv.vp.Zoom
 		mv.dragDY += dy / mv.vp.Zoom
 		x, y := mv.toMap(ev.Position)
-		mv.dropTarget = dropTarget(mv.nodes, x, y, mv.dragSet)
+		mv.dropTarget, mv.dropOut = dropTarget(mv.nodes, x, y, mv.dragSet, mv.insideGroup)
 		mv.Refresh()
 		return
 	}
@@ -384,9 +388,13 @@ func (mv *MapView) Dragged(ev *fyne.DragEvent) {
 // move (SPEC-704).
 func (mv *MapView) DragEnd() {
 	if mv.drag == dragItem {
-		keys, dx, dy, target := mv.dragKeys, mv.dragDX, mv.dragDY, mv.dropTarget
+		keys, dx, dy, target, out := mv.dragKeys, mv.dragDX, mv.dragDY, mv.dropTarget, mv.dropOut
 		mv.endItemDrag()
 		switch {
+		case target != nil && out:
+			if mv.OnDropOut != nil {
+				mv.OnDropOut(keys, target.Item.ID, dx, dy)
+			}
 		case target != nil && mv.OnDropInto != nil:
 			mv.OnDropInto(keys, target.Item.ID, dx, dy)
 		case (dx != 0 || dy != 0) && mv.OnMoved != nil:
@@ -413,6 +421,7 @@ func (mv *MapView) Dragging() bool { return mv.drag == dragItem }
 
 func (mv *MapView) endItemDrag() {
 	mv.dragSet, mv.dropTarget, mv.dragDX, mv.dragDY, mv.pendingKey, mv.dragKeys = nil, nil, 0, 0, nil, nil
+	mv.dropOut = false
 	mv.Refresh()
 }
 
@@ -453,18 +462,39 @@ func (mv *MapView) draggable(p fyne.Position) *mapmodel.Key {
 }
 
 // dropTarget is the group a dragged item would go into at (x, y): a
-// collapsed group icon or a frame's label strip, not one being dragged.
-func dropTarget(nodes []mapmodel.Node, x, y float64, exclude map[mapmodel.Key]bool) *mapmodel.Node {
+// collapsed group's icon or an expanded group's label strip. out is true
+// for an expanded group's bottom bar, when inside says the dragged items
+// lie in that group: they would leave it (SPEC-704 v0.42). Elsewhere a
+// bottom bar is empty space.
+func dropTarget(nodes []mapmodel.Node, x, y float64, exclude map[mapmodel.Key]bool, inside func(group int64) bool) (target *mapmodel.Node, out bool) {
 	for i := len(nodes) - 1; i >= 0; i-- {
 		n := &nodes[i]
 		if n.Item.Type != apitypes.TypeGroup || exclude[mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}] {
 			continue
 		}
 		if (n.Kind == mapmodel.KindGroup && n.Bounds.Contains(x, y)) || (n.Kind == mapmodel.KindFrame && n.Icon.Contains(x, y)) {
-			return n
+			return n, false
+		}
+		if n.Kind == mapmodel.KindFrame && n.Foot.Contains(x, y) && inside != nil && inside(n.Item.ID) {
+			return n, true
 		}
 	}
-	return nil
+	return nil, false
+}
+
+// insideGroup reports whether every dragged item lies in a group, at any
+// depth (SPEC-704 v0.42, B3).
+func (mv *MapView) insideGroup(group int64) bool {
+	if mv.Subtree == nil || len(mv.dragKeys) == 0 {
+		return false
+	}
+	in := mv.Subtree(mapmodel.GroupKey(group))
+	for _, k := range mv.dragKeys {
+		if k == mapmodel.GroupKey(group) || !in[k] {
+			return false
+		}
+	}
+	return true
 }
 
 func (mv *MapView) barAt(p fyne.Position) dragMode {
@@ -562,12 +592,15 @@ func (r *mapRenderer) build() {
 		d.rect(mapmodel.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}, color.Transparent, nrgba(p.Primary), 1.5)
 	}
 	if t := mv.dropTarget; t != nil { // SPEC-704: mark the drop target
-		r := t.Icon
-		if t.Kind == mapmodel.KindGroup {
+		r, word := t.Icon, "into"
+		switch {
+		case mv.dropOut: // the bottom bar (SPEC-704 v0.42)
+			r, word = t.Foot, "out"
+		case t.Kind == mapmodel.KindGroup:
 			r = t.Bounds
 		}
 		d.rect(mapmodel.Rect{X: r.X - 6, Y: r.Y - 6, W: r.W + 12, H: r.H + 12}, color.Transparent, nrgba(p.Primary), 4)
-		d.text("into", r.X+r.W+10, r.Y-6, nrgba(p.Primary), false, true)
+		d.text(word, r.X+r.W+10, r.Y-6, nrgba(p.Primary), false, true)
 	}
 	d.scrollBars(mv, s)
 	r.objs = d.objs
@@ -757,9 +790,14 @@ func (d *drawer) icon(n *mapmodel.Node, selected bool) {
 		d.glyph(it, ic.X+ic.W/2, ic.Y+ic.H/2, ic.H*0.55)
 	} else {
 		fc := d.frameColor(it)
-		// A folder: the body and a tab on its top left.
+		// A folder: the body and a tab on its top left, in the group's bar
+		// colour if it has one (SPEC-727, B8).
 		tabH := mapmodel.GroupTabH
-		d.rect(mapmodel.Rect{X: ic.X, Y: ic.Y - tabH, W: ic.W * 0.42, H: tabH}, bg, fc, 1.5)
+		tab := color.Color(bg)
+		if fill, _, ok := theme.Bar(it.Color, d.p.Contrast); ok {
+			tab = nrgba(fill)
+		}
+		d.rect(mapmodel.Rect{X: ic.X, Y: ic.Y - tabH, W: ic.W * 0.42, H: tabH}, tab, fc, 1.5)
 		d.rect(ic, bg, fc, 1.5)
 		if it.CIDR != "" { // a network group: double border
 			d.rect(mapmodel.Rect{X: ic.X + 3, Y: ic.Y + 3, W: ic.W - 6, H: ic.H - 6}, color.Transparent, fc, 1)
@@ -788,20 +826,30 @@ func (d *drawer) icon(n *mapmodel.Node, selected bool) {
 }
 
 // frame draws an expanded group: a solid (ordinary) or dashed (network)
-// border, the label strip with the status glyph, name and status word.
+// border, the label strip with the status glyph, name and status word, and
+// the empty bottom bar (SPEC-704 v0.42). A group with a bar colour gets a
+// filled label strip with a black or white label (SPEC-727); the glyph
+// keeps a background square, so its contrast doesn't change.
 func (d *drawer) frame(n *mapmodel.Node, vis mapmodel.Rect, selected bool) {
 	b, it := n.Bounds, n.Item
 	fc := d.frameColor(it)
+	g := mapmodel.FrameGlyph
+	text := nrgba(d.p.Text)
+	if fill, fg, ok := theme.Bar(it.Color, d.p.Contrast); ok {
+		d.rect(n.Icon, nrgba(fill), color.Transparent, 0)
+		d.rect(mapmodel.Rect{X: b.X + 8 - 2, Y: b.Y + (mapmodel.FrameLabelH-g)/2 - 2, W: g + 4, H: g + 4}, nrgba(d.p.Background), color.Transparent, 0)
+		text = nrgba(fg)
+	}
 	if it.CIDR != "" {
 		d.dashedRect(b, vis, fc)
 	} else {
 		d.rect(b, color.Transparent, fc, 1.5)
 	}
 	d.line(b.X, b.Y+mapmodel.FrameLabelH, b.X+b.W, b.Y+mapmodel.FrameLabelH, fc, 1)
-	g := mapmodel.FrameGlyph
+	d.line(b.X, n.Foot.Y, b.X+b.W, n.Foot.Y, fc, 1)
 	d.glyph(it, b.X+8+g/2, b.Y+mapmodel.FrameLabelH/2, g)
 	_, th := measure(n.Labels[0])
-	d.text(n.Labels[0], b.X+mapmodel.FrameTextX, b.Y+(mapmodel.FrameLabelH-th)/2, nrgba(d.p.Text), false, true)
+	d.text(n.Labels[0], b.X+mapmodel.FrameTextX, b.Y+(mapmodel.FrameLabelH-th)/2, text, false, true)
 	if selected {
 		d.rect(mapmodel.Rect{X: b.X - 4, Y: b.Y - 4, W: b.W + 8, H: b.H + 8}, color.Transparent, nrgba(d.p.Primary), 2.5)
 	}

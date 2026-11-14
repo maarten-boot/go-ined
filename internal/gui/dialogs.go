@@ -735,7 +735,7 @@ func (g *GUI) groupSelectionDialog(view int64, keys []mapmodel.Key) *formDialog 
 		}
 		for _, k := range keys { // into the group, at the same place
 			p := pos[k]
-			if err := g.setParentAt(view, k, gr.ID, p[0], p[1]); err != nil {
+			if err := g.setParentAt(view, k, &gr.ID, p[0], p[1]); err != nil {
 				return err
 			}
 		}
@@ -784,7 +784,7 @@ func (g *GUI) joinDialog(view int64, keys []mapmodel.Key, primary *mapmodel.Key)
 	join := func(group int64) error {
 		for _, k := range hosts {
 			p := pos[k]
-			if err := g.setParentAt(view, k, group, p[0], p[1]); err != nil {
+			if err := g.setParentAt(view, k, &group, p[0], p[1]); err != nil {
 				return err
 			}
 		}
@@ -861,15 +861,15 @@ func (g *GUI) commonParent(view int64, keys []mapmodel.Key) *int64 {
 }
 
 // setParentAt gives an item a new parent and keeps its position.
-func (g *GUI) setParentAt(view int64, k mapmodel.Key, group int64, x, y float64) error {
+func (g *GUI) setParentAt(view int64, k mapmodel.Key, group *int64, x, y float64) error {
 	var err error
 	switch {
 	case k.Type == apitypes.TypeGroup:
-		_, err = g.c.UpdateGroup(g.ctx, k.ID, apitypes.GroupPatch{ParentID: apitypes.Some(&group), X: apitypes.Some(x), Y: apitypes.Some(y)})
+		_, err = g.c.UpdateGroup(g.ctx, k.ID, apitypes.GroupPatch{ParentID: apitypes.Some(group), X: apitypes.Some(x), Y: apitypes.Some(y)})
 	case view == mapmodel.NetworkView:
-		_, err = g.c.UpdateHost(g.ctx, k.ID, apitypes.HostPatch{ParentID: apitypes.Some(&group), X: apitypes.Some(x), Y: apitypes.Some(y)})
+		_, err = g.c.UpdateHost(g.ctx, k.ID, apitypes.HostPatch{ParentID: apitypes.Some(group), X: apitypes.Some(x), Y: apitypes.Some(y)})
 	default:
-		_, err = g.c.PlaceHost(g.ctx, view, k.ID, apitypes.PlacementSet{ParentID: &group, X: &x, Y: &y})
+		_, err = g.c.PlaceHost(g.ctx, view, k.ID, apitypes.PlacementSet{ParentID: group, X: &x, Y: &y})
 	}
 	return err
 }

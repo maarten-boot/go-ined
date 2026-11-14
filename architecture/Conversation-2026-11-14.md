@@ -70,3 +70,13 @@
     - Checked end to end with real binaries on a scratch server: `ssh, http` found on 127.0.0.1 and ::1, as listening here. The menu's look is not checked under Xvfb.
     - `TestClearAfterMisses` timed out again under load. Cause found: the test set the DNS answer after starting the refresher, whose first lookup is due at once; three more tests did the same. All now set answers first; 20 of 20 runs pass with `-race`.
     - All tests and lint pass.
+20. **User**: text in the left info pane should be selectable; the note's editable text can start directly under the last info item from the inventory. Currently only hosts have "Remove from this view"; that should also apply to groups. When several items are selected, "Remove from this view" and "Show in view" should apply to all selected items.
+    (Spelling corrected: "test" → "text". Read "left info pane" as the details panel, which is on the right; asked the user to confirm.)
+    **Claude** wrote `Design-details-and-selection.md`:
+    - D1: selectable values and title in the details panel. Under Max the selection isn't highlighted (white), but copying works.
+    - D2: the note right below the rows, filling the rest of the height.
+    - D3: "Remove from this view" on groups of a custom view, using the existing cascade delete, which keeps the hosts; it asks first for a group with contents.
+    - D4: "Remove N items from this view" for a selection.
+    - D5: "Show in view" on a selection places hosts and copies groups.
+    - D6: no new keys.
+    - GUI only. Decisions D1–D6 wait for the user's OK.

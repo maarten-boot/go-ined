@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.44** (2026-11-14)
+Status: **draft v0.45** (2026-11-14)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -175,6 +175,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - The group context menu has "Bar colour ▸" with "None", a fixed palette of 16 colours (red, orange, yellow, lime, green, teal, cyan, blue, navy, purple, lavender, magenta, pink, maroon, brown, beige; each with a swatch), a shared custom colour when there is one, and "Custom…", which opens Fyne's colour picker (hue, saturation, RGB, hex). The current choice is checked; with several groups selected it acts on all (SPEC-724). The details panel has a "Bar colour" row.
   - The colour fills an expanded group's label strip and a collapsed group's folder tab; the border keeps its usual colour. The label on the strip is black or white, whichever contrasts more, which is at least 4.58:1 for any colour (SPEC-001). For AAA or a custom ratio, the strip is lightened or darkened just enough to meet it; under Max it is drawn without colour. The status glyph keeps a small background square, so its contrast doesn't change.
   - `inedctl group color <id> '#rrggbb'|none` and `group add --color`; `group show` prints the colour.
+- **SPEC-728** SHOULD (v0.45, user report: a v0.2.0 server refused bar colours without a clear sign): **Server version check.** Whenever the GUI reads `/health` (every connect and every 30 s, SPEC-717), it compares the server's `version` with its own. When both are releases (`vX.Y.Z`, also with `git describe`'s `-N-gHASH` and `-dirty`) and the server's X.Y.Z is lower, a bold line above the status bar says "ined-server <version> is older than this GUI (<version>): newer changes, such as a bar colour, are refused; update and restart the server". Builds after the same release, a newer server, and versions that aren't releases (`dev`) give no warning. The line goes away at the next check after the server is updated; "Copy" includes it.
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.

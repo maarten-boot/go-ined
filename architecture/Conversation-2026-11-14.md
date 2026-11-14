@@ -39,3 +39,12 @@
     - Found under Xvfb: Fyne draws a menu item's shortcut at 20 % opacity (about 1.6:1 on white). The shortcuts are now part of the labels ("Zoom in (Ctrl++)"), in black.
     - SPEC-717/726 v0.44, TC-737; README, `Changes.md` `[Unreleased]`. All GUI tests and lint pass; `TestClearAfterMisses` (dnsname) timed out once in the full run under load and passed 10 of 10 alone (in the Plan).
     - The toolbar change is not in 0.5.0; tag `v0.5.0` stays at the drag fix.
+11. **User**: the line while moving is fixed, but applying a colour to the group bar is still not working; the popup menu is there, I can select a colour but it never shows.
+    (Spelling corrected: "pupup" → "popup".)
+    **Claude**: no `ined` process runs on this machine and the user's server isn't reachable from here (it listens on its own machine). Checked a scratch server with a network group, a nested group and a group in a custom view: the colour is stored and in `/map` for all. Asked for `inedctl health`, `group show` and the status bar.
+12. **User**: I am on Ubuntu 24 if that helps.
+    **Claude**: 24.04 uses Wayland (XWayland for Fyne); a lost submenu click would look the same, so asked whether "Host labels ▸" works, plus the server checks.
+13. **User** pasted `inedctl health`: `Version: v0.2.0-5-g812912d-dirty`.
+    **Claude**: confirmed, the running server is the build from 12 Nov and refuses `color` (and `labels`). Steps: stop it, copy the database, start the new `bin/ined-server` (runs on 24.04: glibc 2.34; GUI 2.38; 24.04 has 2.39), check `inedctl health`. Offered a version check in the GUI.
+14. **User**: yes, add the version check.
+    **Claude** built it on `feature/version-check` (merged): on every health check the GUI compares the server's release with its own; an older server gets a bold line above the status bar ("ined-server v0.2.0 is older than this GUI (v0.5.0): newer changes, such as a bar colour, are refused; update and restart the server"), included in "Copy". SPEC-728 (Spec v0.45), TC-738; `Changes.md` `[Unreleased]`. Checked under Xvfb against a server built from `v0.2.0`. All tests and lint pass.

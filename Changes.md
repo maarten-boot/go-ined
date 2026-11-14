@@ -4,6 +4,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- `ined-gui` warns when the server is from an older release than the GUI ("ined-server v0.2.0 is older than this GUI (v0.5.0): … update and restart the server"), in a line above the status bar. An older server refuses newer changes, such as a bar colour, and until now the only sign was an error message in the status bar.
+
 ### Changed
 - `ined-gui` toolbar: the five zoom items are one button, "Zoom 100 % ▾", that shows the current zoom; its menu has Zoom in, Zoom out, 100 % and Fit all, with their shortcuts. The "Show" list moved into the toolbar, next to it. The trail (`Networks › lan`) has its own row, which appears only while a single group is shown.
 

@@ -1,16 +1,20 @@
 package gui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/test"
 	fynetheme "fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/maarten-boot/go-ined/internal/gui/mapmodel"
+	"github.com/maarten-boot/go-ined/internal/theme"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
 
@@ -58,7 +62,7 @@ func TestDetailsSelectableAndNote(t *testing.T) {
 				t.Errorf("row %d %q: selectable %v", i, l.Text, l.Selectable)
 			}
 		}
-		if d.body.Objects[0] != d.form || d.body.Objects[2] != d.note {
+		if o, ok := d.body.Objects[0].(*container.ThemeOverride); !ok || o.Content != d.form || d.body.Objects[2] != d.note {
 			t.Errorf("body: %v", d.body.Objects)
 		}
 		var scroll *container.Scroll
@@ -260,4 +264,50 @@ func (e *env) viewCount() int {
 	e.g.mu.Lock()
 	defer e.g.mu.Unlock()
 	return len(e.g.model.Views())
+}
+
+// TC-747: the rows of the details panel have half of Fyne's usual white
+// space between them, a long value still wraps, and the columns keep the
+// form's distance and line up with the title.
+func TestCompactDetails(t *testing.T) {
+	a := test.NewTempApp(t)
+	a.Settings().SetTheme(newFyneTheme(theme.NewPalette(theme.Default)))
+	rows := func(l fyne.Layout, n int) (*fyne.Container, []*widget.Label) {
+		var objs []fyne.CanvasObject
+		var vals []*widget.Label
+		for i := range n {
+			v := widget.NewLabel(fmt.Sprintf("value %d", i))
+			if i == 2 {
+				v.SetText(strings.Repeat("a long value that wraps ", 8))
+			}
+			v.Wrapping = fyne.TextWrapWord
+			objs = append(objs, widget.NewLabel(fmt.Sprintf("Key %d", i)), v)
+			vals = append(vals, v)
+		}
+		return container.New(l, objs...), vals
+	}
+	fyneForm, fv := rows(layout.NewFormLayout(), 3)
+	form, cv := rows(compactForm{0.5}, 3)
+	w := test.NewWindow(container.NewVBox(fyneForm, container.NewThemeOverride(form, compactTheme{0.5})))
+	defer w.Close()
+	w.Resize(fyne.NewSize(300, 600))
+	text := fyne.MeasureText("X", fynetheme.TextSize(), fyne.TextStyle{}).Height
+	gap := func(vals []*widget.Label) float32 { // white space between the text of rows 0 and 1
+		return vals[1].Position().Y - vals[0].Position().Y - text
+	}
+	if g, want := gap(cv), gap(fv)/2; g < want-0.5 || g > want+0.5 {
+		t.Fatalf("white space between rows %.1f, want half of %.1f", g, gap(fv))
+	}
+	if cv[2].Size().Height < 2*text {
+		t.Fatalf("a long value doesn't wrap: height %.1f", cv[2].Size().Height)
+	}
+	// Text starts at the label's position plus its inner padding: 8 in the
+	// form, 4 in the compact rows.
+	inner := a.Settings().Theme().Size(fynetheme.SizeNameInnerPadding)
+	if fx, cx := fv[0].Position().X+inner, cv[0].Position().X+inner/2; fx != cx {
+		t.Fatalf("value text at x %.1f, the form's at %.1f", cx, fx)
+	}
+	if fx, cx := fyneForm.Objects[0].Position().X+inner, form.Objects[0].Position().X+inner/2; fx != cx {
+		t.Fatalf("key text at x %.1f, the form's at %.1f", cx, fx)
+	}
 }

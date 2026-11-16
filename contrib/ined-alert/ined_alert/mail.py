@@ -1,5 +1,5 @@
 """Batching notices per recipient and sending them as mail
-(Design-alerting.md A6, A7; SPEC-954)."""
+(Design-alerting.md A6, A7; Design-service-alerts.md S8; SPEC-954)."""
 
 from __future__ import annotations
 
@@ -46,16 +46,34 @@ def _host(n: E.Notice) -> str:
     return f"{n.host['name']} ({n.host['ip']})" if n.host["name"] != n.host["ip"] else n.host["ip"]
 
 
+def _what(n: E.Notice) -> str:
+    """The subject's "web (192.0.2.10)" or "https on web (192.0.2.10)"."""
+    return f"{n.service['name']} on {_host(n)}" if n.service else _host(n)
+
+
+def _svc_long(sv: dict) -> str:
+    """https (443); tcp:5432 already names its port."""
+    return sv["name"] if sv["name"].startswith("tcp:") or not sv.get("port") else f"{sv['name']} ({sv['port']})"
+
+
+def _what_long(n: E.Notice) -> str:
+    return f"{_svc_long(n.service)} on {_host(n)}" if n.service else _host(n)
+
+
+def _count(c: int, one: str) -> str:
+    return f"{c} {one}{'s' if c != 1 else ''}"
+
+
 def subject(items: list[tuple[E.Notice, list[str]]]) -> str:
     if len(items) == 1:
         n = items[0][0]
         match n.kind:
             case E.DOWN:
-                return f"[ined] DOWN {_host(n)}"
+                return f"[ined] DOWN {_what(n)}"
             case E.UP:
-                return f"[ined] UP {_host(n)} after {span(n.at - n.since)}"
+                return f"[ined] UP {_what(n)} after {span(n.at - n.since)}"
             case E.STILL_DOWN:
-                return f"[ined] STILL DOWN {_host(n)} for {span(n.at - n.since)}"
+                return f"[ined] STILL DOWN {_what(n)} for {span(n.at - n.since)}"
             case E.SERVER_DOWN:
                 return "[ined] ined-server unreachable"
             case E.SERVER_UP:
@@ -65,18 +83,29 @@ def subject(items: list[tuple[E.Notice, list[str]]]) -> str:
             case E.PINGS_AGAIN:
                 return "[ined] ined-server is OK again"
             case E.SUMMARY:
-                return f"[ined] ined-alert started: {len(n.hosts)} host{'s' if len(n.hosts) != 1 else ''} down"
+                s = f"[ined] ined-alert started: {_count(len(n.hosts), 'host')} down"
+                return s + (f", {_count(len(n.services), 'service')} down" if n.services else "")
     kinds = [n.kind for n, _ in items]
+    svcs = any(n.service for n, _ in items)
     if all(k == E.DOWN for k in kinds):
         common = set(items[0][1])
         for _, paths in items[1:]:
             common &= set(paths)
         where = f" in {sorted(common)[0]}" if common else ""
-        return f"[ined] {len(items)} hosts down{where}"
+        if not svcs:
+            return f"[ined] {len(items)} hosts down{where}"
+        nh = sum(1 for n, _ in items if not n.service)
+        what = ([_count(nh, "host") + " down"] if nh else []) + [_count(len(items) - nh, "service") + " down"]
+        return f"[ined] {', '.join(what)}{where}"
     parts = []
     for k, word in ((E.DOWN, "down"), (E.UP, "up again"), (E.STILL_DOWN, "still down")):
-        if c := kinds.count(k):
-            parts.append(f"{c} {word}")
+        if not svcs:
+            if c := kinds.count(k):
+                parts.append(f"{c} {word}")
+            continue
+        for one, is_svc in (("host", False), ("service", True)):
+            if c := sum(1 for n, _ in items if n.kind == k and bool(n.service) == is_svc):
+                parts.append(f"{_count(c, one)} {word}")
     if kinds.count(E.SUMMARY):
         parts.append("ined-alert started")
     if other := len(kinds) - sum(kinds.count(k) for k in _WORD) - kinds.count(E.SUMMARY):
@@ -89,18 +118,21 @@ def body(items: list[tuple[E.Notice, list[str]]], server_url: str, now: float) -
     for n, _ in items:
         match n.kind:
             case E.DOWN | E.STILL_DOWN:
-                out.append(f"{_WORD[n.kind]:<10} {_host(n)} since {when(n.since, now)}, {span(n.at - n.since)}")
+                out.append(f"{_WORD[n.kind]:<10} {_what_long(n)} since {when(n.since, now)}, {span(n.at - n.since)}")
                 if n.groups:
                     out.append(f"{'':<10} groups: {', '.join(n.groups)}")
-                if n.host.get("last_seen"):
+                if n.service:
+                    if n.service.get("last_ok"):
+                        out.append(f"{'':<10} last answered: {when(n.service['last_ok'], now)}")
+                elif n.host.get("last_seen"):
                     out.append(f"{'':<10} last seen: {when(n.host['last_seen'], now)}")
             case E.UP:
-                out.append(f"{'UP':<10} {_host(n)} at {when(n.at, now)}, down for {span(n.at - n.since)}")
+                out.append(f"{'UP':<10} {_what_long(n)} at {when(n.at, now)}, down for {span(n.at - n.since)}")
                 if n.groups:
                     out.append(f"{'':<10} groups: {', '.join(n.groups)}")
             case E.SERVER_DOWN:
                 out.append(f"ined-server can't be reached since {when(n.since, now)}: {n.text}")
-                out.append("No host alerts are sent until it is back.")
+                out.append("No host or service alerts are sent until it is back.")
             case E.SERVER_UP:
                 out.append(f"ined-server can be reached again (unreachable for {span(n.at - n.since)}).")
             case E.DEGRADED:
@@ -112,10 +144,16 @@ def body(items: list[tuple[E.Notice, list[str]]], server_url: str, now: float) -
                 if not n.hosts:
                     out.append("ined-alert started. No monitored host is down.")
                 else:
-                    out.append(f"ined-alert started. These hosts are down:")
+                    out.append("ined-alert started. These hosts are down:")
                     for h in n.hosts:
                         name = f"{h['name']} ({h['ip']})" if h["name"] != h["ip"] else h["ip"]
                         out.append(f"  {name} since {when(h['since'], now)}" + (f"  [{', '.join(h['groups'])}]" if h["groups"] else ""))
+                if n.services:
+                    out.append("These watched services are down:")
+                    for h in n.services:
+                        name = f"{h['name']} ({h['ip']})" if h["name"] != h["ip"] else h["ip"]
+                        out.append(f"  {_svc_long(h['service'])} on {name} since {when(h['since'], now)}"
+                                   + (f"  [{', '.join(h['groups'])}]" if h["groups"] else ""))
         out.append("")
     out.append(f"Server: {server_url}")
     out.append("-- ")

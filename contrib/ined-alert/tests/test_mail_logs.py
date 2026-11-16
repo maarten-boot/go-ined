@@ -1,4 +1,5 @@
-"""TC-954 (batching and mail) and TC-955 (logging and syslog)."""
+"""TC-954 (batching and mail), TC-955 (logging and syslog) and the mail of
+TC-957 (service alerts)."""
 
 import socket
 import unittest
@@ -39,6 +40,32 @@ class TestMail(unittest.TestCase):
                          "[ined] 1 down, 1 up again, 1 server message")
         summary = E.Notice(E.SUMMARY, T0, to={})
         self.assertEqual(subject([(summary, []), (down(1, "a"), [])]), "[ined] 1 down, ined-alert started")
+
+    def test_service_mail(self):
+        https = {"name": "https", "port": 443, "last_ok": T0 - 600}
+        n = E.Notice(E.DOWN, T0 + 120, to={}, host=WEB, service=https, since=T0, groups=["Networks/dc/lan"])
+        self.assertEqual(subject([(n, [])]), "[ined] DOWN https on web (192.0.2.10)")
+        u = E.Notice(E.UP, T0 + 720, to={}, host=WEB, service=https, since=T0)
+        self.assertEqual(subject([(u, [])]), "[ined] UP https on web (192.0.2.10) after 12 min")
+        st = E.Notice(E.STILL_DOWN, T0 + 3600, to={}, host=WEB, service=https, since=T0)
+        self.assertEqual(subject([(st, [])]), "[ined] STILL DOWN https on web (192.0.2.10) for 1 h")
+        pg = E.Notice(E.DOWN, T0 + 120, to={}, host=WEB, service={"name": "tcp:5432", "port": 5432, "last_ok": None}, since=T0)
+        hosts = [(down(1, "a"), ["Networks/dc"]), (down(2, "b"), ["Networks/dc"])]
+        self.assertEqual(subject(hosts + [(n, ["Networks/dc"]), (pg, ["Networks/dc"]), (pg, ["Networks/dc"])]),
+                         "[ined] 2 hosts down, 3 services down in Networks/dc")
+        self.assertEqual(subject([(n, []), (pg, [])]), "[ined] 2 services down")
+        self.assertEqual(subject([(down(1, "a"), []), (u, [])]), "[ined] 1 host down, 1 service up again")
+        text = compose("alert@example.com", "ops@example.com", [(n, []), (pg, [])], "http://ined:8470", T0 + 120).get_content()
+        self.assertIn("DOWN       https (443) on web (192.0.2.10) since", text)
+        self.assertIn("           groups: Networks/dc/lan\n           last answered:", text)
+        self.assertIn("DOWN       tcp:5432 on web (192.0.2.10) since", text)
+        self.assertNotIn("last seen", text)
+        text = compose("a@example.com", "b@example.com", [(u, [])], "http://ined:8470", T0 + 720).get_content()
+        self.assertIn("UP         https (443) on web (192.0.2.10) at", text)
+        sm = E.Notice(E.SUMMARY, T0, to={}, services=[WEB | {"service": https, "since": T0 - 60, "groups": []}])
+        self.assertEqual(subject([(sm, [])]), "[ined] ined-alert started: 0 hosts down, 1 service down")
+        text = compose("a@example.com", "b@example.com", [(sm, [])], "http://ined:8470", T0).get_content()
+        self.assertIn("These watched services are down:\n  https (443) on web (192.0.2.10) since", text)
 
     def test_batch_and_compose(self):
         b = Batcher(30)

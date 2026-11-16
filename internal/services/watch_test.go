@@ -262,6 +262,39 @@ func TestWatchResets(t *testing.T) {
 
 func mustAddr(s string) netip.Addr { return netip.MustParseAddr(s) }
 
+// TC-322: a host whose ping status becomes up again has its watched
+// services checked at once, not at the end of the interval; while it stays
+// up or down they keep the interval.
+func TestWatchHostBackUp(t *testing.T) {
+	r, _ := newWatchRig(t, WatchConfig{Interval: 5 * time.Minute, DownAfter: 1})
+	h := r.host("192.0.2.1", "ssh")
+	ping := func(status string) {
+		t.Helper()
+		err := r.svc.ApplyObservations(ctx, []inventory.Observation{{HostID: h.ID, IP: mustAddr("192.0.2.1"),
+			Status: status, Replied: status == apitypes.StatusUp, At: r.at}})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	ping(apitypes.StatusDown)
+	r.round(0)
+	r.want(r.log.take(), "1 ssh down")
+	r.round(time.Minute)
+	ping(apitypes.StatusDown) // no change: not due
+	r.round(time.Minute)
+	if n := r.net.count(); n != 1 {
+		t.Fatalf("%d connects while the host stays down, want 1", n)
+	}
+	r.net.set("192.0.2.1:22", true)
+	ping(apitypes.StatusUp)
+	r.round(time.Second)
+	r.want(r.log.take(), "1 ssh up")
+	r.round(time.Minute) // up since the same time: not again
+	if n := r.net.count(); n != 2 {
+		t.Fatalf("%d connects, want 2", n)
+	}
+}
+
 // TC-318: at most watch_concurrency connects at once; a check cut short by
 // shutdown saves nothing.
 func TestWatchConcurrency(t *testing.T) {

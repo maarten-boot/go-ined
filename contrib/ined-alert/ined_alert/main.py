@@ -1,4 +1,5 @@
-"""ined-alert: the program (Design-alerting.md, SPEC-950..956).
+"""ined-alert: the program (Design-alerting.md, Design-service-alerts.md,
+SPEC-950..956).
 
     ined-alert [--config alert.toml] [--check | --test-mail]
 
@@ -126,7 +127,8 @@ class App:
         for n in ns:
             if not n.to:
                 self.log.warning(kv(event="no_recipient", kind=n.kind, **({"host": n.host["name"]} if n.host else {})))
-            fields = {"event": "alert_queued", "kind": n.kind} | ({"host": n.host["name"]} if n.host else {})
+            fields = ({"event": "alert_queued", "kind": n.kind} | ({"host": n.host["name"]} if n.host else {})
+                      | ({"service": n.service["name"]} if n.service else {}))
             self.log.info(kv(**fields, to=sorted(n.to)))
             self.batcher.add(n, now)
 
@@ -160,6 +162,8 @@ class App:
             return  # the snapshot that follows covers it
         if ev.type in ("host.status", "host.updated", "host.created"):
             self.notices(self.engine.update(ev.data, now), now)
+        elif ev.type == "service.status":
+            self.notices(self.engine.service(ev.data, now), now)
         elif ev.type == "host.deleted":
             self.notices(self.engine.deleted(ev.data["id"], now), now)
         elif ev.type == "resync":
@@ -175,6 +179,7 @@ class App:
                 self.notices(self.load_all(now), now)
                 self.loaded = True
                 self.log.info(kv(event="loaded", hosts=len(self.engine.hosts), open_alerts=len(self.engine.open),
+                                 open_service_alerts=len(self.engine.svc_open),
                                  routes=len(self.cfg.routes)))
                 if self.cfg.startup_summary:
                     self.notices([self.engine.summary(now)], now)

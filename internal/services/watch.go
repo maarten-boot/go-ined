@@ -67,7 +67,9 @@ type watchKey struct {
 
 // Watcher checks the watched services of monitored hosts every Interval,
 // by one TCP connect each, and records their status (SPEC-310): down after
-// DownAfter failures in a row, up after one success.
+// DownAfter failures in a row, up after one success. A host whose ping
+// status becomes up again has its services checked at once, so a status
+// from while it was down doesn't last a whole interval.
 type Watcher struct {
 	inv WatchInventory
 	cfg WatchConfig
@@ -77,7 +79,8 @@ type Watcher struct {
 	mu    sync.Mutex
 	next  map[watchKey]time.Time // when a service is due; absent = now
 	fails map[watchKey]int
-	busy  map[int64]bool // hosts being checked
+	busy  map[int64]bool      // hosts being checked
+	upAt  map[int64]time.Time // the UpSince a host's services were last checked for
 }
 
 // NewWatcher returns a watcher. log may be nil.
@@ -87,7 +90,8 @@ func NewWatcher(inv WatchInventory, cfg WatchConfig, log *slog.Logger) *Watcher 
 		log = slog.Default()
 	}
 	return &Watcher{inv: inv, cfg: cfg, log: log, sem: make(chan struct{}, cfg.Concurrency),
-		next: map[watchKey]time.Time{}, fails: map[watchKey]int{}, busy: map[int64]bool{}}
+		next: map[watchKey]time.Time{}, fails: map[watchKey]int{}, busy: map[int64]bool{},
+		upAt: map[int64]time.Time{}}
 }
 
 // Run checks due services until ctx is cancelled, then waits for the
@@ -115,16 +119,24 @@ func (w *Watcher) round(ctx context.Context, wg *sync.WaitGroup) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	live := map[watchKey]bool{}
+	hosts := map[int64]bool{}
 	for _, t := range targets {
+		hosts[t.ID] = true
+		prev, seen := w.upAt[t.ID]
+		backUp := seen && !t.UpSince.IsZero() && t.UpSince.After(prev)
 		var due []apitypes.ServicePort
 		for _, s := range t.Services {
 			k := watchKey{t.ID, t.IP, s.Name, s.Port}
 			live[k] = true
-			if n, ok := w.next[k]; !ok || !now.Before(n) {
+			if n, ok := w.next[k]; backUp || !ok || !now.Before(n) {
 				due = append(due, s)
 			}
 		}
-		if len(due) == 0 || w.busy[t.ID] {
+		if w.busy[t.ID] {
+			continue // looked at again in the next round
+		}
+		w.upAt[t.ID] = t.UpSince
+		if len(due) == 0 {
 			continue
 		}
 		for _, s := range due {
@@ -148,6 +160,11 @@ func (w *Watcher) round(ctx context.Context, wg *sync.WaitGroup) {
 	for k := range w.fails {
 		if !live[k] {
 			delete(w.fails, k)
+		}
+	}
+	for id := range w.upAt {
+		if !hosts[id] {
+			delete(w.upAt, id)
 		}
 	}
 }

@@ -98,9 +98,23 @@ class FakeClient:
         return iter(())
 
 
-def host(hid, ip, status="up", name="", last_change=None, monitored=True, last_seen=None):
-    return {"id": hid, "ip": ip, "display_name": name or ip, "status": status, "monitored": monitored,
-            "last_change": last_change, "last_seen": last_seen}
+def host(hid, ip, status="up", name="", last_change=None, monitored=True, last_seen=None, watch=None):
+    """A host as the API gives it; without watch, as a server from before
+    watched services (no "watch" key)."""
+    h = {"id": hid, "ip": ip, "display_name": name or ip, "status": status, "monitored": monitored,
+         "last_change": last_change, "last_seen": last_seen}
+    if watch is not None:
+        h["watch"] = watch
+    return h
+
+
+PORTS = {"ssh": 22, "http": 80, "https": 443}
+
+
+def svc(name, status="up", last_change=None, last_ok=None):
+    """A watched service as in a host's "watch" list."""
+    port = int(name[4:]) if name.startswith("tcp:") else PORTS[name]
+    return {"name": name, "port": port, "status": status, "last_change": last_change, "last_ok": last_ok}
 
 
 def logger():

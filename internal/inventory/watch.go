@@ -79,6 +79,7 @@ type WatchTarget struct {
 	ID       int64
 	IP       netip.Addr
 	Services []apitypes.ServicePort
+	UpSince  time.Time // when the host's ping status became up; zero when it isn't up
 }
 
 // WatchTargets returns every monitored host that watches services, ordered
@@ -93,6 +94,9 @@ func (s *Service) WatchTargets() []WatchTarget {
 			continue
 		}
 		t := WatchTarget{ID: h.ID, IP: h.IP, Services: make([]apitypes.ServicePort, len(h.Watch))}
+		if h.Status == apitypes.StatusUp {
+			t.UpSince = h.LastChange
+		}
 		for i, w := range h.Watch {
 			t.Services[i] = apitypes.ServicePort{Name: w.Name, Port: int(w.Port)}
 		}

@@ -237,8 +237,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 		c := services.New(svc, services.Config{Refresh: cfg.Services.Refresh, Timeout: cfg.Services.Timeout}, log)
 		goBG(c.Run)
 		checker = c
+		goBG(services.NewWatcher(svc, services.WatchConfig{
+			Interval: cfg.Services.WatchInterval, DownAfter: cfg.Services.WatchDownAfter,
+			Concurrency: cfg.Services.WatchConcurrency, Timeout: cfg.Services.Timeout,
+		}, log).Run)
 	} else {
-		log.Info("service checks disabled by config (services.enabled = false)")
+		log.Info("service checks disabled by config (services.enabled = false); watched services stay unknown")
 	}
 	disc := discovery.New(svc, prober, "", bus, runID, discovery.Config{
 		MaxPrefix: cfg.Discovery.MaxPrefix, Rate: cfg.Discovery.Rate,

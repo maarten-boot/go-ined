@@ -113,7 +113,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "description": "Server-Sent Events (SPEC-502). Event types: host.created, host.updated, host.status (Host); host.deleted, group.deleted, view.deleted (DeletedEvent); group.created, group.updated (Group); group.status (GroupStatusEvent); group.moved (GroupMovedEvent); map.arranged (MapArrangedEvent); view.created, view.updated (View); placement.updated (Placement); placement.deleted (PlacementDeletedEvent); discovery.progress, discovery.finished (Discovery); resync (ResyncEvent). Event ids are <run>-<seq>; send Last-Event-ID to resume (SPEC-503).",
+        "description": "Server-Sent Events (SPEC-502). Event types: host.created, host.updated, host.status (Host); host.deleted, group.deleted, view.deleted (DeletedEvent); group.created, group.updated (Group); group.status (GroupStatusEvent); group.moved (GroupMovedEvent); map.arranged (MapArrangedEvent); view.created, view.updated (View); placement.updated (Placement); placement.deleted (PlacementDeletedEvent); discovery.progress, discovery.finished (Discovery); service.status (ServiceStatusEvent); resync (ResyncEvent). Event ids are <run>-<seq>; send Last-Event-ID to resume (SPEC-503).",
         "parameters": [
           {
             "name": "Last-Event-ID",
@@ -1032,6 +1032,13 @@
             "format": "date-time",
             "description": "time of the last service check; null = never (SPEC-309)"
           },
+          "watch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WatchedService"
+            },
+            "description": "watched services with their status, in the order given; [] when none (SPEC-310)"
+          },
           "x": {
             "type": "number",
             "format": "double"
@@ -1073,7 +1080,8 @@
           "created_at",
           "updated_at",
           "services",
-          "services_checked_at"
+          "services_checked_at",
+          "watch"
         ]
       },
       "Group": {
@@ -1252,6 +1260,11 @@
           "cidr": {
             "type": "string",
             "description": "network groups only"
+          },
+          "services_down": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "hosts only: watched services that are down (SPEC-310); 0 for groups"
           }
         },
         "additionalProperties": false,
@@ -1267,7 +1280,8 @@
           "has_note",
           "monitored",
           "outside_cidr",
-          "collapsed"
+          "collapsed",
+          "services_down"
         ]
       },
       "Map": {
@@ -1361,6 +1375,14 @@
           "y": {
             "type": "number",
             "format": "double"
+          },
+          "watch": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "description": "replaces the watched services (SPEC-310): ssh, rdp, vnc, vnc:1..vnc:9, http, https or tcp:N; no port twice; [] watches nothing"
           }
         },
         "additionalProperties": false
@@ -2022,6 +2044,101 @@
           "groups",
           "hosts",
           "moved"
+        ]
+      },
+      "WatchedService": {
+        "type": "object",
+        "description": "A watched service of a host and its status (SPEC-310).",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "ssh, rdp, vnc, vnc:1..vnc:9, http, https or tcp:N"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ],
+            "description": "unknown until checked, and while the host is not monitored"
+          },
+          "last_change": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when the status last changed; null = never"
+          },
+          "last_ok": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when the port last accepted a connection; null = never"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "port",
+          "status",
+          "last_change",
+          "last_ok"
+        ]
+      },
+      "ServiceStatusEvent": {
+        "type": "object",
+        "description": "Payload of service.status: a watched service changed status (SPEC-311).",
+        "properties": {
+          "host_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          },
+          "last_change": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "host_id",
+          "display_name",
+          "ip",
+          "name",
+          "port",
+          "status",
+          "last_change"
         ]
       }
     }

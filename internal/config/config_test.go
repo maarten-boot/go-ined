@@ -145,6 +145,31 @@ func TestDiscoveryRateBounds(t *testing.T) {
 	}
 }
 
+// TC-318 (config part): watched services are checked every 5 minutes by
+// default; the interval is at least 10 s, down_after and concurrency at
+// least 1.
+func TestWatchSettings(t *testing.T) {
+	c := DefaultServer()
+	if c.Services.WatchInterval != 5*time.Minute || c.Services.WatchDownAfter != 2 || c.Services.WatchConcurrency != 50 {
+		t.Fatalf("defaults: %+v", c.Services)
+	}
+	for _, f := range []func(*Server){
+		func(c *Server) { c.Services.WatchInterval = 9 * time.Second },
+		func(c *Server) { c.Services.WatchDownAfter = 0 },
+		func(c *Server) { c.Services.WatchConcurrency = 0 },
+	} {
+		c := DefaultServer()
+		f(&c)
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "services.watch_interval must be at least 10s") {
+			t.Errorf("%+v: err = %v", c.Services, err)
+		}
+	}
+	c.Services.WatchInterval = 10 * time.Second
+	if err := c.Validate(); err != nil {
+		t.Errorf("10s: %v", err)
+	}
+}
+
 // A relative ca_cert is relative to the config file's folder; an absolute
 // one is kept.
 func TestRelativeCACert(t *testing.T) {

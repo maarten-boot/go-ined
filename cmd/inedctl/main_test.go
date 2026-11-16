@@ -87,10 +87,10 @@ func TestCommands(t *testing.T) {
 		"IP:", "10.0.0.5", "Parent:", "Monitored:", "yes", "Note:", "hi")
 	ok(t, u, "host", "add", "--unmonitored", "10.0.0.6")
 	list := ok(t, u, "host", "list")
-	contains(t, list, "ID", "IP", "NAME", "STATUS", "RTT", "PARENT", "MON")
+	contains(t, list, "ID", "IP", "NAME", "STATUS", "RTT", "PARENT", "MON", "SVC")
 	lines := strings.Split(strings.TrimSpace(list), "\n")
 	if len(lines) != 3 || !strings.HasPrefix(lines[1], "1 ") || !strings.Contains(lines[1], "web") ||
-		!strings.Contains(lines[2], "unknown") || !strings.HasSuffix(lines[2], "no") {
+		!strings.Contains(lines[2], "unknown") || !strings.HasSuffix(strings.Join(strings.Fields(lines[2]), " "), "no -") {
 		t.Fatalf("host list:\n%s", list)
 	}
 	contains(t, ok(t, u, "host", "show", "1"), "Display name:", "web", "Status:", "unknown")
@@ -588,5 +588,41 @@ func TestHostServices(t *testing.T) {
 	}
 	if r := ctl(t, u, "host", "services"); r.code != 2 {
 		t.Errorf("no id: %+v", r)
+	}
+}
+
+// TC-907: host watch sets, adds to, removes from and clears the watched
+// services and shows them; host show has a Watched line, host list an SVC
+// column; mistakes are reported.
+func TestHostWatch(t *testing.T) {
+	isolate(t)
+	s := testserver.Start(t, testserver.Options{})
+	u := "--url=" + s.URL()
+	ok(t, u, "host", "add", "192.0.2.1")
+	contains(t, ok(t, u, "host", "watch", "1"), "none\n")
+	contains(t, ok(t, u, "host", "watch", "1", "ssh, HTTPS,tcp:05432"), "ssh unknown, https unknown, tcp:5432 unknown\n")
+	contains(t, ok(t, u, "host", "watch", "1", "--add", "vnc:1"), "ssh unknown, https unknown, tcp:5432 unknown, vnc :1 unknown\n")
+	contains(t, ok(t, u, "host", "watch", "1", "--remove", "https,TCP:5432"), "ssh unknown, vnc :1 unknown\n")
+	contains(t, ok(t, u, "host", "show", "1"), "Watched:", "ssh unknown, vnc :1 unknown")
+	contains(t, ok(t, u, "host", "list"), "SVC", "unknown")
+	contains(t, ok(t, u, "--json", "host", "watch", "1"), `"watch": [`, `"name": "ssh",`, `"port": 22,`)
+	contains(t, ok(t, u, "host", "watch", "1", "--clear"), "none\n")
+	for _, c := range []struct {
+		args []string
+		code int
+		msg  string
+	}{
+		{[]string{"1", "ssh,ftp"}, 1, `unknown service "ftp"`},
+		{[]string{"1", "ssh,tcp:22"}, 1, `"ssh" and "tcp:22" are the same port 22`},
+		{[]string{"1", "tcp:70000"}, 1, "from 1 to 65535"},
+		{[]string{"1", "--remove", "rdp"}, 2, "rdp is not watched on host 1"},
+		{[]string{"1", "ssh", "--clear"}, 2, "give one of"},
+		{[]string{"9", "ssh"}, 1, "not found"},
+		{[]string{}, 2, "missing argument"},
+	} {
+		r := ctl(t, append([]string{u, "host", "watch"}, c.args...)...)
+		if r.code != c.code || !strings.Contains(r.errOut, c.msg) {
+			t.Errorf("host watch %v: code %d, %q; want %d, %q", c.args, r.code, r.errOut, c.code, c.msg)
+		}
 	}
 }

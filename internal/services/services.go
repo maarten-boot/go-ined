@@ -26,11 +26,11 @@ type Port struct {
 // DefaultPorts are the ports checked: SSH, RDP, VNC displays 0–9, HTTP and
 // HTTPS. VNC display n is "vnc:n" on port 5900+n; display 0 is "vnc".
 func DefaultPorts() []Port {
-	ps := []Port{{"ssh", 22}, {"rdp", 3389}, {"vnc", 5900}}
-	for n := 1; n <= 9; n++ {
-		ps = append(ps, Port{"vnc:" + strconv.Itoa(n), uint16(5900 + n)})
+	var ps []Port
+	for _, k := range apitypes.KnownServices() {
+		ps = append(ps, Port{k.Name, uint16(k.Port)})
 	}
-	return append(ps, Port{"http", 80}, Port{"https", 443})
+	return ps
 }
 
 // Inventory is the part of inventory.Service the checker uses.

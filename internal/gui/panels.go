@@ -3,6 +3,7 @@ package gui
 import (
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"math"
 	"slices"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	fynetheme "fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -163,7 +163,7 @@ type details struct {
 }
 
 func newDetails(g *GUI) *details {
-	d := &details{g: g, title: widget.NewLabel("Nothing selected"), form: container.New(layout.NewFormLayout())}
+	d := &details{g: g, title: widget.NewLabel("Nothing selected"), form: container.New(compactForm{detailsSpacing})}
 	d.title.TextStyle.Bold = true
 	d.title.Selectable = true // D1: can be copied
 	d.note = widget.NewMultiLineEntry()
@@ -174,9 +174,82 @@ func newDetails(g *GUI) *details {
 	d.note.Disable()
 	d.save.Disable()
 	// The note follows the rows and takes the rest of the height (D2).
-	d.body = container.New(growLayout{grow: 2}, d.form, widget.NewLabel("Note"), d.note, g.bordered(d.save))
+	rows := container.NewThemeOverride(d.form, compactTheme{detailsSpacing})
+	d.body = container.New(growLayout{grow: 2}, rows, widget.NewLabel("Note"), d.note, g.bordered(d.save))
 	d.obj = container.NewBorder(d.title, nil, nil, nil, container.NewVScroll(d.body))
 	return d
+}
+
+// detailsSpacing is how much of Fyne's usual white space is left between
+// the rows of the details panel: 0.5 is half (user request 2026-11-16).
+const detailsSpacing = 0.5
+
+// compactTheme is the app's theme with the labels' inner padding scaled,
+// for the rows of the details panel. It asks the app for its theme at each
+// call, so a contrast change reaches the rows too.
+type compactTheme struct{ scale float32 }
+
+func (c compactTheme) base() fyne.Theme { return fyne.CurrentApp().Settings().Theme() }
+
+func (c compactTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
+	return c.base().Color(n, v)
+}
+func (c compactTheme) Font(s fyne.TextStyle) fyne.Resource     { return c.base().Font(s) }
+func (c compactTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return c.base().Icon(n) }
+func (c compactTheme) Size(n fyne.ThemeSizeName) float32 {
+	if n == fynetheme.SizeNameInnerPadding {
+		return c.base().Size(n) * c.scale
+	}
+	return c.base().Size(n)
+}
+
+// compactForm lays out label/value pairs in two columns like Fyne's form,
+// with the white space between rows scaled: the labels' own padding comes
+// from compactTheme, the gap between rows is Padding × scale. Columns keep
+// the form's distance, and the rows stay aligned with the panel's title.
+type compactForm struct{ scale float32 }
+
+// sizes returns the label column's width, the left offset, the gap between
+// the columns and between the rows.
+func (f compactForm) sizes(objs []fyne.CanvasObject) (labelW, left, colGap, rowGap float32) {
+	// The app's own padding: inside compactTheme, fynetheme.InnerPadding()
+	// gives the scaled one.
+	cut := fyne.CurrentApp().Settings().Theme().Size(fynetheme.SizeNameInnerPadding) * (1 - f.scale)
+	for i := 0; i+1 < len(objs); i += 2 {
+		labelW = max(labelW, objs[i].MinSize().Width)
+	}
+	return labelW, cut, fynetheme.Padding() + 2*cut, fynetheme.Padding() * f.scale
+}
+
+func (f compactForm) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	labelW, left, colGap, rowGap := f.sizes(objs)
+	var s fyne.Size
+	for i := 0; i+1 < len(objs); i += 2 {
+		k, v := objs[i].MinSize(), objs[i+1].MinSize()
+		s.Width = max(s.Width, left+labelW+colGap+v.Width)
+		if i > 0 {
+			s.Height += rowGap
+		}
+		s.Height += max(k.Height, v.Height)
+	}
+	return s
+}
+
+func (f compactForm) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	labelW, left, colGap, rowGap := f.sizes(objs)
+	valueX := left + labelW + colGap
+	valueW := max(0, size.Width-valueX)
+	y := float32(0)
+	for i := 0; i+1 < len(objs); i += 2 {
+		k, v := objs[i], objs[i+1]
+		v.Resize(fyne.NewSize(valueW, v.MinSize().Height)) // a wrapping value knows its height once it has its width
+		h := max(k.MinSize().Height, v.MinSize().Height)
+		k.Move(fyne.NewPos(left, y))
+		k.Resize(fyne.NewSize(labelW, h))
+		v.Move(fyne.NewPos(valueX, y))
+		v.Resize(fyne.NewSize(valueW, h))
+		y += h + rowGap
+	}
 }
 
 // growLayout stacks its objects at their minimum heights, like a VBox,

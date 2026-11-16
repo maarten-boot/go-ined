@@ -73,3 +73,19 @@
      - Spec v0.52 (SPEC-732, 311, 716), TC-748–750; TC-321 checks `services_down`.
    - All Go tests (`-race`), lint and the 40 Python tests pass. `TestDiscoveryDialog` failed once in the full run (the known flaky test, already on the open list); 5 runs of it and the package again passed.
    - All three parts of `Design-service-alerts.md` are done.
+9. **User**: should we add a cidr export/import option to allow import/export of a net with all its groups and stuff?
+   **Claude** read "sholw" as "should" and "ecport" as "export"; the user confirmed "should". Nothing like it exists (only copying the whole database). Recommended it, with an outline: a network group and everything below it, without what the server measures again; custom-view placements by view name; JSON with a version; import into a chosen group in one step, with a dry run; refuse on conflicts with an option to update. Asked about purpose, custom views and conflicts.
+10. **User**: pushed; OK, all; write the design.
+   **Claude** checked the push: it had not arrived (GitHub still had `main` and `docs/architecture` at 78aeccf, no `feature/service-gui`); the command is given again. "OK, all" was read as the recommendations: no address shifting in the first version (later, N11), custom-view placements by view name, refuse on conflicts with "update existing" as an option. Wrote `Design-network-export.md`:
+   - N1 any group of the network view (usually a network group) with everything below it.
+   - N2 group and host fields, watch lists by name, positions relative to the exported group.
+   - N3 status, times, PTR names and service checks stay behind; imported hosts are checked at once.
+   - N4 custom-view placements by view name and group path; missing views skipped, missing groups on the path created.
+   - N5 an indented JSON file with format and version, checked as API input (limits, unknown keys refused).
+   - N6 lands below a chosen group; hosts keep the file's parents; a warning when another network group would fit better.
+   - N7 a dry run with a report, always shown by the GUI.
+   - N8 conflicts (same IP, same CIDR, same group name under the same parent) refuse the import; "update existing" updates without deleting or moving anything else.
+   - N9 one transaction, the usual events.
+   - N10 `GET /groups/{id}/export` (the read token may export), `POST /import` (32 MiB, not the read token), `inedctl group export` and `import`, GUI "Export…" and "Import here…".
+   - N11 later: shifting to another address range, several groups or a whole view, `.tki` import, creating missing views.
+   - N1–N11 wait for the user's OK.

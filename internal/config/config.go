@@ -74,11 +74,15 @@ type DNSSection struct {
 	Concurrency int           `toml:"concurrency"`
 }
 
-// ServicesSection holds the service check settings (SPEC-309).
+// ServicesSection holds the service check settings (SPEC-309) and those
+// of watched services (SPEC-310).
 type ServicesSection struct {
-	Enabled bool          `toml:"enabled"`
-	Refresh time.Duration `toml:"refresh"`
-	Timeout time.Duration `toml:"timeout"`
+	Enabled          bool          `toml:"enabled"`
+	Refresh          time.Duration `toml:"refresh"`
+	Timeout          time.Duration `toml:"timeout"`
+	WatchInterval    time.Duration `toml:"watch_interval"`
+	WatchDownAfter   int           `toml:"watch_down_after"`
+	WatchConcurrency int           `toml:"watch_concurrency"`
 }
 
 // EventsSection holds the event buffer settings (SPEC-503).
@@ -152,9 +156,10 @@ func DefaultServer() Server {
 		Monitor:   MonitorSection{Enabled: true, Interval: 60 * time.Second, Count: 3, Timeout: time.Second, DownAfter: 2},
 		Discovery: DiscoverySection{MaxPrefix: 16, Rate: 200, Concurrency: 64},
 		DNS:       DNSSection{Enabled: true, Refresh: time.Hour, Concurrency: 20},
-		Services:  ServicesSection{Enabled: true, Refresh: 6 * time.Hour, Timeout: time.Second},
-		Events:    EventsSection{Buffer: 1000},
-		Log:       LogSection{Level: "info", Format: "text"},
+		Services: ServicesSection{Enabled: true, Refresh: 6 * time.Hour, Timeout: time.Second,
+			WatchInterval: 5 * time.Minute, WatchDownAfter: 2, WatchConcurrency: 50},
+		Events: EventsSection{Buffer: 1000},
+		Log:    LogSection{Level: "info", Format: "text"},
 	}
 }
 
@@ -316,6 +321,9 @@ func (c Server) Validate() error {
 	}
 	if c.Services.Refresh <= 0 || c.Services.Timeout <= 0 {
 		errs = append(errs, errors.New("services.refresh and services.timeout must be positive"))
+	}
+	if c.Services.WatchInterval < 10*time.Second || c.Services.WatchDownAfter < 1 || c.Services.WatchConcurrency < 1 {
+		errs = append(errs, errors.New("services.watch_interval must be at least 10s, services.watch_down_after and services.watch_concurrency at least 1"))
 	}
 	if c.Events.Buffer < 1 {
 		errs = append(errs, errors.New("events.buffer must be at least 1"))

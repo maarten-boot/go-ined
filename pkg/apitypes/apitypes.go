@@ -5,7 +5,9 @@ package apitypes
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -44,16 +46,17 @@ const (
 
 // Event types of GET /api/v1/events (SPEC-502).
 const (
-	EventHostCreated  = "host.created"
-	EventHostUpdated  = "host.updated"
-	EventHostDeleted  = "host.deleted"
-	EventHostStatus   = "host.status"
-	EventGroupCreated = "group.created"
-	EventGroupUpdated = "group.updated"
-	EventGroupDeleted = "group.deleted"
-	EventGroupStatus  = "group.status"
-	EventGroupMoved   = "group.moved"  // v0.21, SPEC-507
-	EventMapArranged  = "map.arranged" // v0.28, SPEC-510
+	EventHostCreated   = "host.created"
+	EventHostUpdated   = "host.updated"
+	EventHostDeleted   = "host.deleted"
+	EventHostStatus    = "host.status"
+	EventGroupCreated  = "group.created"
+	EventGroupUpdated  = "group.updated"
+	EventGroupDeleted  = "group.deleted"
+	EventGroupStatus   = "group.status"
+	EventGroupMoved    = "group.moved"    // v0.21, SPEC-507
+	EventMapArranged   = "map.arranged"   // v0.28, SPEC-510
+	EventServiceStatus = "service.status" // v0.50, SPEC-311
 
 	EventViewCreated      = "view.created"
 	EventViewUpdated      = "view.updated"
@@ -98,6 +101,18 @@ type (
 	PlacementDeletedEvent struct {
 		ViewID int64 `json:"view_id"`
 		HostID int64 `json:"host_id"`
+	}
+	// ServiceStatusEvent is the payload of service.status: a watched
+	// service of a host changed status (SPEC-311). DisplayName and IP are
+	// the host's, so a client needs no extra call.
+	ServiceStatusEvent struct {
+		HostID      int64      `json:"host_id"`
+		DisplayName string     `json:"display_name"`
+		IP          string     `json:"ip"`
+		Name        string     `json:"name"`
+		Port        int        `json:"port"`
+		Status      string     `json:"status"`
+		LastChange  *time.Time `json:"last_change"`
 	}
 	// ResyncEvent is the payload of resync: reload the full state.
 	ResyncEvent struct {
@@ -187,10 +202,24 @@ type Host struct {
 	// null and services_checked_at null while never checked (v0.47).
 	Services          []string   `json:"services"`
 	ServicesCheckedAt *time.Time `json:"services_checked_at"`
-	X                 float64    `json:"x"`
-	Y                 float64    `json:"y"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	// Watch lists the watched services with their status, in the order
+	// they were given; never null (v0.50, SPEC-310).
+	Watch     []WatchedService `json:"watch"`
+	X         float64          `json:"x"`
+	Y         float64          `json:"y"`
+	CreatedAt time.Time        `json:"created_at"`
+	UpdatedAt time.Time        `json:"updated_at"`
+}
+
+// WatchedService is a service watched on a host (SPEC-310): a known name
+// or "tcp:N", its port, and its status "up", "down" or "unknown". LastOK
+// is the last time its port answered.
+type WatchedService struct {
+	Name       string     `json:"name"`
+	Port       int        `json:"port"`
+	Status     string     `json:"status"`
+	LastChange *time.Time `json:"last_change"`
+	LastOK     *time.Time `json:"last_ok"`
 }
 
 // Group is a group as returned by the API (SPEC-102). CIDR is empty for an
@@ -231,6 +260,9 @@ type MapItem struct {
 	CIDR        string  `json:"cidr,omitempty"`   // network groups only
 	Labels      string  `json:"labels,omitempty"` // groups only (SPEC-725)
 	Color       string  `json:"color,omitempty"`  // groups only (SPEC-727)
+	// ServicesDown is the number of watched services that are down;
+	// hosts only, 0 for groups (v0.50, SPEC-310).
+	ServicesDown int `json:"services_down"`
 }
 
 // Map is the response of GET /map: the items of one view (SPEC-122).
@@ -263,6 +295,9 @@ type HostPatch struct {
 	Monitored   Opt[bool]    `json:"monitored,omitzero"`
 	X           Opt[float64] `json:"x,omitzero"`
 	Y           Opt[float64] `json:"y,omitzero"`
+	// Watch replaces the list of watched services (SPEC-310), such as
+	// ["ssh", "https", "tcp:5432"]; [] watches nothing.
+	Watch Opt[[]string] `json:"watch,omitzero"`
 }
 
 // GroupCreate is the body of POST /groups. Name defaults to the CIDR when
@@ -485,4 +520,73 @@ func ServiceLabel(name string) string {
 		return "vnc :" + d
 	}
 	return name
+}
+
+// ServicePort is a service with a well-known name and its TCP port.
+type ServicePort struct {
+	Name string
+	Port int
+}
+
+// KnownServices are the services checked for the Connect menu (SPEC-309)
+// and the names that can be watched (SPEC-310): SSH, RDP, VNC displays
+// 0–9 ("vnc" is 5900, "vnc:n" is 5900+n), HTTP and HTTPS.
+func KnownServices() []ServicePort {
+	ps := []ServicePort{{"ssh", 22}, {"rdp", 3389}, {"vnc", 5900}}
+	for n := 1; n <= 9; n++ {
+		ps = append(ps, ServicePort{"vnc:" + strconv.Itoa(n), 5900 + n})
+	}
+	return append(ps, ServicePort{"http", 80}, ServicePort{"https", 443})
+}
+
+// MaxWatch is the most services a host can watch (SPEC-310).
+const MaxWatch = 20
+
+// ParseWatched parses one watched service: a known name or "tcp:N" with
+// N in 1–65535, ignoring case and surrounding spaces. It returns the
+// canonical name ("tcp:5432", never "tcp:05432") and the port.
+func ParseWatched(s string) (string, int, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if n, ok := strings.CutPrefix(s, "tcp:"); ok {
+		p, err := strconv.Atoi(strings.TrimSpace(n))
+		if err != nil || p < 1 || p > 65535 {
+			return "", 0, fmt.Errorf("%q: the port must be a number from 1 to 65535", s)
+		}
+		return "tcp:" + strconv.Itoa(p), p, nil
+	}
+	for _, k := range KnownServices() {
+		if k.Name == s {
+			return k.Name, k.Port, nil
+		}
+	}
+	if s == "" {
+		return "", 0, fmt.Errorf("empty service name")
+	}
+	return "", 0, fmt.Errorf("unknown service %q; use ssh, rdp, vnc, vnc:1 to vnc:9, http, https or tcp:PORT", s)
+}
+
+// ParseWatchList parses a whole watch list (SPEC-310): every entry valid,
+// no port twice ("ssh" and "tcp:22" are the same port), at most MaxWatch
+// entries.
+func ParseWatchList(names []string) ([]ServicePort, error) {
+	if len(names) > MaxWatch {
+		return nil, fmt.Errorf("%d services; at most %d can be watched", len(names), MaxWatch)
+	}
+	out := make([]ServicePort, 0, len(names))
+	seen := map[int]string{}
+	for _, n := range names {
+		name, port, err := ParseWatched(n)
+		if err != nil {
+			return nil, err
+		}
+		if prev, ok := seen[port]; ok {
+			if prev == name {
+				return nil, fmt.Errorf("%q is given twice", name)
+			}
+			return nil, fmt.Errorf("%q and %q are the same port %d", prev, name, port)
+		}
+		seen[port] = name
+		out = append(out, ServicePort{name, port})
+	}
+	return out, nil
 }

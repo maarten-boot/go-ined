@@ -7,6 +7,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -111,6 +113,18 @@ var migrations = []string{
 	// list, and when it was checked.
 	`ALTER TABLE hosts ADD COLUMN services TEXT NOT NULL DEFAULT '';
 	ALTER TABLE hosts ADD COLUMN services_checked_at TEXT;`,
+	// 6 → 7: watched services and their status (SPEC-310), in the order
+	// given (ord).
+	`CREATE TABLE host_services (
+		host_id     INTEGER NOT NULL,
+		ord         INTEGER NOT NULL,
+		name        TEXT    NOT NULL,
+		port        INTEGER NOT NULL,
+		status      TEXT    NOT NULL DEFAULT 'unknown',
+		last_change TEXT,
+		last_ok     TEXT,
+		PRIMARY KEY (host_id, ord)
+	);`,
 }
 
 // Store is a SQLite-backed inventory.Repository.
@@ -379,7 +393,39 @@ func (s *Store) loadHosts(ctx context.Context) ([]inventory.Host, error) {
 		}
 		out = append(out, h)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, s.loadWatch(ctx, out)
+}
+
+// loadWatch adds the watched services to hosts (ordered by ID).
+func (s *Store) loadWatch(ctx context.Context, hosts []inventory.Host) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT host_id, name, port, status, last_change, last_ok FROM host_services ORDER BY host_id, ord`)
+	if err != nil {
+		return fmt.Errorf("store: load watched services: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var w inventory.Watched
+		var change, ok sql.NullString
+		if err := rows.Scan(&id, &w.Name, &w.Port, &w.Status, &change, &ok); err != nil {
+			return fmt.Errorf("store: scan watched service: %w", err)
+		}
+		if w.LastChange, err = parseTime(change); err != nil {
+			return fmt.Errorf("store: host %d service %s: %w", id, w.Name, err)
+		}
+		if w.LastOK, err = parseTime(ok); err != nil {
+			return fmt.Errorf("store: host %d service %s: %w", id, w.Name, err)
+		}
+		i, found := slices.BinarySearchFunc(hosts, id, func(h inventory.Host, id int64) int { return cmp.Compare(h.ID, id) })
+		if !found {
+			continue // the host is gone; its rows are removed with it
+		}
+		hosts[i].Watch = append(hosts[i].Watch, w)
+	}
+	return rows.Err()
 }
 
 // Apply implements inventory.Repository: all changes in one transaction.
@@ -396,6 +442,9 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 	for _, id := range c.DeleteHosts {
 		if _, err = tx.ExecContext(ctx, `DELETE FROM hosts WHERE id = ?`, id); err != nil {
 			return fmt.Errorf("store: delete host %d: %w", id, err)
+		}
+		if _, err = tx.ExecContext(ctx, `DELETE FROM host_services WHERE host_id = ?`, id); err != nil {
+			return fmt.Errorf("store: delete services of host %d: %w", id, err)
 		}
 	}
 	for _, id := range c.DeleteGroups {
@@ -449,6 +498,9 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 		if err != nil {
 			return fmt.Errorf("store: upsert host %d: %w", h.ID, err)
 		}
+		if err = saveWatch(ctx, tx, h); err != nil {
+			return err
+		}
 	}
 	for _, p := range c.Placements {
 		_, err = tx.ExecContext(ctx, `INSERT INTO placements (view_id, host_id, parent_id, x, y) VALUES (?, ?, ?, ?, ?)
@@ -471,6 +523,20 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("store: commit: %w", err)
+	}
+	return nil
+}
+
+// saveWatch replaces the watched services of h (SPEC-310).
+func saveWatch(ctx context.Context, tx *sql.Tx, h inventory.Host) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM host_services WHERE host_id = ?`, h.ID); err != nil {
+		return fmt.Errorf("store: replace services of host %d: %w", h.ID, err)
+	}
+	for i, w := range h.Watch {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO host_services (host_id, ord, name, port, status, last_change, last_ok) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			h.ID, i, w.Name, w.Port, w.Status, nullTime(w.LastChange), nullTime(w.LastOK)); err != nil {
+			return fmt.Errorf("store: save service %s of host %d: %w", w.Name, h.ID, err)
+		}
 	}
 	return nil
 }

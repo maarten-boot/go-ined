@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ var commands = map[string]map[string]command{
 	"host": {
 		"list": hostList, "add": hostAdd, "show": hostShow, "edit": hostEdit,
 		"rm": hostRm, "move": hostMove, "services": hostServices,
+		"watch": hostWatch,
 	},
 	"group": {
 		"list": groupList, "add": groupAdd, "show": groupShow, "edit": groupEdit,
@@ -114,7 +116,7 @@ func hostEdit(a *app, name string, args []string) error {
 	if given["monitored"] {
 		p.Monitored = apitypes.Some(*mon)
 	}
-	if p == (apitypes.HostPatch{}) {
+	if len(given) == 0 {
 		return usagef("%s: nothing to change (give --ip, --name, --description or --monitored)", name)
 	}
 	var h apitypes.Host
@@ -140,6 +142,82 @@ func hostServices(a *app, name string, args []string) error {
 		return a.call(http.MethodPost, path("host", id)+"/check-services", nil, &h, show)
 	}
 	return a.call(http.MethodGet, path("host", id), nil, &h, show)
+}
+
+// hostWatch shows or sets the services watched on a host (SPEC-310):
+// a list sets it, --add and --remove change it, --clear empties it.
+func hostWatch(a *app, name string, args []string) error {
+	fs := a.flags(name)
+	add := fs.String("add", "", "services to add, such as ssh,tcp:5432")
+	rm := fs.String("remove", "", "services to stop watching")
+	clear := fs.Bool("clear", false, "watch nothing")
+	pos, err := a.parse(fs, args, 1, 2)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	given := set(fs)
+	modes := len(given)
+	if len(pos) == 2 {
+		modes++
+	}
+	if modes > 1 {
+		return usagef("%s: give one of a list, --add, --remove or --clear", name)
+	}
+	var h apitypes.Host
+	show := func() { fmt.Fprintln(a.out, watchedText(h)) }
+	var list []string
+	switch {
+	case modes == 0:
+		return a.call(http.MethodGet, path("host", id), nil, &h, show)
+	case *clear:
+		list = []string{}
+	case len(pos) == 2:
+		list = splitList(pos[1])
+	default:
+		// --add and --remove change the current list.
+		var cur apitypes.Host
+		if err := a.c.Do(a.ctx, http.MethodGet, path("host", id), nil, &cur); err != nil {
+			return err
+		}
+		for _, w := range cur.Watch {
+			list = append(list, w.Name)
+		}
+		if given["add"] {
+			list = append(list, splitList(*add)...)
+		} else {
+			drop := map[string]bool{}
+			for _, n := range splitList(*rm) {
+				c, _, err := apitypes.ParseWatched(n)
+				if err != nil {
+					return usagef("%s: %v", name, err)
+				}
+				if !slices.Contains(list, c) {
+					return usagef("%s: %s is not watched on host %d", name, c, id)
+				}
+				drop[c] = true
+			}
+			list = slices.DeleteFunc(list, func(n string) bool { return drop[n] })
+		}
+	}
+	if list == nil {
+		list = []string{}
+	}
+	return a.call(http.MethodPatch, path("host", id), apitypes.HostPatch{Watch: apitypes.Some(list)}, &h, show)
+}
+
+// splitList splits "ssh, https,tcp:5432" at commas, dropping empty parts.
+func splitList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func hostRm(a *app, name string, args []string) error {

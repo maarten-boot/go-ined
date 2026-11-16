@@ -33,6 +33,9 @@ concurrency = 20             # Lookups running at the same time.
 enabled = true               # false = no checks, not even on request; the Connect menu shows no ticks.
 refresh = "6h"               # Time between checks of a monitored host. New hosts are checked at once.
 timeout = "1s"               # How long one TCP connect may take.
+watch_interval = "5m"        # SPEC-310: time between checks of a watched service (at least 10s).
+watch_down_after = 2         # Failed checks in a row before a watched service is down.
+watch_concurrency = 50       # Connects to watched services at the same time.
 
 [events]                     # SPEC-503
 buffer = 1000                # Events kept for Last-Event-ID replay.

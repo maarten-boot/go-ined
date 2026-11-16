@@ -28,9 +28,9 @@ func (a *app) hostTable(hs []apitypes.Host) {
 	slices.SortFunc(hs, func(x, y apitypes.Host) int { return cmp.Compare(x.ID, y.ID) })
 	rows := make([][]string, len(hs))
 	for i, h := range hs {
-		rows[i] = []string{id(h.ID), h.IP, h.DisplayName, status(h.Status, h.Stale), ms(h.RTTms), parent(h.ParentID), yesNo(h.Monitored)}
+		rows[i] = []string{id(h.ID), h.IP, h.DisplayName, status(h.Status, h.Stale), ms(h.RTTms), parent(h.ParentID), yesNo(h.Monitored), svcText(h.Watch)}
 	}
-	a.table("ID\tIP\tNAME\tSTATUS\tRTT\tPARENT\tMON", rows)
+	a.table("ID\tIP\tNAME\tSTATUS\tRTT\tPARENT\tMON\tSVC", rows)
 }
 
 func (a *app) groupTable(gs []apitypes.Group) {
@@ -52,6 +52,7 @@ func (a *app) hostDetails(h apitypes.Host) {
 		{"Description", h.Description}, {"Parent", parent(h.ParentID)}, {"Monitored", yesNo(h.Monitored)},
 		{"Status", status(h.Status, h.Stale)}, {"RTT", ms(h.RTTms)}, {"Loss", loss},
 		{"Last seen", when(h.LastSeen)}, {"Last change", when(h.LastChange)}, {"Services", servicesText(h)},
+		{"Watched", watchedText(h)},
 		{"Outside CIDR", yesNo(h.OutsideCIDR)}, {"Position", pos(h.X, h.Y)},
 		{"Created", h.CreatedAt.Local().Format(time.DateTime)}, {"Updated", h.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(h.Note)},
@@ -74,6 +75,56 @@ func servicesText(h apitypes.Host) string {
 		list = "none"
 	}
 	return list + " (checked " + h.ServicesCheckedAt.Local().Format(time.DateTime) + ")"
+}
+
+// svcText is the SVC column of host list (SPEC-310): "-" when nothing is
+// watched, "2 down" when any is down, "ok" when all are up, else
+// "unknown".
+func svcText(ws []apitypes.WatchedService) string {
+	if len(ws) == 0 {
+		return "-"
+	}
+	down, up := 0, 0
+	for _, w := range ws {
+		switch w.Status {
+		case apitypes.StatusDown:
+			down++
+		case apitypes.StatusUp:
+			up++
+		}
+	}
+	switch {
+	case down > 0:
+		return strconv.Itoa(down) + " down"
+	case up == len(ws):
+		return "ok"
+	}
+	return "unknown"
+}
+
+// watchedText is "ssh up, https down since 14:07:10, tcp:5432 unknown" or
+// "none" (SPEC-310). A time of another day has its date.
+func watchedText(h apitypes.Host) string {
+	if len(h.Watch) == 0 {
+		return "none"
+	}
+	parts := make([]string, len(h.Watch))
+	for i, w := range h.Watch {
+		parts[i] = apitypes.ServiceLabel(w.Name) + " " + w.Status
+		if w.Status == apitypes.StatusDown && w.LastChange != nil {
+			parts[i] += " since " + clock(*w.LastChange)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// clock is the local time of t, with the date when it is not today.
+func clock(t time.Time) string {
+	t = t.Local()
+	if y, m, d := t.Date(); y == time.Now().Year() && m == time.Now().Month() && d == time.Now().Day() {
+		return t.Format(time.TimeOnly)
+	}
+	return t.Format(time.DateTime)
 }
 
 func (a *app) groupDetails(g apitypes.Group) {

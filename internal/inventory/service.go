@@ -334,6 +334,7 @@ func (s *Service) MapOf(view int64) (apitypes.Map, error) {
 			Type: apitypes.TypeHost, ID: h.ID, ParentID: parentPtr(h.ParentID),
 			X: h.X, Y: h.Y, Name: h.DisplayName(), Status: h.Status, Stale: h.Stale,
 			HasNote: h.Note != "", Monitored: h.Monitored, IP: h.IP.String(), OutsideCIDR: view == NetworkView && s.m.OutsideCIDR(h),
+			ServicesDown: h.ServicesDown(),
 		})
 	}
 	return apitypes.Map{ViewID: view, Items: items}, nil
@@ -427,6 +428,14 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 	}
 	h := *cur
 	ipChanged := false
+	var watchChanged []int // entries of h.Watch whose status changed: service.status
+	if p.Watch.Set {
+		ws, err := parseWatch(p.Watch.Value, cur.Watch)
+		if err != nil {
+			return apitypes.Host{}, err
+		}
+		h.Watch = ws
+	}
 	if p.IP.Set {
 		ip, err := ParseIP(p.IP.Value)
 		if err != nil {
@@ -444,6 +453,7 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 			// SPEC-309).
 			h.PTRName = ""
 			h.Services, h.ServicesAt = nil, time.Time{}
+			h.Watch, watchChanged = resetWatch(h.Watch, s.stamp(), true)
 			if h.Status != apitypes.StatusUnknown {
 				h.Status = apitypes.StatusUnknown
 				h.LastChange = s.stamp()
@@ -459,6 +469,12 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 			// SPEC-603: unmonitored hosts are never stale; a host whose
 			// monitoring is turned back on is stale until its next round.
 			h.Stale = h.Monitored
+			if !h.Monitored {
+				// Not checked any more: unknown (SPEC-310).
+				var idx []int
+				h.Watch, idx = resetWatch(h.Watch, s.stamp(), false)
+				watchChanged = append(watchChanged, idx...)
+			}
 		}
 	}
 	if p.ParentID.Set {
@@ -498,6 +514,8 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 	if ipChanged {
 		s.notify.Publish(apitypes.EventHostStatus, v)
 	}
+	slices.Sort(watchChanged)
+	s.publishWatch(cur, slices.Compact(watchChanged))
 	s.emitGroupStatus(before)
 	return v, nil
 }
@@ -980,7 +998,7 @@ func (s *Service) hostView(h *Host) apitypes.Host {
 		ParentID: parentPtr(h.ParentID), Monitored: h.Monitored, Status: h.Status,
 		RTTms: h.RTTms, LossPct: h.LossPct, Stale: h.Stale, OutsideCIDR: s.m.OutsideCIDR(h),
 		X: h.X, Y: h.Y, CreatedAt: h.CreatedAt, UpdatedAt: h.UpdatedAt,
-		Views: s.hostViews(h.ID),
+		Views: s.hostViews(h.ID), Watch: watchView(h.Watch),
 	}
 	if !h.LastSeen.IsZero() {
 		t := h.LastSeen

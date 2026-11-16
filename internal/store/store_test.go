@@ -404,3 +404,58 @@ func TestMigration5(t *testing.T) {
 		t.Fatalf("saved colour: %+v %v", st.Groups, err)
 	}
 }
+
+// TC-320: migration 7 adds watched services; a host keeps them in order
+// with their status, a save replaces them, and deleting the host removes
+// them.
+func TestMigration6(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v6.db")
+	db, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(ctx, db, migrations[:6]); err != nil {
+		t.Fatal(err)
+	}
+	ts := "2026-11-01T10:00:00Z"
+	if _, err := db.Exec(`INSERT INTO hosts (id, ip, created_at, updated_at) VALUES (4, '192.0.2.4', ?1, ?1)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s, err := Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	st, err := s.Load(ctx)
+	if err != nil || len(st.Hosts) != 1 || st.Hosts[0].Watch != nil {
+		t.Fatalf("hosts after migration: %+v %v", st.Hosts, err)
+	}
+	at := time.Date(2026, 11, 16, 14, 7, 10, 0, time.UTC)
+	h := st.Hosts[0]
+	h.Watch = []inventory.Watched{
+		{Name: "https", Port: 443, Status: "down", LastChange: at},
+		{Name: "tcp:5432", Port: 5432, Status: "up", LastChange: at, LastOK: at.Add(time.Minute)},
+		{Name: "ssh", Port: 22, Status: "unknown"},
+	}
+	if err := s.Apply(ctx, inventory.Changes{Hosts: []inventory.Host{h}}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err = s.Load(ctx); err != nil || !reflect.DeepEqual(st.Hosts[0].Watch, h.Watch) {
+		t.Fatalf("saved: %+v %v", st.Hosts[0].Watch, err)
+	}
+	h.Watch = h.Watch[2:]
+	if err := s.Apply(ctx, inventory.Changes{Hosts: []inventory.Host{h}}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err = s.Load(ctx); err != nil || !reflect.DeepEqual(st.Hosts[0].Watch, h.Watch) {
+		t.Fatalf("replaced: %+v %v", st.Hosts[0].Watch, err)
+	}
+	if err := s.Apply(ctx, inventory.Changes{DeleteHosts: []int64{4}}); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM host_services`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("%d rows left after delete (%v)", n, err)
+	}
+}

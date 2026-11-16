@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -707,5 +708,65 @@ func TestCheckServicesAPI(t *testing.T) {
 	var flat bytes.Buffer
 	if err := json.Compact(&flat, raw); err != nil || !strings.Contains(flat.String(), `"services":[]`) {
 		t.Fatalf("empty result: %s", raw)
+	}
+}
+
+// TC-321: watched services over the API: [] for a new host, PATCH sets
+// them in canonical form, mistakes are 400, service.status carries the
+// host's name and address, /map counts services down, and the read token
+// can't change them.
+func TestWatchAPI(t *testing.T) {
+	e := newEnv(t, "")
+	var raw json.RawMessage
+	e.want(201, "POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1", Name: "web"}, &raw)
+	var flat bytes.Buffer
+	if json.Compact(&flat, raw) != nil || !strings.Contains(flat.String(), `"watch":[]`) {
+		t.Fatalf("new host: %s", raw)
+	}
+	var h apitypes.Host
+	e.want(200, "PATCH", "/hosts/1", map[string]any{"watch": []string{"ssh", "HTTPS", "tcp:05432"}}, &h)
+	if len(h.Watch) != 3 || h.Watch[2].Name != "tcp:5432" || h.Watch[2].Port != 5432 || h.Watch[1].Status != "unknown" ||
+		h.Watch[0].LastChange != nil || h.Watch[0].LastOK != nil {
+		t.Fatalf("watch: %+v", h.Watch)
+	}
+	for _, body := range []string{
+		`{"watch": ["ftp"]}`, `{"watch": ["tcp:0"]}`, `{"watch": ["ssh", "tcp:22"]}`, `{"watch": null}`, `{"watch": "ssh"}`,
+		`{"watch": ["tcp:1","tcp:2","tcp:3","tcp:4","tcp:5","tcp:6","tcp:7","tcp:8","tcp:9","tcp:10","tcp:11","tcp:12","tcp:13","tcp:14","tcp:15","tcp:16","tcp:17","tcp:18","tcp:19","tcp:20","tcp:21"]}`,
+	} {
+		e.wantErr(400, apitypes.CodeInvalidArgument, "PATCH", "/hosts/1", json.RawMessage(body))
+	}
+
+	s := e.stream("")
+	at := time.Date(2026, 11, 16, 14, 7, 10, 0, time.UTC)
+	if err := e.svc.ApplyWatch(context.Background(), []inventory.WatchResult{
+		{HostID: 1, IP: netip.MustParseAddr("192.0.2.1"), Name: "https", Port: 443, Status: "down", At: at},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var ev apitypes.ServiceStatusEvent
+	if err := json.Unmarshal([]byte(s.want(apitypes.EventServiceStatus).data), &ev); err != nil {
+		t.Fatal(err)
+	}
+	if ev.HostID != 1 || ev.DisplayName != "web" || ev.IP != "192.0.2.1" || ev.Name != "https" || ev.Port != 443 ||
+		ev.Status != "down" || !ev.LastChange.Equal(at) {
+		t.Fatalf("event: %+v", ev)
+	}
+	var m apitypes.Map
+	e.want(200, "GET", "/map", nil, &m)
+	if len(m.Items) != 1 || m.Items[0].ServicesDown != 1 {
+		t.Fatalf("map: %+v", m.Items)
+	}
+	e.restart()
+	e.want(200, "GET", "/hosts/1", nil, &h)
+	if h.Watch[1].Status != "down" || !h.Watch[1].LastChange.Equal(at) {
+		t.Fatalf("after restart: %+v", h.Watch)
+	}
+
+	r := &env{t: t, token: "full", read: "reader", db: filepath.Join(t.TempDir(), "ined.db")}
+	r.start()
+	r.want(201, "POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1"}, nil)
+	var eb apitypes.ErrorBody
+	if c := r.doTok("reader", "PATCH", "/hosts/1", map[string]any{"watch": []string{"ssh"}}, &eb); c != 403 {
+		t.Fatalf("read token: %d %+v", c, eb)
 	}
 }

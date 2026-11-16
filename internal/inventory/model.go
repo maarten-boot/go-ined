@@ -71,9 +71,33 @@ type Host struct {
 	// never checked) (SPEC-309).
 	Services   []string
 	ServicesAt time.Time
-	X, Y       float64
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	// Watch are the watched services with their status (SPEC-310). The
+	// slice is replaced, never changed in place, so copies of a Host can
+	// share it.
+	Watch     []Watched
+	X, Y      float64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// Watched is a service watched on a host (SPEC-310).
+type Watched struct {
+	Name       string // "ssh", "vnc:1", "tcp:5432", ...
+	Port       uint16
+	Status     string    // apitypes.StatusUp, StatusDown or StatusUnknown
+	LastChange time.Time // zero = never
+	LastOK     time.Time // zero = never answered
+}
+
+// ServicesDown returns the number of watched services that are down.
+func (h *Host) ServicesDown() int {
+	n := 0
+	for _, w := range h.Watch {
+		if w.Status == apitypes.StatusDown {
+			n++
+		}
+	}
+	return n
 }
 
 // Group is a node of the tree (SPEC-102). A group with a valid CIDR is a

@@ -28,3 +28,16 @@
      - `make alert-test` and a CI job with the runner's Python 3.12 (actions/setup-python was not added, to avoid an unpinned action).
    - Checked end to end with a scratch server on port 18470, a fake SMTP relay and a UDP syslog listener: the start summary and a down alert for a host already down, a recovery after its IP changed, the server stopped and started (unreachable after 8 s, back, `resync`), and a restart of `ined-alert` with a recovery while it was stopped. Small fixes from that run: the summary's wording in a mixed subject, consistent rounding, only the first failed reconnect is a warning.
    - All Go tests (`-race`), lint and the 31 Python tests pass. Only Python 3.14 is installed here; CI checks 3.12. 3.11 is the stated minimum but not tested.
+5. **User**: pushed. Then: write the design for service alerts.
+   **Claude** checked the push: `main`, `docs/architecture` and `feature/alerting` arrived. CI on `feature/alerting` passed every job; the new `alert` job ran the 31 Python tests on Python 3.12.3.
+   Wrote `Design-service-alerts.md`:
+   - S1: watch the known services (`ssh`, `rdp`, `vnc[:n]`, `http`, `https`) or any `tcp:N`, by TCP connect.
+   - S2: a `watch` list per host, set on purpose, never automatic; per-group watching later.
+   - S3: checked every 60 s, down after 2 failures, at most 50 connects at once.
+   - S4: a status per watched service, stored (schema 7), reset on an IP change.
+   - S5: `watch` in host JSON and `PATCH`, a `service.status` event, `services_down` in `/map`, `inedctl host watch`.
+   - S6: a service marker on the map; host and group status stay ping-based.
+   - S7: "Watch services…" in the GUI, also for a selection.
+   - S8: `ined-alert` alerts on services with the same delay, routes and batching, held back while the host itself is down.
+   - S9: the 6-hour check for the Connect menu stays.
+   - Decisions S1–S9 wait for the user's OK.

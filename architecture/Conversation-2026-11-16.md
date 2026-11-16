@@ -43,3 +43,12 @@
    - Decisions S1–S9 wait for the user's OK.
 6. **User**: pushed; OK, all. Each watched service gets its own up/down status, checked every minute: make the time configurable, default every 5 minutes.
    **Claude** checked the push: `main` and `docs/architecture` arrived. The interval was already a setting (`services.watch_interval`); its default is now 5 minutes. With `watch_down_after` 2, a service that stops is `down` 5 to 10 minutes later. `Design-service-alerts.md` is accepted with that change. Started on part 1 (server, API, `inedctl`) on `feature/service-watch`.
+   - Built part 1 on `feature/service-watch` (merged):
+     - a `watch` list per host (known names or `tcp:N`, at most 20, no port twice), set with `PATCH /hosts/{id}`;
+     - a Watcher in `internal/services`: one TCP connect per watched service every `services.watch_interval` (5 min), down after `watch_down_after` (2) failures, up after one success, at most `watch_concurrency` (50) connects at once;
+     - a status per service with `last_change` and `last_ok`, in a new table `host_services` (schema 7); a new IP address or monitoring off makes them `unknown`;
+     - the `service.status` event, `services_down` in `/map`, OpenAPI;
+     - `inedctl host watch <id> [LIST | --add | --remove | --clear]`, a Watched line in `host show`, an SVC column in `host list`.
+   - Docs: Spec v0.50 (SPEC-310, 311, 512, 904), TC-318–321 and TC-907, regenerated API examples with a "Watched services" section, README, Changes, Plan.
+   - Checked end to end with real binaries against 127.0.0.1, with a 10 s interval and a local HTTP listener: a closed port went `down` after two checks, the listener's port went `down` when it was stopped and `up` when it was back, statuses were kept over a real restart, and monitoring off made them `unknown`. One slip during the check: the first "restart" stopped a shell wrapper instead of the server, so it didn't happen; the second server refused the locked database, as it should. It was redone with the server's own PID.
+   - All Go tests (`-race`), lint and the 31 Python tests pass. `bin/` rebuilt: v0.5.0-33-g389453a.

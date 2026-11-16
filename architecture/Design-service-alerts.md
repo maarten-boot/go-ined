@@ -1,6 +1,6 @@
 # Design: watched services and service alerts
 
-Status: **accepted** (2026-11-16, "OK, all"), with one change: watched services are checked every 5 minutes by default, not every minute (S3).
+Status: **accepted** (2026-11-16, "OK, all"), with one change: watched services are checked every 5 minutes by default, not every minute (S3). Part 1 (server, API, `inedctl`) is implemented (SPEC-310, 311, 512, 904); `ined-alert` and the GUI follow.
 
 User request: write the design for service alerts: a mail when a service on a host is down (the first part of the original alerting request, deferred in `Design-alerting.md` A10).
 

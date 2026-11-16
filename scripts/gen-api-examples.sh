@@ -178,6 +178,13 @@ ctl "The same with inedctl" "group copy 4 --view 2" group copy 4 --view 2
 ex "Check the services of host 5 (checks turned off in this run)" POST /hosts/5/check-services
 ctl "The services of a host with inedctl (--check checks first)" "host services 5" host services 5
 
+# Watched services (SPEC-310, 311, 512, 904).
+{ echo "## Watched services"; echo
+  echo 'A host'"'"'s `watch` list names the services to check every `services.watch_interval` (5 min by default): `ssh`, `rdp`, `vnc`, `vnc:1`…`vnc:9`, `http`, `https` or `tcp:N`. Each has a status (`up`, `down` after 2 failed checks in a row, `unknown` before the first check, while the host is not monitored and in this run, where checks are off), `last_change` and `last_ok`. A change of status sends `service.status`, for example `{"host_id":5,"display_name":"web","ip":"192.0.2.10","name":"https","port":443,"status":"down","last_change":"2026-11-16T14:07:10Z"}`; `/map` items of hosts have `services_down`.'; echo; } >>"$OUT"
+ex "Watch SSH, HTTPS and PostgreSQL on host 5" PATCH /hosts/5 '{"watch":["ssh","https","tcp:5432"]}'
+ex "Error: the same port twice" PATCH /hosts/5 '{"watch":["ssh","tcp:22"]}'
+ctl "Add a service with inedctl (a list sets, --remove and --clear also work)" "host watch 5 --add http" host watch 5 --add http
+
 {
 cat <<'EOF'
 # API examples — go-ined

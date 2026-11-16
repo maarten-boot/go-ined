@@ -89,3 +89,13 @@
    - N10 `GET /groups/{id}/export` (the read token may export), `POST /import` (32 MiB, not the read token), `inedctl group export` and `import`, GUI "Export…" and "Import here…".
    - N11 later: shifting to another address range, several groups or a whole view, `.tki` import, creating missing views.
    - N1–N11 wait for the user's OK.
+11. **User**: pushed; OK, all.
+   **Claude** checked the push: `main`, `docs/architecture` and `feature/service-gui` arrived. Design N1–N11 accepted. Started on the server part by reading the inventory, copy-group, validation, errors and API code. No code was written.
+12. **User**: no need to build, I'm going home.
+   **Claude** stopped. Recorded the design as accepted, with notes for the build in its status:
+   - with "update existing", matching groups are updated where they are;
+   - CIDR nesting violations are errors;
+   - an address or CIDR given twice in the file is an error;
+   - the import works on a copy of the model, with one `Changes`;
+   - `/import` needs its own body limit;
+   - export positions are relative to the top group.

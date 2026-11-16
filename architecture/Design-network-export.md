@@ -1,6 +1,15 @@
 # Design: export and import of a network
 
-Status: **proposed** (2026-11-16). The outline was agreed ("OK, all"): a network group with everything below it, custom-view placements by view name, refuse on conflicts with an option to update. Decisions N1–N11 wait for the user's OK.
+Status: **accepted** (2026-11-16, "OK, all"): N1–N11 as recommended. Not built yet. The order is server/API, then `inedctl`, then the GUI.
+
+Notes for the build, from reading the code:
+- **Update existing (N8):** a matching group is updated where it is and is not moved (its other contents would be left behind); the file's items below it go into it. Only matching hosts move, into their group from the file.
+- **CIDR nesting (SPEC-113):** a network group that would not fit inside its enclosing network group is an error even with "update existing", not a conflict.
+- **Duplicates:** an IP address or CIDR that appears twice in the file is an error in the file.
+- **How to build it:**
+  - `inventory/transfer.go`: `ExportGroup` reads under the read lock. `Import` works on a copy of the model (factor `clone()` out of `Snapshot`), applies one `Changes` and then switches the model over.
+  - API: `POST /import` needs its own body limit; `auth` applies 1 MiB to every request today.
+  - Positions in the model are absolute map coordinates. The export subtracts the top group's position; custom-view positions stay absolute.
 
 User request: "should we add a cidr export/import option to allow import/export of a net with all its groups and stuff?"
 

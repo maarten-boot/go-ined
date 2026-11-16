@@ -1,6 +1,6 @@
 # Design: alerting by email (and syslog)
 
-Status: **proposed** (2026-11-16), waiting for the user's OK.
+Status: **implemented** (2026-11-16): A1–A11 as recommended ("OK, all"), on `feature/alerting`. Settled in the build: before a down or recovery mail the host is read from the server once more, so an old event can't cause one; `/health` gives `access` so `ined-alert` can tell the token kinds apart; a route may name a whole view; `--check` and `--test-mail`; CI runs the tests with the runner's Python 3.12. SPEC-808, SPEC-950–956.
 
 User request: alerts, for example by email, when a host or a service on a host is down; later, after SNMP monitoring, also alerts on values such as disk > 90 % or CPU > 80 %. To keep all of that out of the server, the user considered scripting; a Python client could be easier, especially if it only reads. Mail through a local SMTP relay for now. Alerts per group; only admins get all alerts. Syslog, so every action is logged to a central collector. A mail when the alerter restarts is an option.
 

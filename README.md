@@ -109,7 +109,7 @@ The server logs to stderr; `[log] level` (`debug`, `info`, `warn`, `error`) and 
 
 Backup: the database is one SQLite file. While the server runs, copy it with `sqlite3 ined.db ".backup ined-copy.db"` (a consistent copy); with the server stopped, a plain file copy is fine.
 
-Security: by default the server listens on loopback only. To listen on any other address you must set `server.token`; clients then send `Authorization: Bearer <token>`. Set `server.tls_cert` and `server.tls_key` to turn on TLS. For a self-signed certificate, point the clients' `server.ca_cert` (or `inedctl --ca-cert`) at the certificate's PEM file.
+Security: by default the server listens on loopback only. To listen on any other address you must set `server.token`; clients then send `Authorization: Bearer <token>`. `server.read_token` adds a second token that can only read (lists, the map and the event stream; anything else gets 403), for scripts that only watch, such as `ined-alert`. Set `server.tls_cert` and `server.tls_key` to turn on TLS. For a self-signed certificate, point the clients' `server.ca_cert` (or `inedctl --ca-cert`) at the certificate's PEM file.
 
 Only one `ined-server` can use a database at a time; a second one refuses to start.
 
@@ -126,6 +126,17 @@ sudo setcap cap_net_raw+ep bin/ined-server
 Many distributions already allow ping sockets for all groups (option A's value). Set `monitor.enabled = false` to turn background pinging off (discovery still works).
 
 Discovery probes IPv4 ranges up to `/16` (`discovery.max_prefix`) at 200 addresses per second (`discovery.rate`). The server is designed for about 5,000 hosts; a range with more addresses than that logs a warning. Reverse DNS uses the system's resolver; set `dns.enabled = false` to turn it off. The service check for the Connect menu (`[services]`) makes one TCP connection per port, not a port scan; set `services.enabled = false` to turn it off.
+
+## Alerting
+
+[`contrib/ined-alert`](contrib/ined-alert/README.md) sends email when a monitored host is down for 2 minutes, and again when it is back, to the people of the groups it is in and to the admins. It runs next to the server, in Python 3.11 or later with nothing to install:
+
+1. In `server.toml`, set `token` and `read_token`, and restart the server.
+2. Copy `contrib/ined-alert/alert.toml` to `~/.config/go-ined/alert.toml` and set the read token, `mail.from`, the admins and a `[[route]]` per group, such as `group = "Networks/dc"`.
+3. `contrib/ined-alert/ined-alert --check` shows which hosts each route covers; `--test-mail` sends one mail to the admins.
+4. Run `contrib/ined-alert/ined-alert`, or install `ined-alert.service` for systemd.
+
+Mail goes through an SMTP relay (`localhost:25`) without login. Alerts within 30 seconds go out as one mail. Every action is logged on stderr and, with `[syslog] address`, to a collector. The admins also hear when the server can't be reached or can't ping.
 
 ## Documentation
 

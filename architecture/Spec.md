@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.48** (2026-11-14)
+Status: **draft v0.49** (2026-11-16)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -105,7 +105,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - `GET/POST /groups`, `GET/PATCH/DELETE /groups/{id}?children=reparent|cascade`
   - `GET /map`: every item with its type, parent, position, `collapsed` flag, `cidr`, status, `stale` flag, display name, `has_note` flag, `outside_cidr` flag, `monitored` flag (v0.19, for SPEC-712) and, for hosts, `ip`. Flags that don't apply to an item type (`collapsed` on hosts, `outside_cidr` and `monitored` on groups) are `false`. A client builds the map from this one response.
   - `POST /discovery` (202 with the new job), `GET /discovery/{id}`, `DELETE /discovery/{id}` (cancel; 200 with the job's state at that moment, `discovery.finished` follows)
-  - `GET /health`: without a token, returns only `{status, version}`. With a valid token, it also returns the ICMP mode (`unprivileged`, `privileged`, `unavailable` or `disabled`), `icmp_error` and `icmp6_error` when set, the database status and the run id. `status` is `degraded` when the database fails or no ICMP mode works (v0.10).
+  - `GET /health`: without a token, returns only `{status, version}`. With a valid token, it also returns the ICMP mode (`unprivileged`, `privileged`, `unavailable` or `disabled`), `icmp_error` and `icmp6_error` when set, the database status, the run id and `access` (`full`, or `read` for the read-only token; v0.49, SPEC-808). `status` is `degraded` when the database fails or no ICMP mode works (v0.10).
   - Moving, repositioning, collapsing, expanding and editing notes are all done with `PATCH` on `parent_id`, `x` / `y`, `collapsed` or `note`. In a `PATCH`, an absent field is left unchanged; `null` is allowed only for `parent_id` (the root) and is rejected with 400 for every other field (v0.17).
   - Views and placements: SPEC-122.
 - **SPEC-502** MUST: `GET /api/v1/events` is a Server-Sent Events (SSE) stream. Event types: `host.created|updated|deleted|status`, `group.created|updated|deleted|status|moved` (`moved`: SPEC-507), `map.arranged` (SPEC-510), `discovery.progress|finished` (`finished` includes the final `state`: `done`, `cancelled` or `failed`), `view.created|updated|deleted` and `placement.updated|deleted` (SPEC-122), and `resync`.
@@ -117,6 +117,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   |------|--------|------|
   | 400 | `invalid_argument` | Malformed JSON, unknown JSON field, `null` for a field that can't be null (v0.17), invalid IP or CIDR, non-canonical CIDR, IPv6 discovery, a `parent_id` that doesn't exist or is in another view, a `cidr` in a custom view, placing a host in view 1, text over its length limit (except notes) |
   | 401 | `unauthenticated` | Missing or invalid token |
+  | 403 | `forbidden` | The read-only token (SPEC-808) with any method but `GET` and `HEAD` (v0.49) |
   | 404 | `not_found` | Unknown id in the path, unknown endpoint |
   | 405 | `method_not_allowed` | Method not supported on an existing endpoint (with an `Allow` header) |
   | 409 | `conflict` | Duplicate IP, CIDR or view name, cycle, non-empty group delete, SPEC-114 violation, deleting the network view |
@@ -196,6 +197,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   |------|-----|---------|
   | server | `server.listen` | `127.0.0.1:8470` |
   | server | `server.token` | `""` |
+  | server | `server.read_token` | `""` (none; SPEC-808, v0.49) |
   | server | `server.tls_cert`, `server.tls_key` | `""` (TLS off) |
   | server | `storage.db_path` | `""` (= `$XDG_DATA_HOME/go-ined/ined.db`) |
   | server | `monitor.enabled` | `true` (v0.9) |
@@ -214,6 +216,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   | gui | `connect.ssh` / `rdp` / `vnc` | `""` (the platform's default, SPEC-731, v0.47) |
 - **SPEC-806** SHOULD: Every binary supports `-version`, which prints the version (set at build time) and exits.
 - **SPEC-807** SHOULD (v0.24): **Server log.** `[log] level` (`debug`, `info`, `warn`, `error`; default `info`) and `format` (`text` or `json`; default `text`) in `server.toml`, and `-log-level` on the command line. The log goes to stderr. At `debug`, every API request is logged with method, path and duration (v0.25).
+- **SPEC-808** SHOULD (v0.49, user request; design `Design-alerting.md`, A2): **Read-only token.** `server.read_token` (default `""`) is a second token that may only read: `GET`, `HEAD` and the event stream; any other method gets 403 `forbidden` ("this token can only read (server.read_token)"). It needs `server.token` (without it every request may change things) and must differ from it; otherwise the server refuses to start. Both tokens are compared in constant time. Authenticated `/health` has `access`: `full` or `read`; `inedctl health` prints it. Meant for `ined-alert` (SPEC-950) and other scripts that only watch.
 
 ## 12. CLI (`inedctl`)
 - **SPEC-901** MUST: Subcommands:
@@ -233,9 +236,19 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
 - **SPEC-902** MUST: Output is a human-readable table by default. `--json` prints the API's JSON unchanged. Tables are sorted by ID. Hosts: ID, IP, NAME, STATUS, RTT, PARENT, MON. Groups: ID, NAME, CIDR, STATUS, PARENT, COLLAPSED (v0.13), VIEW (v0.17); `group show` includes the view. A stale host shows `(stale)` after its status, so the status is always in words (v0.14).
 - **SPEC-903** MUST: Exit codes: `0` OK, `1` the API returned an error (or a waited-for discovery job failed or was cancelled), `2` usage or config error (bad config file, URL or CA file), `3` connection, TLS or authentication error (including 401), `130` interrupted with Ctrl-C (`events` exits 0 instead). After an interrupted `discover start --wait`, inedctl says that the job keeps running on the server. `health` exits 0 whenever the server answers, also when its status is `degraded`; scripts read `--json` (v0.15).
 
+## 12b. Alerting (`ined-alert`, v0.49, user request; design `Design-alerting.md`, A1–A11)
+- **SPEC-950** SHOULD: **The program.** `contrib/ined-alert/` holds `ined-alert`, a Python 3.11+ program using only the standard library, with a client package `ined` (`Client(url, token)`: `hosts()`, `host(id)`, `groups()`, `views()`, `map(view)`, `health()`, `events()`, which reconnects after 1 s doubling to 30 s and resumes with `Last-Event-ID`; a 4xx answer raises `APIError`), an example `alert.toml`, a systemd unit and tests (`make alert-test`, also in CI with the runner's Python 3.12). It is not in the release archives. `ined-alert [--config F] [--check | --test-mail]`: `--check` prints the token's access, the hosts each route covers and the route warnings (exit 1 when there are any); `--test-mail` sends one mail to the admins. Exit codes: 0 stopped by SIGINT/SIGTERM or a check that went well, 1 a runtime error such as a refused token, 2 a configuration error. With the full token it warns and still runs.
+- **SPEC-951** SHOULD: **Config.** `alert.toml` (default `$XDG_CONFIG_HOME/go-ined/alert.toml`): `[server] url, token` (`INED_URL`, `INED_TOKEN` override); `[mail] host` (`localhost`), `port` (25), `from` (required); `[alert] admins`, `down_after` (`2m`), `batch` (`30s`), `repeat` (`""` = none), `startup_summary` (false), `state_file` (`""` = `$XDG_STATE_HOME/ined-alert/state.json`), `server_down_after` (`5m`); `[[route]] group, to`; `[syslog] address` (`""`, `udp://h:p`, `tcp://h:p` or a socket path), `facility` (`local0`); `[log] level` (`info`). Durations as Go writes them. An unknown section or key, a bad duration or address, a missing `from`, or neither admins nor routes is an error.
+- **SPEC-952** SHOULD: **What is alerted.** A monitored host whose status becomes `down` and stays down for `down_after` (counted from its `last_change`) gets a **down** alert; before it is sent the host is read from the server once more, so an old event can't cause one. When the host is `up` again (also checked with the server), the recipients of the down alert get a **recovery** alert. Back up within `down_after`: nothing, only logged. `unknown` is not alerted per host and ends a waiting alert. Turning monitoring off or deleting the host ends an alert without a mail. No repeat unless `repeat` is set ("STILL DOWN").
+- **SPEC-953** SHOULD: **Recipients.** A route names a group by its path, view first (`Networks/dc/lan`, `Payroll/app servers`), or a whole view (`Payroll`), and covers the group and everything below it. A host's recipients are those of every route covering it in any view, plus the admins; each recipient gets an alert once. Routes are resolved from the views and their maps, again a few seconds after group, view, placement or host changes. A route that matches nothing, or several groups (it covers them all), is a warning in the log.
+- **SPEC-954** SHOULD: **Mail.** Alerts for one recipient within `batch` go out as one plain-text mail ("[ined] DOWN web (192.0.2.10)", "[ined] UP web (192.0.2.10) after 18 min", "[ined] 40 hosts down in Networks/dc"), with name, IP address, the host's groups as paths, since when, last seen and the server URL; header `Auto-Submitted: auto-generated`. Sent through SMTP without login or TLS; a failure is retried after 10 s, 1 min and 5 min, then dropped. At a stop, what is waiting is sent first.
+- **SPEC-955** SHOULD: **Logging.** Every action (start and stop, connected, disconnected, `resync`, each status change seen, an alert waiting, cancelled, queued, sent, failed or dropped, config warnings) is one `key=value` line on stderr and, with `[syslog] address`, to a syslog collector with tag `ined-alert`. A collector that can't be reached is reported once; alerting goes on. Only the first of a series of failed reconnects is a warning.
+- **SPEC-956** SHOULD: **Restart and the server's state.** A state file (JSON, written atomically, mode 0600) holds the open down alerts and whether the admins were told the server is unreachable or degraded. At start and after `resync`: a host down with an open alert gets nothing new, a host down without one is alerted after its delay, an open alert for a host that is up gets a recovery mail, one for a deleted host is closed. An unreadable state file is moved to `.bad` and logged. `startup_summary` mails the admins the monitored hosts down at start. When the event stream is lost for `server_down_after`, or `/health` (read every 60 s) says `degraded` that long, the admins get one mail, and another when it is over.
+
 ## 13. LATER (not in v0.1)
 - A 9P front end that exposes the inventory as a file tree.
 - A ZMQ publisher for alerts.
+- Alerts for services (SPEC-309) and SNMP values with thresholds in `ined-alert`; both need server work first (services watched per host with their own events; SNMP collection) (v0.49, `Design-alerting.md` A10).
 - TCP-port probes for hosts that block ICMP, and ARP discovery.
 - An SNMP check per host with a configurable list of community strings to try, stored like the services (SPEC-309) (v0.47, user request).
 - A **Hosts** notebook tab in the GUI (v0.11, user request): the inventory as a list with IP address and DNS name, sortable by column, with a find box to jump to an item.

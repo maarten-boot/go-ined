@@ -20,3 +20,11 @@
    - A10: service and SNMP alerts later, after server work.
    - A11: tests.
    - Decisions A1–A11 wait for the user's OK.
+4. **User**: pushed; OK, all (A1–A11).
+   **Claude** checked the push: `main` and `docs/architecture` arrived.
+   - Built it on `feature/alerting` (merged):
+     - server: `server.read_token`, which can only read (403 `forbidden` otherwise; it needs `server.token` and must differ from it); `access` in `/health`; `inedctl health` prints it; OpenAPI, example config (SPEC-808, TC-808);
+     - `contrib/ined-alert`: a client package `ined` and the program, Python standard library only: routes per group path in any view, a delay with a check on the server before mailing, batching per recipient, SMTP with retries, `key=value` logging to stderr and syslog, a state file for restarts, mails when the server is unreachable or degraded, the start summary, `--check` and `--test-mail`, a systemd unit (SPEC-950–956, TC-950–956);
+     - `make alert-test` and a CI job with the runner's Python 3.12 (actions/setup-python was not added, to avoid an unpinned action).
+   - Checked end to end with a scratch server on port 18470, a fake SMTP relay and a UDP syslog listener: the start summary and a down alert for a host already down, a recovery after its IP changed, the server stopped and started (unreachable after 8 s, back, `resync`), and a restart of `ined-alert` with a recovery while it was stopped. Small fixes from that run: the summary's wording in a mixed subject, consistent rounding, only the first failed reconnect is a warning.
+   - All Go tests (`-race`), lint and the 31 Python tests pass. Only Python 3.14 is installed here; CI checks 3.12. 3.11 is the stated minimum but not tested.

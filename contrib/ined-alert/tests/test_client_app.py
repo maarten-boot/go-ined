@@ -137,6 +137,26 @@ class TestApp(unittest.TestCase):
         self.assertEqual(load_state(app.cfg.state_file, app.log)["open"], {})
         self.assertIn("event=alert_queued kind=down host=web", buf.getvalue())
 
+    def test_service_mail(self):
+        # TC-957: a service.status event ends up as a mail, and in the state file.
+        ws = [{"name": "https", "port": 443, "status": "up", "last_change": None, "last_ok": None}]
+        app, client, sent, clock, buf = self.rig([host(1, "192.0.2.1", name="web", watch=ws)])
+        app.step(clock())
+        ws[0].update(status="down", last_change="2027-01-15T08:00:00Z")
+        ev = {"host_id": 1, "display_name": "web", "ip": "192.0.2.1", "name": "https", "port": 443,
+              "status": "down", "last_change": "2027-01-15T08:00:00Z"}
+        app.handle(("event", Event("r-1", "service.status", ev)), clock.add(1))
+        for _ in range(4):
+            app.step(clock.add(40))
+        self.assertEqual(sorted((m["To"], m["Subject"]) for m in sent), [
+            ("admin@example.com", "[ined] DOWN https on web (192.0.2.1)"),
+            ("ops@example.com", "[ined] DOWN https on web (192.0.2.1)"),
+            ("pay@example.com", "[ined] DOWN https on web (192.0.2.1)"),
+        ])
+        st = load_state(app.cfg.state_file, app.log)
+        self.assertEqual((st["version"], list(st["services"])), (2, ["1/https"]))
+        self.assertIn("event=alert_queued kind=down host=web service=https", buf.getvalue())
+
     def test_unreachable_and_routes_reload(self):
         app, client, sent, clock, buf = self.rig([host(1, "192.0.2.1")])
         app.step(clock())

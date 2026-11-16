@@ -2128,6 +2128,10 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "services_down": {
+            "type": "integer",
+            "description": "The host's number of watched services down after this change, as in /map items (v0.51)."
           }
         },
         "additionalProperties": false,
@@ -2138,7 +2142,8 @@
           "name",
           "port",
           "status",
-          "last_change"
+          "last_change",
+          "services_down"
         ]
       }
     }

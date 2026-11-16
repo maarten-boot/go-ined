@@ -748,7 +748,7 @@ func TestWatchAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	if ev.HostID != 1 || ev.DisplayName != "web" || ev.IP != "192.0.2.1" || ev.Name != "https" || ev.Port != 443 ||
-		ev.Status != "down" || !ev.LastChange.Equal(at) {
+		ev.Status != "down" || !ev.LastChange.Equal(at) || ev.ServicesDown != 1 {
 		t.Fatalf("event: %+v", ev)
 	}
 	var m apitypes.Map

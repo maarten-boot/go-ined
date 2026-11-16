@@ -207,6 +207,11 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		case h != nil:
 			items = append(items, g.showInViewItem(h))
 		}
+		if hosts := selectedHosts(sel); onSelection && len(hosts) > 1 {
+			items = append(items, g.watchItem(hosts))
+		} else {
+			items = append(items, g.watchItem([]int64{k.ID}))
+		}
 		if h != nil {
 			items = append(items, g.connectItem(h))
 		}

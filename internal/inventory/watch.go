@@ -45,14 +45,16 @@ func resetWatch(ws []Watched, at time.Time, clearOK bool) ([]Watched, []int) {
 	return out, changed
 }
 
-// publishWatch emits service.status for entries idx of h. Caller holds
-// the lock.
+// publishWatch emits service.status for entries idx of h, with the
+// host's count of services down after all of them. Caller holds the lock.
 func (s *Service) publishWatch(h *Host, idx []int) {
+	down := h.ServicesDown()
 	for _, i := range idx {
 		w := h.Watch[i]
 		s.notify.Publish(apitypes.EventServiceStatus, apitypes.ServiceStatusEvent{
 			HostID: h.ID, DisplayName: h.DisplayName(), IP: h.IP.String(),
 			Name: w.Name, Port: int(w.Port), Status: w.Status, LastChange: timePtr(w.LastChange),
+			ServicesDown: down,
 		})
 	}
 }

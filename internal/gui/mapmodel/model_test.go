@@ -125,6 +125,24 @@ func TestApply(t *testing.T) {
 		t.Error("gen not bumped")
 	}
 
+	// TC-748: services down come with the host's watch list and with
+	// service.status; an unchanged count redraws nothing.
+	h.Watch = []apitypes.WatchedService{{Name: "ssh", Port: 22, Status: "down"}, {Name: "https", Port: 443, Status: "up"}}
+	m.Apply(apitypes.EventHostUpdated, raw(t, h))
+	if n := m.Map(2).Items[HostKey(1)].ServicesDown; n != 1 {
+		t.Fatalf("services down from host.updated: %d", n)
+	}
+	e, _ = m.Apply(apitypes.EventServiceStatus, raw(t, apitypes.ServiceStatusEvent{HostID: 1, Name: "https", Port: 443, Status: "down", ServicesDown: 2}))
+	if !slices.Equal(e.Redraw, []int64{1, 2}) || m.Map(1).Items[HostKey(1)].ServicesDown != 2 {
+		t.Fatalf("service.status: %+v", e)
+	}
+	if e, _ = m.Apply(apitypes.EventServiceStatus, raw(t, apitypes.ServiceStatusEvent{HostID: 1, Name: "https", ServicesDown: 2})); e.Redraw != nil {
+		t.Errorf("same count: %+v", e)
+	}
+	if e, _ = m.Apply(apitypes.EventServiceStatus, raw(t, apitypes.ServiceStatusEvent{HostID: 99, ServicesDown: 1})); e.Redraw != nil || e.Reload != nil {
+		t.Errorf("unknown host: %+v", e)
+	}
+
 	// group.status in place, only in the group's view.
 	e, _ = m.Apply(apitypes.EventGroupStatus, raw(t, apitypes.GroupStatusEvent{ID: 5, Status: "down"}))
 	if !slices.Equal(e.Redraw, []int64{2}) || m.Map(2).Items[GroupKey(5)].Status != "down" {

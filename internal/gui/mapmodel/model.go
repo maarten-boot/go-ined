@@ -127,7 +127,7 @@ type Effect struct {
 }
 
 // Apply updates the model from one event (SPEC-716): host.status,
-// host.updated and group.status change items in place; other changes to
+// host.updated, service.status and group.status change items in place; other changes to
 // a view's items ask for a reload of that view; view.* events change the
 // list of views; resync asks for a full reload.
 func (m *Model) Apply(typ string, data json.RawMessage) (Effect, error) {
@@ -151,11 +151,26 @@ func (m *Model) Apply(typ string, data json.RawMessage) (Effect, error) {
 				continue
 			}
 			it.Name, it.Status, it.Stale, it.HasNote, it.Monitored, it.IP = h.DisplayName, h.Status, h.Stale, h.Note != "", h.Monitored, h.IP
+			it.ServicesDown = servicesDown(h.Watch)
 			if vid == NetworkView {
 				it.ParentID, it.X, it.Y, it.OutsideCIDR = h.ParentID, h.X, h.Y, h.OutsideCIDR
 			}
 			vm.gen++
 			e.Redraw = append(e.Redraw, vid)
+		}
+
+	case apitypes.EventServiceStatus:
+		var ev apitypes.ServiceStatusEvent
+		if err := decode(typ, data, &ev); err != nil {
+			return e, err
+		}
+		for _, vid := range m.LoadedViews() {
+			vm := m.maps[vid]
+			if it := vm.Items[HostKey(ev.HostID)]; it != nil && it.ServicesDown != ev.ServicesDown {
+				it.ServicesDown = ev.ServicesDown
+				vm.gen++
+				e.Redraw = append(e.Redraw, vid)
+			}
 		}
 
 	case apitypes.EventGroupStatus:
@@ -291,4 +306,15 @@ func (m *Model) sortViews() {
 	slices.SortFunc(m.views, func(a, b apitypes.View) int {
 		return cmp.Or(cmp.Compare(a.Order, b.Order), cmp.Compare(a.ID, b.ID))
 	})
+}
+
+// servicesDown counts the watched services that are down (SPEC-310).
+func servicesDown(ws []apitypes.WatchedService) int {
+	n := 0
+	for _, w := range ws {
+		if w.Status == apitypes.StatusDown {
+			n++
+		}
+	}
+	return n
 }

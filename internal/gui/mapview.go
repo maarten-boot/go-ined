@@ -817,6 +817,9 @@ func (d *drawer) icon(n *mapmodel.Node, selected bool) {
 		d.line(x1-k, y0, x1-k, y0+k, text, 1.2)
 		d.line(x1-k, y0+k, x1, y0+k, text, 1.2)
 	}
+	if it.Type == apitypes.TypeHost && it.ServicesDown > 0 {
+		d.serviceMarker(ic)
+	}
 	y := ic.Y + ic.H + mapmodel.LabelGap
 	for i, s := range n.Labels {
 		if !d.text(s, it.X, y, text, true, i < max(1, n.NameLines)) {
@@ -829,6 +832,22 @@ func (d *drawer) icon(n *mapmodel.Node, selected bool) {
 		b := n.Bounds
 		d.rect(mapmodel.Rect{X: b.X - 4, Y: b.Y - 8, W: b.W + 8, H: b.H + 12}, color.Transparent, nrgba(d.p.Primary), 2.5)
 	}
+}
+
+// serviceMarker draws the sign of a host with a watched service down
+// (SPEC-732, S6): a warning triangle with a bar, just off the icon's
+// bottom-right corner, in the "down" colour. It is a shape, so it doesn't
+// depend on colour, and none of the status glyphs is a triangle.
+func (d *drawer) serviceMarker(ic mapmodel.Rect) {
+	const k = 11.0
+	col := nrgba(d.p.Status(apitypes.StatusDown))
+	x0, y1 := ic.X+ic.W-k/2, ic.Y+ic.H+k/3 // bottom left of the triangle
+	x1, xm, y0 := x0+k, x0+k/2, y1-k
+	d.rect(mapmodel.Rect{X: x0 - 1, Y: y0 - 1, W: k + 2, H: k + 2}, nrgba(d.p.Background), color.Transparent, 0)
+	d.line(x0, y1, x1, y1, col, 1.8)
+	d.line(x0, y1, xm, y0, col, 1.8)
+	d.line(xm, y0, x1, y1, col, 1.8)
+	d.line(xm, y0+k*0.35, xm, y1-k*0.3, col, 1.8)
 }
 
 // frame draws an expanded group: a solid (ordinary) or dashed (network)

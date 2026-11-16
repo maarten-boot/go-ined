@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "8a3c8c53925e7890",
+  "run_id": "66777e52b5f22648",
   "access": "full"
 }
 ```
@@ -51,8 +51,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-16T12:11:01.457Z",
-  "updated_at": "2026-11-16T12:11:01.457Z"
+  "created_at": "2026-11-16T15:18:03.267Z",
+  "updated_at": "2026-11-16T15:18:03.267Z"
 }
 ```
 
@@ -79,8 +79,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-16T12:11:01.469Z",
-  "updated_at": "2026-11-16T12:11:01.469Z"
+  "created_at": "2026-11-16T15:18:03.278Z",
+  "updated_at": "2026-11-16T15:18:03.278Z"
 }
 ```
 
@@ -118,8 +118,8 @@ Response: `201`
   "watch": [],
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-16T12:11:01.48Z",
-  "updated_at": "2026-11-16T12:11:01.48Z"
+  "created_at": "2026-11-16T15:18:03.29Z",
+  "updated_at": "2026-11-16T15:18:03.29Z"
 }
 ```
 
@@ -157,8 +157,8 @@ Response: `200`
   "watch": [],
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-16T12:11:01.48Z",
-  "updated_at": "2026-11-16T12:11:01.492Z"
+  "created_at": "2026-11-16T15:18:03.29Z",
+  "updated_at": "2026-11-16T15:18:03.3Z"
 }
 ```
 
@@ -185,8 +185,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-16T12:11:01.457Z",
-  "updated_at": "2026-11-16T12:11:01.503Z"
+  "created_at": "2026-11-16T15:18:03.267Z",
+  "updated_at": "2026-11-16T15:18:03.311Z"
 }
 ```
 
@@ -350,11 +350,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: 8a3c8c53925e7890-10
+id: 66777e52b5f22648-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"services":null,"services_checked_at":null,"watch":[],"x":40,"y":40,"created_at":"2026-11-16T12:11:01.898Z","updated_at":"2026-11-16T12:11:01.898Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"services":null,"services_checked_at":null,"watch":[],"x":40,"y":40,"created_at":"2026-11-16T15:18:03.707Z","updated_at":"2026-11-16T15:18:03.707Z"}
 
-id: 8a3c8c53925e7890-11
+id: 66777e52b5f22648-11
 event: host.deleted
 data: {"id":2}
 
@@ -370,7 +370,7 @@ Response: `202`
 
 ```json
 {
-  "id": "8a3c8c53925e7890-1",
+  "id": "66777e52b5f22648-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -379,7 +379,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-16T12:11:02.215Z",
+  "started_at": "2026-11-16T15:18:04.041Z",
   "finished_at": null
 }
 ```
@@ -387,14 +387,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/8a3c8c53925e7890-1
+curl -s $INED/api/v1/discovery/66777e52b5f22648-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "8a3c8c53925e7890-1",
+  "id": "66777e52b5f22648-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -403,8 +403,8 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-16T12:11:02.215Z",
-  "finished_at": "2026-11-16T12:11:02.221Z"
+  "started_at": "2026-11-16T15:18:04.041Z",
+  "finished_at": "2026-11-16T15:18:04.049Z"
 }
 ```
 
@@ -474,8 +474,8 @@ Collapsed:   yes
 Labels:      inherit
 Bar colour:  none
 Position:    40, 40
-Created:     2026-11-16 13:11:04
-Updated:     2026-11-16 13:11:04
+Created:     2026-11-16 16:18:06
+Updated:     2026-11-16 16:18:06
 Note:        -
 ```
 
@@ -505,8 +505,8 @@ Services:     not checked yet
 Watched:      none
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-16 13:11:04
-Updated:      2026-11-16 13:11:04
+Created:      2026-11-16 16:18:06
+Updated:      2026-11-16 16:18:06
 Note:         2nd floor
 ```
 
@@ -570,8 +570,8 @@ inedctl --json host show 5
   "watch": [],
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-16T12:11:04.296Z",
-  "updated_at": "2026-11-16T12:11:04.296Z"
+  "created_at": "2026-11-16T15:18:06.146Z",
+  "updated_at": "2026-11-16T15:18:06.146Z"
 }
 ```
 
@@ -606,8 +606,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job 8a3c8c53925e7890-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job 8a3c8c53925e7890-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job 66777e52b5f22648-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job 66777e52b5f22648-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -667,8 +667,8 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-16T12:11:04.345Z",
-  "updated_at": "2026-11-16T12:11:04.345Z"
+  "created_at": "2026-11-16T15:18:06.189Z",
+  "updated_at": "2026-11-16T15:18:06.189Z"
 }
 ```
 
@@ -695,8 +695,8 @@ Response: `201`
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-16T12:11:04.354Z",
-  "updated_at": "2026-11-16T12:11:04.354Z"
+  "created_at": "2026-11-16T15:18:06.198Z",
+  "updated_at": "2026-11-16T15:18:06.198Z"
 }
 ```
 
@@ -824,8 +824,8 @@ ID:      2
 Name:    Printers
 Kind:    custom
 Order:   1
-Created: 2026-11-16 13:11:04
-Updated: 2026-11-16 13:11:04
+Created: 2026-11-16 16:18:06
+Updated: 2026-11-16 16:18:06
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6
@@ -860,8 +860,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 40,
-  "created_at": "2026-11-16T12:11:04.354Z",
-  "updated_at": "2026-11-16T12:11:04.406Z"
+  "created_at": "2026-11-16T15:18:06.198Z",
+  "updated_at": "2026-11-16T15:18:06.253Z"
 }
 ```
 
@@ -883,8 +883,8 @@ Collapsed:   no
 Labels:      inherit
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-16 13:11:04
-Updated:     2026-11-16 13:11:04
+Created:     2026-11-16 16:18:06
+Updated:     2026-11-16 16:18:06
 Note:        -
 ```
 
@@ -913,8 +913,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-16T12:11:04.354Z",
-  "updated_at": "2026-11-16T12:11:04.417Z"
+  "created_at": "2026-11-16T15:18:06.198Z",
+  "updated_at": "2026-11-16T15:18:06.261Z"
 }
 ```
 
@@ -942,8 +942,8 @@ Services:     not checked yet
 Watched:      none
 Outside CIDR: no
 Position:     240, 40
-Created:      2026-11-16 13:11:04
-Updated:      2026-11-16 13:11:04
+Created:      2026-11-16 16:18:06
+Updated:      2026-11-16 16:18:06
 Note:         Toner replaced 2026-11
 ```
 
@@ -976,8 +976,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-16T12:11:04.354Z",
-  "updated_at": "2026-11-16T12:11:04.44Z"
+  "created_at": "2026-11-16T15:18:06.198Z",
+  "updated_at": "2026-11-16T15:18:06.282Z"
 }
 ```
 
@@ -1016,8 +1016,8 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-16 13:11:04
-Updated:     2026-11-16 13:11:04
+Created:     2026-11-16 16:18:06
+Updated:     2026-11-16 16:18:06
 Note:        -
 ```
 
@@ -1050,8 +1050,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-16T12:11:04.354Z",
-  "updated_at": "2026-11-16T12:11:04.471Z"
+  "created_at": "2026-11-16T15:18:06.198Z",
+  "updated_at": "2026-11-16T15:18:06.303Z"
 }
 ```
 
@@ -1090,8 +1090,8 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-16 13:11:04
-Updated:     2026-11-16 13:11:04
+Created:     2026-11-16 16:18:06
+Updated:     2026-11-16 16:18:06
 Note:        -
 ```
 
@@ -1232,7 +1232,7 @@ Exit code: `0`
 
 ## Watched services
 
-A host's `watch` list names the services to check every `services.watch_interval` (5 min by default): `ssh`, `rdp`, `vnc`, `vnc:1`…`vnc:9`, `http`, `https` or `tcp:N`. Each has a status (`up`, `down` after 2 failed checks in a row, `unknown` before the first check, while the host is not monitored and in this run, where checks are off), `last_change` and `last_ok`. A change of status sends `service.status`, for example `{"host_id":5,"display_name":"web","ip":"192.0.2.10","name":"https","port":443,"status":"down","last_change":"2026-11-16T14:07:10Z"}`; `/map` items of hosts have `services_down`.
+A host's `watch` list names the services to check every `services.watch_interval` (5 min by default): `ssh`, `rdp`, `vnc`, `vnc:1`…`vnc:9`, `http`, `https` or `tcp:N`. Each has a status (`up`, `down` after 2 failed checks in a row, `unknown` before the first check, while the host is not monitored and in this run, where checks are off), `last_change` and `last_ok`. A change of status sends `service.status`, for example `{"host_id":5,"display_name":"web","ip":"192.0.2.10","name":"https","port":443,"status":"down","last_change":"2026-11-16T14:07:10Z","services_down":1}` (`services_down` is the host's count of watched services down after the change); `/map` items of hosts have `services_down` too.
 
 ### Watch SSH, HTTPS and PostgreSQL on host 5
 
@@ -1291,8 +1291,8 @@ Response: `200`
   ],
   "x": 40,
   "y": 120,
-  "created_at": "2026-11-16T12:11:04.296Z",
-  "updated_at": "2026-11-16T12:11:04.553Z"
+  "created_at": "2026-11-16T15:18:06.146Z",
+  "updated_at": "2026-11-16T15:18:06.388Z"
 }
 ```
 

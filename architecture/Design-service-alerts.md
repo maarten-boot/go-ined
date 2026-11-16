@@ -1,6 +1,6 @@
 # Design: watched services and service alerts
 
-Status: **proposed** (2026-11-16), waiting for the user's OK.
+Status: **accepted** (2026-11-16, "OK, all"), with one change: watched services are checked every 5 minutes by default, not every minute (S3).
 
 User request: write the design for service alerts: a mail when a service on a host is down (the first part of the original alerting request, deferred in `Design-alerting.md` A10).
 
@@ -13,7 +13,7 @@ User request: write the design for service alerts: a mail when a service on a ho
 
 ## Proposal
 
-Make services **watched on purpose**, per host. The server checks watched services as often as it pings, keeps a status for each with its own event, and `ined-alert` alerts on them the same way as on hosts. The 6-hour check for the Connect menu stays as it is.
+Make services **watched on purpose**, per host. The server checks watched services on their own interval (5 minutes by default), keeps a status for each with its own event, and `ined-alert` alerts on them the same way as on hosts. The 6-hour check for the Connect menu stays as it is.
 
 ## Decisions (recommended)
 
@@ -27,9 +27,9 @@ Make services **watched on purpose**, per host. The server checks watched servic
   - The GUI's dialog shows which services answered at the last check, to make picking easy (S7).
   - Watching per group, inherited by the hosts below as host labels are (SPEC-725), is left for later. The GUI can already set the list on a whole selection of hosts.
 - **S3 How often.**
-  - Watched services of a monitored host are checked every `services.watch_interval`, 60 s by default, with the existing 1 s timeout.
-  - A service is `down` after `services.watch_down_after` failed checks in a row (2, like `monitor.down_after`). It is `up` again after one success.
-  - Up to `services.watch_concurrency` (50) connects at once. 5,000 hosts with 3 watched services each is 15,000 connects a minute; a closed port answers at once, and only ports that don't answer at all take the full second.
+  - Watched services of a monitored host are checked every `services.watch_interval`, **5 minutes by default** (the user's choice), with the existing 1 s timeout. It can be set from 10 s up; a shorter interval finds a problem sooner at the cost of more connections.
+  - A service is `down` after `services.watch_down_after` failed checks in a row (2, like `monitor.down_after`). It is `up` again after one success. With the defaults, a service that stops is `down` 5 to 10 minutes later.
+  - Up to `services.watch_concurrency` (50) connects at once. 5,000 hosts with 3 watched services each is 15,000 connects per interval, 50 a second at 5 minutes; a closed port answers at once, and only ports that don't answer at all take the full second.
   - An unmonitored host's watched services are not checked, and their status is `unknown`.
 - **S4 A status per watched service.**
   - Each watched service has `status` (`up`, `down`, `unknown`), `last_change` and `last_ok`.
@@ -46,7 +46,7 @@ Make services **watched on purpose**, per host. The server checks watched servic
   - OpenAPI and the API examples are updated.
   - `inedctl`:
     - `host watch <id> ssh,https,tcp:5432`, plus `--add`, `--remove` and `--clear`;
-    - `host show` gets a "Watched" line: "ssh up, https down since 14:02, tcp:5432 up";
+    - `host show` gets a "Watched" line: "ssh up, https down since 14:07, tcp:5432 up";
     - `host list` gets a `SVC` column showing "1 down".
 - **S6 On the map.**
   - A host's own status stays its ping status (SPEC-105), and group status doesn't change.
@@ -75,17 +75,17 @@ Make services **watched on purpose**, per host. The server checks watched servic
 inedctl host watch 12 ssh,https,tcp:5432
 inedctl host show 12
 ...
-Watched:  ssh up, https down since 14:02:10, tcp:5432 up
+Watched:  ssh up, https down since 14:07:10, tcp:5432 up
 ```
 
-The mail to the routes of web's groups and to the admins, about 2 minutes later:
+With the defaults, https is `down` after its second failed check (14:07:10), and the mail goes to the routes of web's groups and to the admins `alert.down_after` (2 minutes) later:
 
 ```
 Subject: [ined] DOWN https on web (192.0.2.10)
 
-DOWN       https (443) on web (192.0.2.10) since 14:02:10, 2 min
+DOWN       https (443) on web (192.0.2.10) since 14:07:10, 2 min
            groups: Networks/dc/lan, Payroll/app servers
-           last answered: 14:01:10
+           last answered: 13:57:10
 ```
 
 ## Changes

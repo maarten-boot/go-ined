@@ -41,3 +41,5 @@
    - S8: `ined-alert` alerts on services with the same delay, routes and batching, held back while the host itself is down.
    - S9: the 6-hour check for the Connect menu stays.
    - Decisions S1–S9 wait for the user's OK.
+6. **User**: pushed; OK, all. Each watched service gets its own up/down status, checked every minute: make the time configurable, default every 5 minutes.
+   **Claude** checked the push: `main` and `docs/architecture` arrived. The interval was already a setting (`services.watch_interval`); its default is now 5 minutes. With `watch_down_after` 2, a service that stops is `down` 5 to 10 minutes later. `Design-service-alerts.md` is accepted with that change. Started on part 1 (server, API, `inedctl`) on `feature/service-watch`.

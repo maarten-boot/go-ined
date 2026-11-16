@@ -7,7 +7,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 ### Added
 - **Watched services**: name the services that matter on a host (`ssh`, `rdp`, `vnc`, `vnc:1`…`vnc:9`, `http`, `https`, or any TCP port as `tcp:5432`), and the server checks them every 5 minutes, each with its own status: down after two failed checks in a row, up again after one success. `inedctl host watch <id> ssh,https,tcp:5432` sets them (`--add`, `--remove`, `--clear`); `host show` has a "Watched" line and `host list` an SVC column ("1 down"). Nothing is watched until you say so.
   - Server: `watch_interval` (`5m`), `watch_down_after` (2) and `watch_concurrency` (50) under `[services]`; `watch` in host JSON and `PATCH /hosts/{id}`; a `service.status` event; `services_down` in `/map`. The database gets a new table on first start (schema 7), so an older server can't open it afterwards.
-  - Mail alerts for watched services in `ined-alert` and the GUI's part come next.
+  - `ined-alert` mails them like hosts: "[ined] DOWN https on web (192.0.2.10)" after 2 minutes, and a recovery mail. While the host itself is down its service alerts wait, since the host's mail says enough; a service still down when the host is back is mailed 2 minutes after its return. Its state file becomes version 2 (an older file is read as before).
+  - When a host comes back up, the server checks its watched services at once.
+  - The GUI's part comes next.
 - **`ined-alert`** (`contrib/ined-alert/`), email alerts per group: a host that stays down for 2 minutes sends a mail to the lists of the groups it is in (in any view) and to the admins, and a recovery mail when it is back. Alerts within 30 seconds go out as one mail; mail goes through a local SMTP relay; every action is logged, also to a syslog collector. It remembers open alerts over a restart, tells the admins when the server can't be reached or can't ping, and can mail a list of the hosts down when it starts. Python 3.11 or later, nothing to install; see its README.
 - `server.read_token` in `server.toml`: a second token that can only read (lists, the map and the event stream). Anything else gets 403. `/health` and `inedctl health` say what a token may do (`Access: read`).
 - `ined-gui` details panel: the title and the values can be selected and copied (Ctrl+C). The note now follows right after the last row and takes the rest of the height.
@@ -20,6 +22,7 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - `ined-gui` warns when the server is from an older release than the GUI ("ined-server v0.2.0 is older than this GUI (v0.5.0): … update and restart the server"), in a line above the status bar. An older server refuses newer changes, such as a bar colour, and until now the only sign was an error message in the status bar.
 
 ### Changed
+- `ined-gui` details panel: the rows are closer together, with half the white space between them.
 - `ined-gui`: the map fits all at start (also when the window is maximized right away) and again after every resize of the map area, including the details panel's divider. Your own zoom lasts until the next resize.
 - `ined-gui` toolbar: the five zoom items are one button, "Zoom 100 % ▾", that shows the current zoom; its menu has Zoom in, Zoom out, 100 % and Fit all, with their shortcuts. The "Show" list moved into the toolbar, next to it. The trail (`Networks › lan`) has its own row, which appears only while a single group is shown.
 

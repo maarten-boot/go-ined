@@ -1,6 +1,6 @@
 # Design: watched services and service alerts
 
-Status: **accepted** (2026-11-16, "OK, all"), with one change: watched services are checked every 5 minutes by default, not every minute (S3). Part 1 (server, API, `inedctl`) is implemented (SPEC-310, 311, 512, 904); `ined-alert` and the GUI follow.
+Status: **accepted** (2026-11-16, "OK, all"), with one change: watched services are checked every 5 minutes by default, not every minute (S3). Part 1 (server, API, `inedctl`) is implemented (SPEC-310, 311, 512, 904); part 2, `ined-alert`, is implemented (SPEC-952, 954, 956, v0.51); the GUI follows. One addition from part 2: a host whose ping status becomes up has its watched services checked at once, so the held service alerts (S8) see fresh results after the host's return instead of a status up to 5 minutes old.
 
 User request: write the design for service alerts: a mail when a service on a host is down (the first part of the original alerting request, deferred in `Design-alerting.md` A10).
 

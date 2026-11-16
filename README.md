@@ -131,7 +131,7 @@ Watched services: name the services that matter on a host, such as `inedctl host
 
 ## Alerting
 
-[`contrib/ined-alert`](contrib/ined-alert/README.md) sends email when a monitored host is down for 2 minutes, and again when it is back, to the people of the groups it is in and to the admins. It runs next to the server, in Python 3.11 or later with nothing to install:
+[`contrib/ined-alert`](contrib/ined-alert/README.md) sends email when a monitored host, or a watched service on it, is down for 2 minutes, and again when it is back, to the people of the groups it is in and to the admins. It runs next to the server, in Python 3.11 or later with nothing to install:
 
 1. In `server.toml`, set `token` and `read_token`, and restart the server.
 2. Copy `contrib/ined-alert/alert.toml` to `~/.config/go-ined/alert.toml` and set the read token, `mail.from`, the admins and a `[[route]]` per group, such as `group = "Networks/dc"`.

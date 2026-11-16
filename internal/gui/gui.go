@@ -98,7 +98,8 @@ type GUI struct {
 	borders   []*canvas.Rectangle // button borders, shown in Max contrast (D1)
 
 	// Editing (M6).
-	lastForm *formDialog // the form opened last (for tests)
+	lastForm  *formDialog // the form opened last (for tests)
+	lastWatch *watchForm  // the "Watch services" dialog opened last (for tests)
 	// colorPicked is the callback of the colour picker opened last (for
 	// tests).
 	colorPicked func(color.Color)

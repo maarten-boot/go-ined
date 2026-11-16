@@ -467,7 +467,7 @@ func (d *details) fill() {
 			{"Manual name", dash(h.Name)}, {"Status", mapmodel.StatusWord(h.Status, h.Stale)},
 			{"Stale", yesNo(h.Stale)}, {"Monitored", yesNo(h.Monitored)}, {"Round-trip time", rtt},
 			{"Packet loss", loss}, {"Last seen", when(h.LastSeen)}, {"Last change", when(h.LastChange)},
-			{"Services", servicesText(*h)},
+			{"Services", servicesText(*h)}, {"Watched", watchedText(h.Watch)},
 			{"Parent (this view)", d.parentName()}, {"Views", d.viewNames(h.Views)},
 			{"Description", dash(h.Description)},
 		}
@@ -529,6 +529,18 @@ func (d *details) onEvent(ev client.Event) {
 		var h apitypes.Host
 		if json.Unmarshal(ev.Data, &h) == nil && k == mapmodel.HostKey(h.ID) {
 			d.setHost(h, false)
+		}
+	case apitypes.EventServiceStatus:
+		var s apitypes.ServiceStatusEvent
+		if json.Unmarshal(ev.Data, &s) == nil && d.host != nil && k == mapmodel.HostKey(s.HostID) {
+			ws := slices.Clone(d.host.Watch)
+			for i := range ws {
+				if ws[i].Name == s.Name && ws[i].Port == s.Port {
+					ws[i].Status, ws[i].LastChange = s.Status, s.LastChange
+				}
+			}
+			d.host.Watch = ws
+			d.fill()
 		}
 	case apitypes.EventGroupUpdated:
 		var g apitypes.Group

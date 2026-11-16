@@ -344,3 +344,30 @@ func TestFitOnResize(t *testing.T) {
 		t.Errorf("divider: %+v", mv.Viewport())
 	}
 }
+
+// TC-750: a host with a watched service down gets the service marker, a
+// triangle of lines in the "down" colour, under every preset; its own
+// glyph stays its ping status (SPEC-732, S6). Groups get none.
+func TestServiceMarker(t *testing.T) {
+	for _, p := range []theme.Palette{theme.NewPalette(theme.Default), theme.NewPalette(theme.Contrast{Preset: theme.PresetMax, Min: 21})} {
+		mv, _ := newMap(t, p,
+			apitypes.MapItem{Type: "host", ID: 1, Name: "a", X: 100, Y: 100, Status: "up", Monitored: true},
+			apitypes.MapItem{Type: "host", ID: 2, Name: "b", X: 300, Y: 100, Status: "up", Monitored: true, ServicesDown: 2},
+		)
+		box := func(x, y float64) mapmodel.Rect { return mapmodel.Rect{X: x - 60, Y: y - 30, W: 120, H: 90} }
+		plain, marked := count(objectsIn(mv, box(100, 100))), count(objectsIn(mv, box(300, 100)))
+		if marked.lines != plain.lines+4 || marked.rects != plain.rects+1 || marked.circles != 1 || !marked.filledCircle {
+			t.Errorf("%s: plain %+v, marked %+v", p.Contrast, plain, marked)
+		}
+		down := nrgba(p.Status(apitypes.StatusDown))
+		n := 0
+		for _, o := range objectsIn(mv, box(300, 100)) {
+			if l, ok := o.(*canvas.Line); ok && l.StrokeColor == down {
+				n++
+			}
+		}
+		if n != 4 {
+			t.Errorf("%s: %d marker lines in the down colour, want 4", p.Contrast, n)
+		}
+	}
+}

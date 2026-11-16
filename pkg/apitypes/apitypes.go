@@ -113,6 +113,9 @@ type (
 		Port        int        `json:"port"`
 		Status      string     `json:"status"`
 		LastChange  *time.Time `json:"last_change"`
+		// ServicesDown is the host's number of watched services down after
+		// this change, as in /map (v0.51), so a map needs no other call.
+		ServicesDown int `json:"services_down"`
 	}
 	// ResyncEvent is the payload of resync: reload the full state.
 	ResyncEvent struct {

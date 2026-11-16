@@ -3,10 +3,11 @@
 # Every value shown here is the built-in default. Command-line flags override this file.
 
 [server]
-listen   = "127.0.0.1:8470"  # Non-loopback addresses require a token (SPEC-802).
-token    = ""                # Bearer token. Empty = no auth (loopback only).
-tls_cert = ""                # Set both tls_cert and tls_key to turn on TLS (SPEC-803).
-tls_key  = ""
+listen     = "127.0.0.1:8470"  # Non-loopback addresses require a token (SPEC-802).
+token      = ""                # Bearer token. Empty = no auth (loopback only).
+read_token = ""                # A second token that may only read (GET, events), e.g. for ined-alert; needs token (SPEC-808).
+tls_cert   = ""                # Set both tls_cert and tls_key to turn on TLS (SPEC-803).
+tls_key    = ""
 
 [storage]
 db_path = ""                 # Empty = $XDG_DATA_HOME/go-ined/ined.db (falls back to ~/.local/share/go-ined/ined.db).

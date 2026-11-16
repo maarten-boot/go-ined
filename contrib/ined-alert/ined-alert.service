@@ -1,0 +1,27 @@
+# systemd unit for ined-alert (SPEC-950). Install:
+#   sudo cp -r contrib/ined-alert /opt/ined-alert
+#   sudo useradd --system --home /var/lib/ined-alert ined-alert
+#   sudo install -d -o ined-alert /etc/go-ined
+#   sudo cp /opt/ined-alert/alert.toml /etc/go-ined/alert.toml   # then edit it
+#   sudo cp /opt/ined-alert/ined-alert.service /etc/systemd/system/
+#   sudo systemctl enable --now ined-alert
+[Unit]
+Description=go-ined email alerts
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ined-alert
+ExecStart=/usr/bin/python3 /opt/ined-alert/ined-alert --config /etc/go-ined/alert.toml
+StateDirectory=ined-alert
+Environment=XDG_STATE_HOME=/var/lib
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

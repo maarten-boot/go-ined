@@ -1,0 +1,40 @@
+# ined-alert configuration: example (architecture/Design-alerting.md, SPEC-951).
+# Default location: $XDG_CONFIG_HOME/go-ined/alert.toml (falls back to ~/.config/go-ined/alert.toml).
+# Durations as "30s", "2m", "1h30m". An unknown key is an error.
+
+[server]
+url   = "http://127.0.0.1:8470"
+token = ""                       # The read-only token (server.read_token, SPEC-808). INED_URL and INED_TOKEN override.
+
+[mail]
+host = "localhost"               # An SMTP relay, without login or TLS.
+port = 25
+from = "ined-alert@example.com"  # Required.
+
+[alert]
+admins            = ["admin@example.com"]  # Get every alert, and the server's own problems.
+down_after        = "2m"         # A host must stay down this long before a mail goes out.
+batch             = "30s"        # Alerts for one recipient within this time go out as one mail.
+repeat            = ""           # "" = no repeat while a host stays down; e.g. "4h".
+startup_summary   = false        # true: at start, mail the admins a list of the hosts that are down.
+state_file        = ""           # "" = $XDG_STATE_HOME/ined-alert/state.json (~/.local/state/...).
+server_down_after = "5m"         # Mail the admins when the server can't be reached, or can't ping, this long.
+
+# A route sends the alerts of a group, and of everything below it, to a list.
+# The path starts with the view: "Networks/dc/lan", "Payroll/app servers";
+# a view alone ("Payroll") covers the whole view. A host in several routed
+# groups alerts all their lists.
+[[route]]
+group = "Networks/dc"
+to    = ["ops@example.com"]
+
+[[route]]
+group = "Payroll/app servers"
+to    = ["payroll-it@example.com"]
+
+[syslog]
+address  = ""                    # "" = stderr only; "udp://collector:514", "tcp://collector:514" or "/dev/log".
+facility = "local0"
+
+[log]
+level = "info"                   # debug, info, warn or error.

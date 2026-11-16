@@ -37,10 +37,12 @@ type Server struct {
 
 // ServerSection holds the listener settings.
 type ServerSection struct {
-	Listen  string `toml:"listen"`
-	Token   string `toml:"token"`
-	TLSCert string `toml:"tls_cert"`
-	TLSKey  string `toml:"tls_key"`
+	Listen string `toml:"listen"`
+	Token  string `toml:"token"`
+	// ReadToken may only read: GET and the event stream (SPEC-808).
+	ReadToken string `toml:"read_token"`
+	TLSCert   string `toml:"tls_cert"`
+	TLSKey    string `toml:"tls_key"`
 }
 
 // StorageSection holds the database settings.

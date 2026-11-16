@@ -1748,6 +1748,14 @@
           },
           "run_id": {
             "type": "string"
+          },
+          "access": {
+            "type": "string",
+            "description": "What the token may do: full, or read for server.read_token (SPEC-808).",
+            "enum": [
+              "full",
+              "read"
+            ]
           }
         },
         "additionalProperties": false,
@@ -1777,6 +1785,7 @@
             "enum": [
               "invalid_argument",
               "unauthenticated",
+              "forbidden",
               "not_found",
               "method_not_allowed",
               "conflict",

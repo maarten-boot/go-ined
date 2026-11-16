@@ -29,3 +29,6 @@ go.work.sum
 
 # Local env
 .env
+
+# Python
+__pycache__/

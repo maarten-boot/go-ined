@@ -37,5 +37,13 @@ func CheckListenSecurity(c Server) error {
 		return errors.New("server.listen " + c.Server.Listen +
 			" is not a loopback address: set server.token (SPEC-802)")
 	}
+	// Without server.token everything is open, so a read-only token would
+	// limit nothing (SPEC-808).
+	switch rt := c.Server.ReadToken; {
+	case rt != "" && c.Server.Token == "":
+		return errors.New("server.read_token needs server.token: without it every request may change things (SPEC-808)")
+	case rt != "" && rt == c.Server.Token:
+		return errors.New("server.read_token must differ from server.token (SPEC-808)")
+	}
 	return nil
 }

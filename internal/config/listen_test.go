@@ -28,3 +28,19 @@ func TestListenSecurity(t *testing.T) {
 		}
 	}
 }
+
+// TC-808: a read-only token needs the full token and must differ from it.
+func TestReadTokenConfig(t *testing.T) {
+	for _, c := range []struct {
+		token, read string
+		ok          bool
+	}{
+		{"", "", true}, {"full", "", true}, {"full", "reader", true}, {"", "reader", false}, {"same", "same", false},
+	} {
+		cfg := DefaultServer()
+		cfg.Server.Token, cfg.Server.ReadToken = c.token, c.read
+		if err := CheckListenSecurity(cfg); (err == nil) != c.ok {
+			t.Errorf("token=%q read_token=%q: err=%v, want ok=%v", c.token, c.read, err, c.ok)
+		}
+	}
+}

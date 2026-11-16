@@ -258,7 +258,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	}
 
 	handler := api.New(svc, api.Options{
-		Token: cfg.Server.Token, Version: version.Version, RunID: runID, DBPing: st.Ping, Logger: log,
+		Token: cfg.Server.Token, ReadToken: cfg.Server.ReadToken, Version: version.Version, RunID: runID, DBPing: st.Ping, Logger: log,
 		Events: bus, Discovery: disc, Services: checker,
 		ICMP: func() api.ICMPInfo {
 			icmpMu.Lock()
@@ -279,7 +279,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	}
 	tls := cfg.Server.TLSCert != ""
 	log.Info("ined-server started", "version", version.Version, "listen", ln.Addr().String(),
-		"tls", tls, "auth", cfg.Server.Token != "", "db", cfg.Storage.DBPath, "run_id", runID)
+		"tls", tls, "auth", cfg.Server.Token != "", "read_token", cfg.Server.ReadToken != "", "db", cfg.Storage.DBPath, "run_id", runID)
 
 	errc := make(chan error, 1)
 	go func() {

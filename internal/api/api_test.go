@@ -26,6 +26,7 @@ type env struct {
 	t     *testing.T
 	srv   *httptest.Server
 	token string
+	read  string // the read-only token (SPEC-808)
 	db    string
 	st    *store.Store
 	svc   *inventory.Service
@@ -74,7 +75,7 @@ func (e *env) start() {
 			return h, err
 		})
 	}
-	e.srv = httptest.NewServer(New(svc, Options{Token: e.token, Version: "test", RunID: run, DBPing: st.Ping, Events: e.bus, Services: checker}))
+	e.srv = httptest.NewServer(New(svc, Options{Token: e.token, ReadToken: e.read, Version: "test", RunID: run, DBPing: st.Ping, Events: e.bus, Services: checker}))
 	e.t.Cleanup(e.stop)
 }
 
@@ -403,6 +404,55 @@ func TestAuthAndHealth(t *testing.T) {
 	open.doTok("", "GET", "/health", nil, &full)
 	if full.RunID != "run1" {
 		t.Errorf("open server health: %+v", full)
+	}
+}
+
+// TC-808: the read-only token reads and follows events but changes
+// nothing (403 forbidden); /health says which kind a token is.
+func TestReadToken(t *testing.T) {
+	e := &env{t: t, token: "full", read: "reader", db: filepath.Join(t.TempDir(), "ined.db")}
+	e.start()
+	var h apitypes.Host
+	if c := e.do("POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1"}, &h); c != 201 {
+		t.Fatalf("create with the full token: %d", c)
+	}
+	for _, p := range []string{"/hosts", "/hosts/" + itoa(h.ID), "/groups", "/views", "/map"} {
+		if c := e.doTok("reader", "GET", p, nil, nil); c != 200 {
+			t.Errorf("GET %s with the read token: %d", p, c)
+		}
+	}
+	for _, r := range []struct{ method, path string }{
+		{"POST", "/hosts"}, {"PATCH", "/hosts/" + itoa(h.ID)}, {"DELETE", "/hosts/" + itoa(h.ID)},
+		{"POST", "/groups"}, {"POST", "/hosts/" + itoa(h.ID) + "/check-services"}, {"PUT", "/views/1/hosts/" + itoa(h.ID)},
+	} {
+		var eb apitypes.ErrorBody
+		if c := e.doTok("reader", r.method, r.path, apitypes.HostCreate{IP: "192.0.2.2"}, &eb); c != 403 || eb.Error.Code != "forbidden" ||
+			!strings.Contains(eb.Error.Message, "can only read") {
+			t.Errorf("%s %s with the read token: %d %+v", r.method, r.path, c, eb)
+		}
+	}
+	if n := len(e.svc.Hosts()); n != 1 {
+		t.Errorf("%d hosts, want 1", n)
+	}
+	for tok, want := range map[string]string{"full": "full", "reader": "read", "": ""} {
+		var hv apitypes.Health
+		e.doTok(tok, "GET", "/health", nil, &hv)
+		if hv.Access != want {
+			t.Errorf("token %q: access %q, want %q", tok, hv.Access, want)
+		}
+	}
+	// The event stream.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", e.srv.URL+Prefix+"/events", nil)
+	req.Header.Set("Authorization", "Bearer reader")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("events with the read token: %d", resp.StatusCode)
 	}
 }
 

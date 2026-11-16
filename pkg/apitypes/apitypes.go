@@ -27,6 +27,7 @@ const (
 const (
 	CodeInvalidArgument  = "invalid_argument"
 	CodeUnauthenticated  = "unauthenticated"
+	CodeForbidden        = "forbidden" // 403: the read-only token tried to change something (SPEC-808)
 	CodeNotFound         = "not_found"
 	CodeMethodNotAllowed = "method_not_allowed"
 	CodeConflict         = "conflict"
@@ -421,7 +422,16 @@ type Health struct {
 	ICMP6Error string `json:"icmp6_error,omitempty"`
 	DB         string `json:"db,omitempty"`
 	RunID      string `json:"run_id,omitempty"`
+	// Access is what the token may do: "full" or "read" (SPEC-808);
+	// only with a valid token.
+	Access string `json:"access,omitempty"`
 }
+
+// Token kinds in Health.Access (SPEC-808).
+const (
+	AccessFull = "full"
+	AccessRead = "read"
+)
 
 // ErrorBody is the body of every error response (SPEC-504).
 type ErrorBody struct {

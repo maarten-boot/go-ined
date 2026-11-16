@@ -678,7 +678,7 @@ func (a *app) health(args []string) error {
 	return a.call(http.MethodGet, "/health", nil, &h, func() {
 		a.details([][2]string{
 			{"Status", h.Status}, {"Version", h.Version}, {"ICMP mode", h.ICMPMode},
-			{"ICMP error", h.ICMPError}, {"ICMPv6 error", h.ICMP6Error}, {"Database", h.DB}, {"Run id", h.RunID},
+			{"ICMP error", h.ICMPError}, {"ICMPv6 error", h.ICMP6Error}, {"Database", h.DB}, {"Run id", h.RunID}, {"Access", h.Access},
 		}, true)
 	})
 }

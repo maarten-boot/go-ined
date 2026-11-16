@@ -30,12 +30,15 @@ const MaxBodyBytes = 1 << 20
 
 // Options configures the handler.
 type Options struct {
-	Token   string                          // empty = no authentication
-	Version string                          // reported by /health
-	RunID   string                          // reported by /health (authenticated)
-	DBPing  func(ctx context.Context) error // for /health; nil = not checked
-	Logger  *slog.Logger                    // nil = slog.Default()
-	Events  *events.Bus                     // for /events; nil = endpoint answers 404
+	Token string // empty = no authentication
+	// ReadToken allows GET, HEAD and the event stream only (SPEC-808);
+	// empty = none. Needs Token.
+	ReadToken string
+	Version   string                          // reported by /health
+	RunID     string                          // reported by /health (authenticated)
+	DBPing    func(ctx context.Context) error // for /health; nil = not checked
+	Logger    *slog.Logger                    // nil = slog.Default()
+	Events    *events.Bus                     // for /events; nil = endpoint answers 404
 	// ICMP reports the monitor's ICMP state for /health (SPEC-304).
 	// nil = "not started".
 	ICMP func() ICMPInfo
@@ -163,20 +166,37 @@ type ctxKey int
 
 const authedKey ctxKey = 1
 
-func isAuthed(r *http.Request) bool { v, _ := r.Context().Value(authedKey).(bool); return v }
+// isAuthed reports whether the request has a valid token, and with what
+// access: apitypes.AccessFull or AccessRead; "" without one.
+func isAuthed(r *http.Request) bool { return access(r) != "" }
+
+func access(r *http.Request) string { v, _ := r.Context().Value(authedKey).(string); return v }
 
 // auth checks the bearer token (SPEC-802). /health is reachable without a
-// token but then returns reduced information.
+// token but then returns reduced information. The read-only token may only
+// read (SPEC-808).
 func (s *server) auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ok := s.opts.Token == "" || tokenMatches(r.Header.Get("Authorization"), s.opts.Token)
-		if !ok && r.URL.Path != Prefix+"/health" && r.URL.Path != Prefix+"/openapi.json" {
+		h := r.Header.Get("Authorization")
+		acc := ""
+		switch {
+		case s.opts.Token == "" || tokenMatches(h, s.opts.Token):
+			acc = apitypes.AccessFull
+		case s.opts.ReadToken != "" && tokenMatches(h, s.opts.ReadToken):
+			acc = apitypes.AccessRead
+		}
+		open := r.URL.Path == Prefix+"/health" || r.URL.Path == Prefix+"/openapi.json"
+		if acc == "" && !open {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="go-ined"`)
 			writeError(w, http.StatusUnauthorized, apitypes.CodeUnauthenticated, "missing or invalid bearer token")
 			return
 		}
+		if acc == apitypes.AccessRead && r.Method != http.MethodGet && r.Method != http.MethodHead {
+			writeError(w, http.StatusForbidden, apitypes.CodeForbidden, "this token can only read (server.read_token)")
+			return
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, MaxBodyBytes)
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authedKey, ok)))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authedKey, acc)))
 	})
 }
 
@@ -193,6 +213,7 @@ func tokenMatches(header, token string) bool {
 func (s *server) health(w http.ResponseWriter, r *http.Request) {
 	h := apitypes.Health{Status: "ok", Version: s.opts.Version}
 	if isAuthed(r) {
+		h.Access = access(r)
 		h.RunID = s.opts.RunID
 		h.ICMPMode = apitypes.ICMPNotStarted
 		if s.opts.ICMP != nil {

@@ -3,9 +3,9 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/maarten-boot/go-ined/internal/version.Version=$(VERSION)
 
-.PHONY: all build build-nogui nogui-check test vet fmt-check lint release-build examples clean
+.PHONY: all build build-nogui nogui-check test alert-test vet fmt-check lint release-build examples clean
 
-all: fmt-check vet nogui-check test build
+all: fmt-check vet nogui-check test alert-test build
 
 # ined-gui needs cgo and the X11/OpenGL dev packages (Fyne).
 build:
@@ -23,6 +23,10 @@ nogui-check:
 
 test:
 	go test -race ./...
+
+# ined-alert (contrib/ined-alert, SPEC-950): Python 3.11+, standard library only.
+alert-test:
+	cd contrib/ined-alert && python3 -W error::ResourceWarning -m unittest discover -s . -t . -p 'test_*.py'
 
 vet:
 	go vet ./...

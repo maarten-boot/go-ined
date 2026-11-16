@@ -53,6 +53,17 @@ jobs:
       - name: go test -race (the GUI tests run headless)
         run: go test -race -count=1 ./...
 
+  alert:
+    # ined-alert (SPEC-950) with the runner's own Python (3.12 on
+    # ubuntu-24.04), standard library only.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Python version
+        run: python3 --version
+      - name: ined-alert tests
+        run: make alert-test
+
   raw-icmp:
     runs-on: ubuntu-24.04
     steps:

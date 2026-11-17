@@ -63,3 +63,4 @@
    - GUI: C5 "Import into this group…"; L6 blanks after `tcp:`.
    - Docs: Spec v0.54; N8 in the design; Tests.md with TC-323 (P1) and the new coverage; README status (P2); the `ined-alert` README on dropped mail (C6); `Changes.md`; Plan; the crosscheck's resolution.
    - All Go tests (`-race`), lint and the 48 Python tests pass. Next: release 0.6.0 (D3).
+   - Release 0.6.0 prepared (D3): `[0.6.0]` in `Changes.md`, opening with "update `ined-server` together with `ined-gui`" (a 0.5.0 server refuses the new calls; schemas 6 and 7); OpenAPI 0.6.0; README status. The local release build gave 8 files, every checksum OK, and the binaries print `v0.6.0`. Annotated tag `v0.6.0` on `main`; it is pushed with the branches, and the release workflow publishes it.

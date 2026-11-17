@@ -902,6 +902,125 @@
           }
         }
       }
+    },
+    "/groups/{id}/export": {
+      "get": {
+        "summary": "Export a group of the network view with its subgroups, hosts and their custom-view placements (SPEC-513). Allowed with the read-only token.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkExport"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/import": {
+      "post": {
+        "summary": "Import a network export below a group of the network view, in one step (SPEC-513). Bodies up to 32 MiB. 409 with the error and the report when it conflicts and update is false; a dry run always answers 200.",
+        "parameters": [
+          {
+            "name": "parent_id",
+            "in": "query",
+            "required": false,
+            "description": "The group to import into; absent = the top level.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "x",
+            "in": "query",
+            "required": false,
+            "description": "The top group's position; give x and y, or neither.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "y",
+            "in": "query",
+            "required": false,
+            "description": "See x.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "Only report.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "update",
+            "in": "query",
+            "required": false,
+            "description": "Update matching items instead of refusing.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkExport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportReport"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts; nothing was changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportConflict"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2144,6 +2263,334 @@
           "status",
           "last_change",
           "services_down"
+        ]
+      },
+      "NetworkExport": {
+        "type": "object",
+        "description": "A network export file (SPEC-513, Design-network-export.md N5): one group of the network view with everything below it. format is \"go-ined-network\", version 1.",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "exported_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "server_version": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "description": "Where the group was, \"Networks › dc › lan\"; information only."
+          },
+          "group": {
+            "$ref": "#/components/schemas/ExportGroup"
+          },
+          "view_groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportViewGroup"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "format",
+          "version",
+          "exported_at",
+          "server_version",
+          "from",
+          "group",
+          "view_groups"
+        ]
+      },
+      "ExportGroup": {
+        "type": "object",
+        "description": "A group in an export, with its subgroups and hosts; positions relative to the exported group, which is at 0, 0.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "cidr": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "collapsed": {
+            "type": "boolean"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportGroup"
+            }
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportHost"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "cidr",
+          "description",
+          "note",
+          "labels",
+          "color",
+          "collapsed",
+          "x",
+          "y",
+          "groups",
+          "hosts"
+        ]
+      },
+      "ExportHost": {
+        "type": "object",
+        "description": "A host in an export: its own fields, without what the server measures.",
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "monitored": {
+            "type": "boolean"
+          },
+          "watch": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportPlacement"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ip",
+          "name",
+          "description",
+          "note",
+          "monitored",
+          "watch",
+          "x",
+          "y",
+          "views"
+        ]
+      },
+      "ExportPlacement": {
+        "type": "object",
+        "description": "A host's place in a custom view, by the view's name and the group names from its top level down.",
+        "properties": {
+          "view": {
+            "type": "string"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "view",
+          "path",
+          "x",
+          "y"
+        ]
+      },
+      "ExportViewGroup": {
+        "type": "object",
+        "description": "A group of a custom view on a placement's path, so an import can make it when missing; path ends with its name.",
+        "properties": {
+          "view": {
+            "type": "string"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "collapsed": {
+            "type": "boolean"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "view",
+          "path",
+          "description",
+          "note",
+          "labels",
+          "color",
+          "collapsed",
+          "x",
+          "y"
+        ]
+      },
+      "ImportCounts": {
+        "type": "object",
+        "description": "Items of an import: groups and hosts of the network view, groups in custom views, placements in custom views.",
+        "properties": {
+          "groups": {
+            "type": "integer"
+          },
+          "hosts": {
+            "type": "integer"
+          },
+          "view_groups": {
+            "type": "integer"
+          },
+          "placements": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "groups",
+          "hosts",
+          "view_groups",
+          "placements"
+        ]
+      },
+      "ImportReport": {
+        "type": "object",
+        "description": "What an import did or would do (N7). conflicts lists the first 50; more_conflicts counts the rest.",
+        "properties": {
+          "dry_run": {
+            "type": "boolean"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "group_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "create": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "update": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "more_conflicts": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "dry_run",
+          "done",
+          "group_id",
+          "create",
+          "update",
+          "conflicts",
+          "more_conflicts",
+          "skipped",
+          "warnings"
+        ]
+      },
+      "ImportConflict": {
+        "type": "object",
+        "description": "Body of a 409 from POST /import: the usual error (code conflict) with the report, which lists the conflicts.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "report": {
+            "$ref": "#/components/schemas/ImportReport"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "report"
         ]
       }
     }

@@ -626,3 +626,68 @@ func TestHostWatch(t *testing.T) {
 		}
 	}
 }
+
+// TC-908: group export to a file (0600) and stdout; import into another
+// server: a dry run, the import, the same file again refused with the
+// conflicts (exit 1, also as a dry run), --update; stdin; usage errors;
+// a file the server refuses.
+func TestExportImport(t *testing.T) {
+	isolate(t)
+	a := testserver.Start(t, testserver.Options{})
+	b := testserver.Start(t, testserver.Options{})
+	ua, ub := "--url="+a.URL(), "--url="+b.URL()
+	ok(t, ua, "group", "add", "--cidr", "10.0.1.0/24", "--name", "lan")
+	ok(t, ua, "host", "add", "10.0.1.10", "--name", "web", "--note", "front")
+	ok(t, ua, "host", "watch", "1", "ssh")
+	file := filepath.Join(t.TempDir(), "lan.json")
+	contains(t, ok(t, ua, "group", "export", "1", "-o", file), "exported Networks › lan: 1 group, 1 host to "+file)
+	if st, err := os.Stat(file); err != nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("file: %v %v", st, err)
+	}
+	contains(t, ok(t, ua, "group", "export", "1"), `"format": "go-ined-network"`, `"watch": [`)
+
+	contains(t, ok(t, ub, "import", file, "--dry-run"), "Would create: 1 group, 1 host.\nConflicts: none.\n")
+	if out := ok(t, ub, "host", "list"); strings.Contains(out, "10.0.1.10") {
+		t.Fatalf("the dry run made hosts: %q", out)
+	}
+	contains(t, ok(t, ub, "import", file, "--x", "300", "--y", "200"), "Created: 1 group, 1 host.\nConflicts: none.\nImported as group 1.\n")
+	contains(t, ok(t, ub, "host", "show", "1"), "front", "ssh unknown")
+
+	for _, extra := range [][]string{nil, {"--dry-run"}} {
+		r := ctl(t, append([]string{ub, "import", file}, extra...)...)
+		if r.code != 1 || !strings.Contains(r.out, "Conflicts (2):\n  network group 10.0.1.0/24 exists already") ||
+			!strings.Contains(r.errOut, "refused: 2 conflicts; nothing was changed (--update updates them)") {
+			t.Errorf("again %v: %d %q %q", extra, r.code, r.out, r.errOut)
+		}
+	}
+	data, _ := os.ReadFile(file)
+	edited := strings.Replace(string(data), `"name": "web"`, `"name": "web2"`, 1)
+	r := ctlIn(t, edited, ub, "import", "-", "--update")
+	if r.code != 0 || !strings.Contains(r.out, "Updated: 1 group, 1 host.") {
+		t.Fatalf("update: %d %q %q", r.code, r.out, r.errOut)
+	}
+	contains(t, ok(t, ub, "host", "show", "1"), "web2")
+	contains(t, ok(t, ub, "--json", "import", file, "--dry-run", "--update"), `"dry_run": true`)
+
+	for _, c := range []struct {
+		args  []string
+		stdin string
+		code  int
+		msg   string
+	}{
+		{[]string{file, "--x", "1"}, "", 2, "give --x and --y together"},
+		{[]string{file, "--parent", "0"}, "", 2, "--parent must be a positive group id"},
+		{[]string{"-"}, "not json", 2, "- is not JSON"},
+		{[]string{"-"}, `{"format": "go-ined-network", "version": 1, "oops": 1}`, 1, `unknown field "oops"`},
+		{[]string{filepath.Join(t.TempDir(), "none.json")}, "", 2, "no such file"},
+		{[]string{}, "", 2, "missing argument"},
+	} {
+		r := ctlIn(t, c.stdin, append([]string{ub, "import"}, c.args...)...)
+		if r.code != c.code || !strings.Contains(r.errOut, c.msg) {
+			t.Errorf("import %v: code %d, %q; want %d, %q", c.args, r.code, r.errOut, c.code, c.msg)
+		}
+	}
+	if r := ctl(t, ua, "group", "export", "9"); r.code != 1 || !strings.Contains(r.errOut, "not found") {
+		t.Errorf("export 9: %+v", r)
+	}
+}

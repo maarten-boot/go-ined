@@ -67,6 +67,7 @@ Commands:
   group labels <id> name|ip|both|inherit      (what the GUI shows under the hosts in it)
   group color <id> '#rrggbb'|none              (the colour of its top bar in the GUI)
   group copy <id> --view V                     (copy it with its subgroups and hosts into custom view V)
+  group export <id> [-o FILE]                  (the group with everything below it, as JSON; default stdout)
   note get|set|clear host|group <id> [text...]   (set reads stdin when no text is given)
   view list
   view add <name> [--order N]
@@ -82,6 +83,9 @@ Commands:
   discover start <cidr> | --group ID [--parent ID] [--wait]
   discover status <job-id>
   discover cancel <job-id>
+  import FILE|- [--parent ID] [--x X --y Y] [--dry-run] [--update]
+                                               (a group export, below group ID or at the top level;
+                                                exit 1 when it is, or would be, refused for conflicts)
   events [--last-id ID]
   health
 
@@ -217,6 +221,8 @@ func (a *app) main(args []string) error {
 		return a.health(rest)
 	case "events":
 		return a.events(rest)
+	case "import":
+		return a.importNetwork(rest)
 	}
 	actions, ok := commands[obj]
 	if !ok {

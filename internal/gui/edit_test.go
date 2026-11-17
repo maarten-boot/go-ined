@@ -543,7 +543,7 @@ func TestMenusAndNewHost(t *testing.T) {
 	var f *formDialog
 	e.ui.Wait(func() {
 		items := g.menuItems(1, nil, 5, 5, nil)
-		if fmt.Sprint(labels(items)) != "[New group here… New host here…]" {
+		if fmt.Sprint(labels(items)) != "[New group here… New host here… Import here…]" {
 			t.Errorf("empty-space menu: %v", labels(items))
 		}
 		if fmt.Sprint(labels(g.menuItems(v.ID, nil, 5, 5, nil))) != "[New group here…]" {

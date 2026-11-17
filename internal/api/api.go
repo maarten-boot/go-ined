@@ -143,6 +143,8 @@ func newServer(svc *inventory.Service, opts Options) (*server, http.Handler) {
 	route("/groups", map[string]http.HandlerFunc{"GET": s.listGroups, "POST": s.createGroup})
 	route("/groups/{id}", map[string]http.HandlerFunc{"GET": s.getGroup, "PATCH": s.patchGroup, "DELETE": s.deleteGroup})
 	route("/groups/{id}/move", map[string]http.HandlerFunc{"POST": s.moveGroup})
+	route("/groups/{id}/export", map[string]http.HandlerFunc{"GET": s.exportGroup})
+	route("/import", map[string]http.HandlerFunc{"POST": s.importNetwork})
 	route("/views", map[string]http.HandlerFunc{"GET": s.listViews, "POST": s.createView})
 	route("/views/{id}", map[string]http.HandlerFunc{"GET": s.getView, "PATCH": s.patchView, "DELETE": s.deleteView})
 	route("/views/{id}/hosts/{host_id}", map[string]http.HandlerFunc{"PUT": s.placeHost, "DELETE": s.unplaceHost})
@@ -195,7 +197,11 @@ func (s *server) auth(next http.Handler) http.Handler {
 			writeError(w, http.StatusForbidden, apitypes.CodeForbidden, "this token can only read (server.read_token)")
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, MaxBodyBytes)
+		limit := int64(MaxBodyBytes)
+		if r.URL.Path == Prefix+"/import" {
+			limit = MaxImportBytes // a network with its notes (SPEC-513)
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authedKey, acc)))
 	})
 }

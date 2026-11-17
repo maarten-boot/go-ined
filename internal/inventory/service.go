@@ -345,20 +345,25 @@ func (s *Service) MapOf(view int64) (apitypes.Map, error) {
 func (s *Service) Snapshot() *Model {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.m.clone()
+}
+
+// clone returns a deep copy of the model.
+func (m *Model) clone() *Model {
 	c := NewModel()
-	for id, h := range s.m.Hosts {
+	for id, h := range m.Hosts {
 		hc := *h
 		c.Hosts[id] = &hc
 	}
-	for id, g := range s.m.Groups {
+	for id, g := range m.Groups {
 		gc := *g
 		c.Groups[id] = &gc
 	}
-	for id, v := range s.m.Views {
+	for id, v := range m.Views {
 		vc := *v
 		c.Views[id] = &vc
 	}
-	for vid, ps := range s.m.Placements {
+	for vid, ps := range m.Placements {
 		c.Placements[vid] = map[int64]*Placement{}
 		for hid, p := range ps {
 			pc := *p

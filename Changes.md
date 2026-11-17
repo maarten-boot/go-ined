@@ -4,6 +4,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-17
+
+Update `ined-server` together with `ined-gui`: a 0.5.0 server refuses watch lists, the read-only token and export and import, and the GUI now says so ("ined-server v0.5.0 is older than this GUI"). The database gets two new columns and a table on first start (schemas 6 and 7), so an older server can't open it afterwards. `ined-alert` is new; it needs this server for service alerts and the read-only token.
+
 ### Added
 - **Export and import of a network**: `inedctl group export 12 -o lan.json` saves a group of the network view with its subgroups, hosts, notes, watch lists and custom-view placements as one JSON file. `inedctl import lan.json --parent 3` adds it to any server in one step; `--dry-run` shows first what would happen. Hosts or groups that are there already refuse the import, unless `--update`; groups match by CIDR, or by their exact name under the same parent, and a matched group stays where it is (the report says so). Views that don't exist are skipped; missing groups in a custom view are made. In `ined-gui`, a group's menu has "Export…" and "Import into this group…", and empty space has "Import here…"; both show the report before importing. API: `GET /groups/{id}/export` and `POST /import`.
 - **Watched services**: name the services that matter on a host (`ssh`, `rdp`, `vnc`, `vnc:1`…`vnc:9`, `http`, `https`, or any TCP port as `tcp:5432`), and the server checks them every 5 minutes, each with its own status: down after two failed checks in a row, up again after one success. `inedctl host watch <id> ssh,https,tcp:5432` sets them (`--add`, `--remove`, `--clear`; an empty list is refused, so an empty variable in a script can't clear it); `host show` has a "Watched" line and `host list` an SVC column ("1 down"). Nothing is watched until you say so. Writing `ssh` again as `tcp:22` keeps its status. With `services.enabled = false` they are all set to `unknown` at start.

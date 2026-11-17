@@ -38,6 +38,9 @@ func groupExport(a *app, name string, args []string) error {
 	if err := os.WriteFile(*out, append(raw, '\n'), 0o600); err != nil {
 		return usagef("%s: %v", name, err)
 	}
+	if err := os.Chmod(*out, 0o600); err != nil { // WriteFile keeps an existing file's mode
+		return usagef("%s: %v", name, err)
+	}
 	var f apitypes.NetworkExport
 	if err := json.Unmarshal(raw, &f); err != nil {
 		return err

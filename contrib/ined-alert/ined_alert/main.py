@@ -25,7 +25,7 @@ from typing import Callable
 from ined import APIError, Client
 
 from . import config as C
-from .engine import Engine, Notice
+from .engine import Engine, Notice, parse_state
 from .logs import kv, setup
 from .mail import Batcher, Outbox, compose, smtp_sender, test_message
 from .routes import Routes
@@ -42,8 +42,7 @@ def load_state(path: str, log: logging.Logger) -> dict:
     try:
         with open(path, encoding="utf-8") as f:
             st = json.load(f)
-        if not isinstance(st, dict):
-            raise ValueError("not an object")
+        parse_state(st)  # a file of the wrong shape (or a newer version) is set aside too
         return st
     except FileNotFoundError:
         return {}
@@ -117,6 +116,8 @@ class App:
         acc = h.get("access", "")
         if acc == "full":
             self.log.warning(kv(event="token_warning", warning="the token may change things; use server.read_token"))
+        elif acc == "" and "db" not in h:  # /health answers without a valid token too, with less
+            self.log.warning(kv(event="token_warning", warning="the server doesn't accept the token"))
         elif acc == "":
             self.log.warning(kv(event="token_warning", warning="the server doesn't say what the token may do (an older server?)"))
         return acc

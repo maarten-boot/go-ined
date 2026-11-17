@@ -71,6 +71,8 @@ class Routes:
                         paths = to.setdefault(a, [])
                         if r.group not in paths:
                             paths.append(r.group)
+        for p in sorted({r.group for r in self.routes if not r.to}):
+            self.warnings.append(f'route "{p}" has no recipients (to = [])')
         for p, n in matched.items():
             if n == 0:
                 self.warnings.append(f'route "{p}" matches no view or group')

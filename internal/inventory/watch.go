@@ -19,8 +19,12 @@ func parseWatch(names []string, cur []Watched) ([]Watched, error) {
 	out := make([]Watched, 0, len(ps))
 	for _, p := range ps {
 		w := Watched{Name: p.Name, Port: uint16(p.Port), Status: apitypes.StatusUnknown}
-		if i := slices.IndexFunc(cur, func(c Watched) bool { return c.Name == w.Name }); i >= 0 {
+		// A service given again keeps its status, also under another name
+		// for the same port ("ssh" and "tcp:22"); a list has one entry per port.
+		if i := slices.IndexFunc(cur, func(c Watched) bool { return c.Port == w.Port }); i >= 0 {
+			name := w.Name
 			w = cur[i]
+			w.Name = name
 		}
 		out = append(out, w)
 	}
@@ -73,6 +77,47 @@ func watchView(ws []Watched) []apitypes.WatchedService {
 			LastChange: timePtr(w.LastChange), LastOK: timePtr(w.LastOK)}
 	}
 	return out
+}
+
+// ResetAllWatch sets every watched service that isn't unknown to unknown,
+// for a server started with services.enabled = false: nothing checks them,
+// so an old "down" must not stay (SPEC-310). It returns how many changed.
+func (s *Service) ResetAllWatch(ctx context.Context) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	type upd struct {
+		h   Host
+		idx []int
+	}
+	var ups []upd
+	n := 0
+	for _, id := range sortedKeys(s.m.Hosts) {
+		cur := s.m.Hosts[id]
+		ws, idx := resetWatch(cur.Watch, s.stamp(), false)
+		if len(idx) == 0 {
+			continue
+		}
+		h := *cur
+		h.Watch = ws
+		ups = append(ups, upd{h, idx})
+		n += len(idx)
+	}
+	if len(ups) == 0 {
+		return 0, nil
+	}
+	ch := Changes{Hosts: make([]Host, len(ups))}
+	for i, u := range ups {
+		ch.Hosts[i] = u.h
+	}
+	if err := s.repo.Apply(ctx, ch); err != nil {
+		return 0, err
+	}
+	for _, u := range ups {
+		cur := s.m.Hosts[u.h.ID]
+		*cur = u.h
+		s.publishWatch(cur, u.idx)
+	}
+	return n, nil
 }
 
 // WatchTarget is a monitored host with watched services, for the watch

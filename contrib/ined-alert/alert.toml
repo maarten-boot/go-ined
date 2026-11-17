@@ -16,7 +16,7 @@ admins            = ["admin@example.com"]  # Get every alert, and the server's o
 down_after        = "2m"         # A host must stay down this long before a mail goes out.
 batch             = "30s"        # Alerts for one recipient within this time go out as one mail.
 repeat            = ""           # "" = no repeat while a host stays down; e.g. "4h".
-startup_summary   = false        # true: at start, mail the admins a list of the hosts that are down.
+startup_summary   = false        # true: at start, mail the admins a list of the hosts and watched services that are down.
 state_file        = ""           # "" = $XDG_STATE_HOME/ined-alert/state.json (~/.local/state/...).
 server_down_after = "5m"         # Mail the admins when the server can't be reached, or can't ping, this long.
 

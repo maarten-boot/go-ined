@@ -200,6 +200,11 @@ func checkFile(f *apitypes.NetworkExport) ([]impGroup, []impHost, map[string]api
 	var gs []impGroup
 	var hs []impHost
 	cidrs, ips := map[netip.Prefix]string{}, map[netip.Addr]string{}
+	type sibling struct {
+		parent int
+		name   string
+	}
+	plain := map[sibling]bool{} // plain groups by parent and name: an import would match both to one group
 	var walk func(g *apitypes.ExportGroup, parent, depth int, loc string) error
 	walk = func(g *apitypes.ExportGroup, parent, depth int, loc string) error {
 		name := strings.TrimSpace(g.Name)
@@ -226,6 +231,12 @@ func checkFile(f *apitypes.NetworkExport) ([]impGroup, []impHost, map[string]api
 				return invalidf("%s: CIDR %s is also in %s", loc, cidr, other)
 			}
 			cidrs[cidr] = loc
+		} else {
+			k := sibling{parent, name}
+			if plain[k] {
+				return invalidf("%s: group %q is given twice in the same group", loc, name)
+			}
+			plain[k] = true
 		}
 		probe := Group{Name: name, Description: g.Description, Note: g.Note, Labels: g.Labels, Color: g.Color}
 		if err := checkGroupText(&probe); err != nil {
@@ -535,9 +546,15 @@ func (p *importPlan) groups(gs []impGroup) {
 			g.Name = cmp.Or(strings.TrimSpace(src.Name), g.Name)
 			g.Description, g.Note, g.Labels, g.Color, g.Collapsed = src.Description, src.Note, src.Labels, src.Color, src.Collapsed
 			g.UpdatedAt = p.s.stamp()
-			if i == 0 && parent != match.ParentID {
+			// A matched group keeps its place: moving it would take its
+			// other contents along, or leave a frame without them.
+			if parent != match.ParentID {
+				below := p.s.where(parent)
+				if ig.parent >= 0 {
+					below = gs[ig.parent].loc + " as in the file"
+				}
 				p.rep.Warnings = append(p.rep.Warnings, fmt.Sprintf("%s is updated where it is, in %s, not moved below %s",
-					match.label(), p.s.where(match.ParentID), p.s.where(parent)))
+					match.label(), p.s.where(match.ParentID), below))
 			}
 			p.m.Groups[g.ID] = &g
 			p.ch.Groups = append(p.ch.Groups, g)

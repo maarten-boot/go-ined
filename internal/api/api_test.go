@@ -417,14 +417,22 @@ func TestReadToken(t *testing.T) {
 	if c := e.do("POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1"}, &h); c != 201 {
 		t.Fatalf("create with the full token: %d", c)
 	}
-	for _, p := range []string{"/hosts", "/hosts/" + itoa(h.ID), "/groups", "/views", "/map"} {
+	var g apitypes.Group
+	if c := e.do("POST", "/groups", apitypes.GroupCreate{Name: "lan"}, &g); c != 201 {
+		t.Fatalf("group: %d", c)
+	}
+	for _, p := range []string{"/hosts", "/hosts/" + itoa(h.ID), "/groups", "/views", "/map", "/groups/" + itoa(g.ID) + "/export"} {
 		if c := e.doTok("reader", "GET", p, nil, nil); c != 200 {
 			t.Errorf("GET %s with the read token: %d", p, c)
+		}
+		if c := e.doTok("reader", "HEAD", p, nil, nil); c != 200 {
+			t.Errorf("HEAD %s with the read token: %d", p, c)
 		}
 	}
 	for _, r := range []struct{ method, path string }{
 		{"POST", "/hosts"}, {"PATCH", "/hosts/" + itoa(h.ID)}, {"DELETE", "/hosts/" + itoa(h.ID)},
 		{"POST", "/groups"}, {"POST", "/hosts/" + itoa(h.ID) + "/check-services"}, {"PUT", "/views/1/hosts/" + itoa(h.ID)},
+		{"POST", "/import"},
 	} {
 		var eb apitypes.ErrorBody
 		if c := e.doTok("reader", r.method, r.path, apitypes.HostCreate{IP: "192.0.2.2"}, &eb); c != 403 || eb.Error.Code != "forbidden" ||

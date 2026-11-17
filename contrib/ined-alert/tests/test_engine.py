@@ -92,6 +92,40 @@ class TestEngine(unittest.TestCase):
         self.assertEqual(r.e.update(dict(r.client.hosts_[1], status="up"), r.clock.add(1)), [])
         self.assertIn(1, r.e.open)
 
+    def test_recovery_waits_for_the_server(self):
+        # C2 of crosscheck 2026-11-17-01: an "up" event while the server
+        # can't be asked keeps the alert; the next tick asks again.
+        r = Rig([host(1, "192.0.2.1", name="web", status="down", last_change=iso(T0 - 600)), host(2, "192.0.2.2")])
+        r.e.snapshot(r.client.hosts(), r.clock())
+        self.assertEqual([n.kind for n in r.e.tick(r.clock())], [E.DOWN])
+        r.client.down = True
+        self.assertEqual(r.e.update(dict(r.client.hosts_[1], status="up"), r.clock.add(10)), [])
+        self.assertIn(1, r.e.open)
+        self.assertIn('event=confirm_failed host=web', r.buf.getvalue())
+        self.assertEqual(r.e.tick(r.clock.add(10)), [])  # still unreachable: still open
+        self.assertIn(1, r.e.open)
+        # The server is back and says down: the event was old; the alert stays.
+        r.client.down = False
+        self.assertEqual(r.e.tick(r.clock.add(10)), [])
+        self.assertEqual((list(r.e.open), r.e.recheck), ([1], set()))
+        # Again, and this time the server says up: the recovery is mailed.
+        r.client.down = True
+        r.e.update(dict(r.client.hosts_[1], status="up"), r.clock.add(10))
+        r.client.down = False
+        r.set(1, status="up")
+        (u,) = r.e.tick(r.clock.add(10))
+        self.assertEqual((u.kind, u.host["name"]), (E.UP, "web"))
+        self.assertEqual((r.e.open, r.e.recheck), ({}, set()))
+
+    def test_bad_state(self):
+        # C1 of crosscheck 2026-11-17-01: a state file of the wrong shape or
+        # a newer version is refused (the program sets it aside).
+        for st in ({"open": []}, {"server": None}, {"services": {"x": {}}}, {"services": {"1": {}}},
+                   {"open": {"1": {}}}, {"open": {"x": {}}}, {"version": 3}, {"version": "2"}, []):
+            with self.assertRaises(ValueError, msg=repr(st)):
+                E.parse_state(st)
+        self.assertEqual(E.parse_state({})["open"], {})
+
     def test_monitoring_off_and_deleted(self):
         r = Rig([host(1, "192.0.2.1", status="down", last_change=iso(T0 - 600)), host(2, "192.0.2.2", status="down", last_change=iso(T0 - 600))])
         r.e.snapshot(r.client.hosts(), r.clock())

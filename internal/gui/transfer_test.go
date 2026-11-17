@@ -16,8 +16,9 @@ type closeBuf struct {
 
 func (b *closeBuf) Close() error { b.closed = true; return nil }
 
-// TC-751: "Export…" and "Import here…" on groups of the network view (not
-// in custom views) and "Import here…" on empty space; export writes the
+// TC-751: "Export…" and "Import into this group…" on groups of the network
+// view (not in custom views) and "Import here…" on empty space; with a
+// focus set, a group's menu has both, each once; export writes the
 // file and says so; import shows the dry run's report first and imports
 // on "Import"; with conflicts the button is "Update existing and import";
 // a file that isn't JSON, or that the server refuses, is reported
@@ -35,15 +36,34 @@ func TestExportImportGUI(t *testing.T) {
 
 	e.ui.Wait(func() {
 		items := labels(g.menuItems(1, find(e.nodes(1), "group", lan.ID), 0, 0, nil))
-		if !strings.Contains(strings.Join(items, "|"), "|Export…|Import here…|") {
+		if !strings.Contains(strings.Join(items, "|"), "|Export…|Import into this group…|") {
 			t.Errorf("network group menu: %q", items)
 		}
 	})
+	must(c.UpdateGroup(ctx, lan.ID, apitypes.GroupPatch{Collapsed: apitypes.Some(false)}))
+	sub := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "sub", ParentID: &lan.ID}))
+	eventually(t, e.ui, "sub loaded", func() bool { return find(e.nodes(1), "group", sub.ID) != nil })
+	e.ui.Wait(func() {
+		g.setFocus(1, lan.ID)
+		items := labels(g.menuItems(1, find(e.nodes(1), "group", sub.ID), 0, 0, nil))
+		seen := map[string]int{}
+		for _, l := range items {
+			seen[l]++
+		}
+		if seen["Import into this group…"] != 1 || seen["Import here…"] != 1 {
+			t.Errorf("group menu with a focus: %q", items)
+		}
+		g.setFocus(1, 0)
+	})
+	if err := c.DeleteGroup(ctx, sub.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, e.ui, "sub gone", func() bool { return find(e.nodes(1), "group", sub.ID) == nil })
 	eventually(t, e.ui, "custom view shown", func() bool { return g.showView(v.ID) })
 	eventually(t, e.ui, "custom view loaded", func() bool { return find(e.nodes(v.ID), "group", lg.ID) != nil })
 	e.ui.Wait(func() {
 		for _, l := range labels(g.menuItems(v.ID, find(e.nodes(v.ID), "group", lg.ID), 0, 0, nil)) {
-			if l == "Export…" || l == "Import here…" {
+			if l == "Export…" || strings.HasPrefix(l, "Import") {
 				t.Errorf("custom view group menu has %q", l)
 			}
 		}

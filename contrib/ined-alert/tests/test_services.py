@@ -94,6 +94,64 @@ class TestServiceAlerts(unittest.TestCase):
         self.assertEqual((n.kind, n.service["name"], n.since), (E.DOWN, "https", T0 + 10))
         self.assertEqual(list(r.e.svc_open), [(1, "https")])
 
+    def test_held_while_the_host_waits(self):
+        # web goes down but isn't alerted yet; https fails meanwhile: held.
+        # web is back within down_after: https is mailed down_after after that.
+        r = Rig([web()])
+        r.e.snapshot(r.client.hosts(), r.clock())
+        r.client.hosts_[1].update(status="down", last_change=iso(T0))
+        r.e.update(dict(r.client.hosts_[1]), r.clock())
+        r.e.service(event(r, "https", "down", T0 + 10), r.clock.add(10))
+        self.assertEqual(r.e.tick(r.clock.add(50)), [])
+        self.assertIn('event=held host=web service=https reason="the host is down"', r.buf.getvalue())
+        t1 = r.clock.add(30)
+        r.client.hosts_[1].update(status="up", last_change=iso(t1))
+        self.assertEqual(r.e.update(dict(r.client.hosts_[1]), t1), [])  # cancelled, nothing was mailed
+        self.assertEqual(r.e.tick(r.clock.add(119)), [])
+        (n,) = r.e.tick(r.clock.add(1))
+        self.assertEqual((n.kind, n.service["name"], n.since), (E.DOWN, "https", T0 + 10))
+
+    def test_recovery_waits_for_the_server(self):
+        # C2 of crosscheck 2026-11-17-01, for a service.
+        r = Rig([web(https=svc("https", "down", iso(T0 - 600)))])
+        r.e.snapshot(r.client.hosts(), r.clock())
+        self.assertEqual(kinds(r.e.tick(r.clock())), [(E.DOWN, "https")])
+        r.client.down = True
+        e = event(r, "https", "up", r.clock.add(10))
+        self.assertEqual(r.e.service(e, r.clock()), [])
+        self.assertEqual(list(r.e.svc_open), [(1, "https")])
+        self.assertEqual(r.e.tick(r.clock.add(10)), [])
+        r.client.down = False
+        self.assertEqual(kinds(r.e.tick(r.clock.add(10))), [(E.UP, "https")])
+        self.assertEqual((r.e.svc_open, r.e.recheck), ({}, set()))
+
+    def test_renamed_service_keeps_its_alert(self):
+        # L4/P7 of crosscheck 2026-11-17-01: "ssh" watched as "tcp:22" (the
+        # same port) keeps its status on the server and its alert here.
+        r = Rig([web(ssh=svc("ssh", "down", iso(T0 - 600)))])
+        r.e.snapshot(r.client.hosts(), r.clock())
+        self.assertEqual(kinds(r.e.tick(r.clock())), [(E.DOWN, "ssh")])
+        r.client.hosts_[1]["watch"][1]["name"] = "tcp:22"
+        self.assertEqual(r.e.update(dict(r.client.hosts_[1]), r.clock.add(10)), [])
+        self.assertEqual(list(r.e.svc_open), [(1, "tcp:22")])
+        self.assertEqual(r.e.tick(r.clock.add(600)), [], "no second DOWN")
+        self.assertIn("event=renamed host=web ip=192.0.2.1 service=ssh to=tcp:22", r.buf.getvalue())
+        (u,) = r.e.service(event(r, "tcp:22", "up", r.clock()), r.clock())
+        self.assertEqual((u.kind, u.service["name"]), (E.UP, "tcp:22"))
+
+    def test_older_server_closes_service_alerts(self):
+        # L8 of crosscheck 2026-11-17-01: after a downgrade below v0.50 the
+        # hosts have no "watch"; a snapshot closes their service alerts.
+        r = Rig([web(https=svc("https", "down", iso(T0 - 600)))])
+        r.e.snapshot(r.client.hosts(), r.clock())
+        r.e.tick(r.clock())
+        del r.client.hosts_[1]["watch"]
+        self.assertEqual(r.e.update(dict(r.client.hosts_[1]), r.clock.add(1)), [])
+        self.assertEqual(list(r.e.svc_open), [(1, "https")], "an event alone doesn't close it")
+        self.assertEqual(r.e.snapshot(r.client.hosts(), r.clock.add(1)), [])
+        self.assertEqual(r.e.svc_open, {})
+        self.assertIn('reason="the server lists no watched services" note="no recovery mail"', r.buf.getvalue())
+
     def test_open_alert_stays_while_the_host_is_down(self):
         r = Rig([web(https=svc("https", "down", iso(T0)))], repeat=3600)
         r.e.snapshot(r.client.hosts(), r.clock())

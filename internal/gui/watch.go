@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -168,6 +169,9 @@ func (g *GUI) openWatchDialog(hosts []apitypes.Host) *watchForm {
 	return f
 }
 
+// tcpBlank is "tcp:" with blanks after it, as in "tcp: 5432".
+var tcpBlank = regexp.MustCompile(`(?i)tcp:\s+`)
+
 // list is the watch list the dialog shows: the ticked services in their
 // usual order, then the other ports as tcp:N; checked as the server would.
 func (f *watchForm) list() ([]string, error) {
@@ -177,7 +181,7 @@ func (f *watchForm) list() ([]string, error) {
 			list = append(list, s.Name)
 		}
 	}
-	for p := range strings.FieldsFuncSeq(f.other.Text, func(r rune) bool { return r == ',' || r == ' ' || r == ';' }) {
+	for p := range strings.FieldsFuncSeq(tcpBlank.ReplaceAllString(f.other.Text, "tcp:"), func(r rune) bool { return r == ',' || r == ' ' || r == ';' }) {
 		p = strings.TrimPrefix(strings.ToLower(p), "tcp:")
 		if _, err := strconv.Atoi(p); err != nil {
 			return nil, fmt.Errorf("other TCP ports: %q is not a port number", p)

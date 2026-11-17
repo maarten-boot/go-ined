@@ -323,7 +323,7 @@ func TestIPChangeResetsStreak(t *testing.T) {
 	}
 }
 
-// TC-315: last_seen is the arrival of the last reply, not the end of the
+// TC-323: last_seen is the arrival of the last reply, not the end of the
 // round; TC-313: a host of an unavailable family yields no result at all.
 func TestSeenAtAndSkippedFamily(t *testing.T) {
 	inv := &fakeInv{}

@@ -2250,7 +2250,7 @@
           },
           "services_down": {
             "type": "integer",
-            "description": "The host's number of watched services down after this change, as in /map items (v0.51)."
+            "description": "The host's number of watched services down after this change, as in /map items (v0.52)."
           }
         },
         "additionalProperties": false,

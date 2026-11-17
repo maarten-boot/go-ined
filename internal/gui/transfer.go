@@ -99,10 +99,11 @@ func nCount(n int, noun string) string {
 	return fmt.Sprintf("%d %ss", n, noun)
 }
 
-// importItem is "Import here…": into parent (0 = the top level) of the
-// network view, at x, y when given.
-func (g *GUI) importItem(parent int64, x, y *float64) *fyne.MenuItem {
-	return fyne.NewMenuItem("Import here…", func() {
+// importItem imports into parent (0 = the top level) of the network view,
+// at x, y when given: "Import here…" at a clicked spot, "Import into this
+// group…" on a group.
+func (g *GUI) importItem(label string, parent int64, x, y *float64) *fyne.MenuItem {
+	return fyne.NewMenuItem(label, func() {
 		d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
 			if err != nil {
 				g.status.message("Import: " + err.Error())

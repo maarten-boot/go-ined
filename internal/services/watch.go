@@ -200,10 +200,15 @@ func (w *Watcher) check(ctx context.Context, id int64, ip netip.Addr, svcs []api
 	for i, s := range svcs {
 		k := watchKey{id, ip, s.Name, s.Port}
 		r := inventory.WatchResult{HostID: id, IP: ip, Name: s.Name, Port: s.Port, OK: ok[i], At: at}
-		if ok[i] {
+		_, live := w.next[k]
+		switch {
+		case !live:
+			// No longer watched since the check started: its count is gone
+			// and must not come back for a service added again.
+		case ok[i]:
 			w.fails[k] = 0
 			r.Status = apitypes.StatusUp
-		} else {
+		default:
 			w.fails[k]++
 			if w.fails[k] >= w.cfg.DownAfter {
 				r.Status = apitypes.StatusDown

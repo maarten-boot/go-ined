@@ -603,6 +603,7 @@ func TestHostWatch(t *testing.T) {
 	contains(t, ok(t, u, "host", "watch", "1", "ssh, HTTPS,tcp:05432"), "ssh unknown, https unknown, tcp:5432 unknown\n")
 	contains(t, ok(t, u, "host", "watch", "1", "--add", "vnc:1"), "ssh unknown, https unknown, tcp:5432 unknown, vnc :1 unknown\n")
 	contains(t, ok(t, u, "host", "watch", "1", "--remove", "https,TCP:5432"), "ssh unknown, vnc :1 unknown\n")
+	contains(t, ok(t, u, "host", "watch", "1", "--add", "SSH"), "ssh unknown, vnc :1 unknown\n") // watched already
 	contains(t, ok(t, u, "host", "show", "1"), "Watched:", "ssh unknown, vnc :1 unknown")
 	contains(t, ok(t, u, "host", "list"), "SVC", "unknown")
 	contains(t, ok(t, u, "--json", "host", "watch", "1"), `"watch": [`, `"name": "ssh",`, `"port": 22,`)
@@ -617,6 +618,9 @@ func TestHostWatch(t *testing.T) {
 		{[]string{"1", "tcp:70000"}, 1, "from 1 to 65535"},
 		{[]string{"1", "--remove", "rdp"}, 2, "rdp is not watched on host 1"},
 		{[]string{"1", "ssh", "--clear"}, 2, "give one of"},
+		{[]string{"1", ""}, 2, "an empty list; use --clear"},
+		{[]string{"1", " , "}, 2, "an empty list; use --clear"},
+		{[]string{"1", "--add", "ftp"}, 2, `unknown service "ftp"`},
 		{[]string{"9", "ssh"}, 1, "not found"},
 		{[]string{}, 2, "missing argument"},
 	} {
@@ -643,6 +647,12 @@ func TestExportImport(t *testing.T) {
 	contains(t, ok(t, ua, "group", "export", "1", "-o", file), "exported Networks › lan: 1 group, 1 host to "+file)
 	if st, err := os.Stat(file); err != nil || st.Mode().Perm() != 0o600 {
 		t.Fatalf("file: %v %v", st, err)
+	}
+	// An existing file gets 0600 too (L3 of crosscheck 2026-11-17-01).
+	os.Chmod(file, 0o644)
+	ok(t, ua, "group", "export", "1", "-o", file)
+	if st, err := os.Stat(file); err != nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("existing file: %v %v", st, err)
 	}
 	contains(t, ok(t, ua, "group", "export", "1"), `"format": "go-ined-network"`, `"watch": [`)
 

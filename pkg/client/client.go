@@ -136,6 +136,7 @@ type APIError struct {
 	Status  int    // HTTP status
 	Code    string // apitypes.Code*; empty if the body wasn't an API error
 	Message string
+	Body    []byte // the response body, for errors that carry more (POST /import)
 }
 
 func (e *APIError) Error() string {
@@ -214,7 +215,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 func apiError(status int, data []byte) error {
 	var eb apitypes.ErrorBody
 	if json.Unmarshal(data, &eb) == nil && eb.Error.Code != "" {
-		return &APIError{Status: status, Code: eb.Error.Code, Message: eb.Error.Message}
+		return &APIError{Status: status, Code: eb.Error.Code, Message: eb.Error.Message, Body: data}
 	}
 	msg := strings.TrimSpace(string(data))
 	if len(msg) > 200 {
@@ -427,4 +428,56 @@ func (c *Client) UnplaceHost(ctx context.Context, viewID, hostID int64) error {
 // PlacementPath is the path PlaceHost and UnplaceHost use.
 func PlacementPath(viewID, hostID int64) string {
 	return "/views/" + id(viewID) + "/hosts/" + id(hostID)
+}
+
+// ---- export and import (SPEC-513) ----
+
+// ExportGroup returns GET /groups/{id}/export, the network export file.
+func (c *Client) ExportGroup(ctx context.Context, groupID int64) (apitypes.NetworkExport, error) {
+	var f apitypes.NetworkExport
+	err := c.Do(ctx, http.MethodGet, "/groups/"+id(groupID)+"/export", nil, &f)
+	return f, err
+}
+
+// ImportOptions are the query of POST /import.
+type ImportOptions struct {
+	ParentID int64    // 0 = the top level
+	X, Y     *float64 // the top group's position
+	DryRun   bool
+	Update   bool
+}
+
+// Import sends POST /import. f is a *apitypes.NetworkExport, or the file
+// as it is (json.RawMessage), so the server sees keys it doesn't know.
+// When the import is refused for conflicts (409), the report is returned
+// with the *APIError, so the conflicts can be shown.
+func (c *Client) Import(ctx context.Context, f any, o ImportOptions) (apitypes.ImportReport, error) {
+	q := url.Values{}
+	if o.ParentID != 0 {
+		q.Set("parent_id", id(o.ParentID))
+	}
+	if o.X != nil && o.Y != nil {
+		q.Set("x", strconv.FormatFloat(*o.X, 'f', -1, 64))
+		q.Set("y", strconv.FormatFloat(*o.Y, 'f', -1, 64))
+	}
+	if o.DryRun {
+		q.Set("dry_run", "true")
+	}
+	if o.Update {
+		q.Set("update", "true")
+	}
+	path := "/import"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var rep apitypes.ImportReport
+	err := c.Do(ctx, http.MethodPost, path, f, &rep)
+	var ae *APIError
+	if errors.As(err, &ae) && ae.Status == http.StatusConflict {
+		var ic apitypes.ImportConflict
+		if json.Unmarshal(ae.Body, &ic) == nil {
+			rep = ic.Report
+		}
+	}
+	return rep, err
 }

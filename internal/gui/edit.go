@@ -145,6 +145,8 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	newItems := []*fyne.MenuItem{fyne.NewMenuItem("New group here…", func() { g.newGroupDialog(view, parent, mx, my) })}
 	if view == mapmodel.NetworkView {
 		newItems = append(newItems, fyne.NewMenuItem("New host here…", func() { g.newHostDialog(parent, mx, my) }))
+		x, y := mx, my
+		newItems = append(newItems, g.importItem(cmpOr(parent), &x, &y))
 	}
 	if n == nil {
 		return newItems
@@ -266,6 +268,12 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		copyTo,
 	}
 	items = append(items, fyne.NewMenuItem("Reflow…", func() { g.reflowDialog(view, &id) }), labels, colour)
+	if view == mapmodel.NetworkView {
+		items = append(items, g.exportItem(id, n.Item.Name))
+		if parent == nil || *parent != id { // a frame's body has "Import here…" below
+			items = append(items, g.importItem(id, nil, nil))
+		}
+	}
 	if cidr := n.Item.CIDR; cidr != "" {
 		scan := fyne.NewMenuItem("Scan this network", func() { g.openDiscovery(cidr) })
 		scan.Disabled = strings.Contains(cidr, ":") // IPv6 (SPEC-707)
@@ -694,4 +702,12 @@ func (g *GUI) onKey(ev *fyne.KeyEvent) {
 	case fyne.KeyE:
 		g.setSelectedCollapsed(false)
 	}
+}
+
+// cmpOr is the group id parent points to, or 0 for the top level.
+func cmpOr(parent *int64) int64 {
+	if parent == nil {
+		return 0
+	}
+	return *parent
 }

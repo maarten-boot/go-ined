@@ -30,6 +30,7 @@ var commands = map[string]map[string]command{
 		"rm": groupRm, "move": groupMove, "shift": groupShift,
 		"collapse": groupCollapse(true), "expand": groupCollapse(false),
 		"labels": groupLabels, "color": groupColor, "copy": groupCopy,
+		"export": groupExport,
 	},
 	"note": {"get": noteGet, "set": noteSet, "clear": noteClear},
 	"view": {

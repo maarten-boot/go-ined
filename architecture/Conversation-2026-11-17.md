@@ -27,3 +27,18 @@
      - the same file again was refused (4 conflicts, exit 1);
      - a second export equalled the first, apart from the Lab placement.
    - All Go tests (`-race`), lint and the 40 Python tests pass.
+3. **User**: pushed; run the crosscheck.
+   **Claude** checked the push: `main`, `docs/architecture` and `feature/network-export` arrived. Wrote `Crosscheck-2026-11-17-01.md`, the first since 2026-11-13-03, covering 16 merged branches.
+   - Method:
+     - three reviewers with read-only access: alerting, watched services, export and import;
+     - Claude: the GUI items, the trace, the docs, and repeating every M finding.
+     - CI passed for `main` @ `e04ef54`.
+   - Findings: 0 H, 6 M, 11 L in the code, 7 L in the docs.
+     - C1: `ined-alert` stops on a state file of the wrong shape instead of moving it to `.bad`.
+     - C2: a recovery is mailed unchecked when the server can't be read.
+     - C3: with `services.enabled = false`, watched services keep their old state instead of `unknown`.
+     - C4: import with update leaves matched groups in place without a warning below the top; N8 says positions are set.
+     - C5: two "Import here…" items in a group's menu while a focus is set.
+     - C6: a DOWN mail dropped after the retries still leaves the alert open.
+     - Docs: TC-315 is used twice; the README's status stops at "Connect".
+   - Decisions asked: D1 fix C1–C6; D2 fix the L items except L11; D3 release 0.6.0 after the fixes.

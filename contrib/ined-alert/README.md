@@ -6,9 +6,9 @@ Email alerts per group for go-ined, with syslog (design: `architecture/Design-al
 - A monitored host that stays **down** for `down_after` (2 min) sends a mail; when it is **up** again, the same people get a recovery mail.
 - A **watched service** (`inedctl host watch 12 ssh,https,tcp:5432`, SPEC-310) that stays down for `down_after` sends "[ined] DOWN https on web (192.0.2.10)", and a recovery mail later. While the host itself is down, or waiting for its own alert, its service alerts wait: the host's mail says enough. A service still down when the host is back is mailed `down_after` after its return.
 - **Routes** send the alerts of a group, and of everything below it, to a list; the **admins** get everything, also when the server can't be reached or can't ping.
-- Alerts for one recipient within `batch` (30 s) go out as one mail. Mail goes through an SMTP relay (`localhost:25`) without login.
+- Alerts for one recipient within `batch` (30 s) go out as one mail. Mail goes through an SMTP relay (`localhost:25`) without login. A failed mail is tried again after 10 s, 1 min and 5 min, then dropped and logged as an error (`mail_dropped`); the alert still counts as sent, so its recovery mail goes out later. Watch the log for `mail_dropped`.
 - Every action is logged as `key=value` lines to stderr and, if set, to a **syslog** collector.
-- A **state file** keeps open host and service alerts over a restart (version 2; a version 1 file is read as before); `startup_summary = true` mails the admins the hosts, and the watched services, that are down at start.
+- A **state file** keeps open host and service alerts over a restart (version 2; a version 1 file is read as before; an unreadable or damaged file, or one from a newer version, is moved to `state.json.bad` and the program starts without open alerts); `startup_summary = true` mails the admins the hosts, and the watched services, that are down at start.
 
 Python 3.11 or later, standard library only (Ubuntu 24.04 has 3.12).
 

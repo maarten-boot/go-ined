@@ -42,3 +42,24 @@
      - C6: a DOWN mail dropped after the retries still leaves the alert open.
      - Docs: TC-315 is used twice; the README's status stops at "Connect".
    - Decisions asked: D1 fix C1–C6; D2 fix the L items except L11; D3 release 0.6.0 after the fixes.
+4. **User**: status?
+   **Claude**: the crosscheck was committed (`94cde06`) but not yet pushed (GitHub still had `e04ef54`); decisions D1–D3 open; no bin program running.
+5. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `94cde06`) and fixed everything on `fix/crosscheck-17` (merged):
+   - `ined-alert`:
+     - C1: a state file of the wrong shape or a newer version is moved to `.bad`;
+     - C2: a recovery the server can't confirm keeps the alert open, and the next tick asks again;
+     - L4/P7: a service watched under another name for the same port keeps its alert;
+     - L8: a snapshot without `watch` closes service alerts;
+     - L9: a refused token is named so;
+     - L10: a warning for a route without recipients.
+   - Server:
+     - C3: with services off, watched services are set to `unknown` at start;
+     - L4: a list given again keeps a service's status by port;
+     - L7: a check in flight for a removed service leaves no failure count. The test for it first raced on the test's own clock; the round that forgets the service is now called directly.
+     - C4: import update warns for every matched group that stays where it is. Plain groups match by name under the file's parent, so only a network group can be matched somewhere else; the test uses one.
+     - L1: a plain group name twice under one parent is refused.
+   - `inedctl`: L3 `-o` sets 0600 on an existing file; L5 an empty LIST is a usage error and `--add` of a watched service does nothing.
+   - GUI: C5 "Import into this group…"; L6 blanks after `tcp:`.
+   - Docs: Spec v0.54; N8 in the design; Tests.md with TC-323 (P1) and the new coverage; README status (P2); the `ined-alert` README on dropped mail (C6); `Changes.md`; Plan; the crosscheck's resolution.
+   - All Go tests (`-race`), lint and the 48 Python tests pass. Next: release 0.6.0 (D3).

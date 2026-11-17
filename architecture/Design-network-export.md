@@ -98,9 +98,11 @@ Uses: moving a network to another server, keeping a copy of part of the map, set
     - a plain group with the same name under the same parent.
   - **By default an import with any conflict is refused** and nothing changes. The error lists the conflicts, the first 50 with a count of the rest.
   - **With "update existing"**, matching items are updated from the file instead:
-    - fields, positions and watch lists are set;
-    - matching hosts are moved into the imported group;
+    - fields and watch lists are set;
+    - matching groups keep their parent and position (moving one would take its other contents along); each one whose parent differs from the file's gets a warning, and the file's items below it go into it (crosscheck 2026-11-17-01 C4);
+    - matching hosts get the file's group and position;
     - nothing on the server that isn't in the file is deleted or moved.
+  - Names match exactly ("Printers" is not "printers"). A file with two plain groups of one name under one parent is refused, since both would match one group (crosscheck 2026-11-17-01 L1, L2).
 - **N9 One step, normal events.**
   - The import is one database transaction: all of it or nothing.
   - It emits the usual events for what it created or changed (`group.created`, `host.created`, `host.updated`, `placement.updated`), as discovery and "Show in view" do.

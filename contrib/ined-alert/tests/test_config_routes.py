@@ -83,7 +83,7 @@ class TestRoutes(unittest.TestCase):
 
     def test_view_route_duplicates_and_warnings(self):
         routes = [Route("Payroll", ["pay@example.com"]), Route("Networks/dc/lan", ["lan@example.com"]),
-                  Route("Networks/dc/lan", ["lan2@example.com"]), Route("Networks/nope", ["x@example.com"])]
+                  Route("Networks/dc/lan", ["lan2@example.com"]), Route("Networks/nope", ["x@example.com"]), Route("Payroll", [])]
         r = Routes(routes, [])
         maps = {1: {"items": MAPS[1]["items"] + [{"type": "group", "id": 12, "parent_id": 10, "name": "lan"},
                                                   {"type": "host", "id": 4, "parent_id": 12, "name": "h4"}]},
@@ -92,7 +92,8 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(r.recipients(1), {"pay@example.com": ["Payroll"], "lan@example.com": ["Networks/dc/lan"],
                                            "lan2@example.com": ["Networks/dc/lan"]})
         self.assertEqual(r.recipients(4), {"lan@example.com": ["Networks/dc/lan"], "lan2@example.com": ["Networks/dc/lan"]})
-        self.assertEqual(r.warnings, ['route "Networks/dc/lan" matches 2 groups; it covers all of them',
+        self.assertEqual(r.warnings, ['route "Payroll" has no recipients (to = [])',
+                                      'route "Networks/dc/lan" matches 2 groups; it covers all of them',
                                       'route "Networks/nope" matches no view or group'])
 
 

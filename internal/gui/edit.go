@@ -146,7 +146,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	if view == mapmodel.NetworkView {
 		newItems = append(newItems, fyne.NewMenuItem("New host here…", func() { g.newHostDialog(parent, mx, my) }))
 		x, y := mx, my
-		newItems = append(newItems, g.importItem(cmpOr(parent), &x, &y))
+		newItems = append(newItems, g.importItem("Import here…", cmpOr(parent), &x, &y))
 	}
 	if n == nil {
 		return newItems
@@ -271,7 +271,9 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	if view == mapmodel.NetworkView {
 		items = append(items, g.exportItem(id, n.Item.Name))
 		if parent == nil || *parent != id { // a frame's body has "Import here…" below
-			items = append(items, g.importItem(id, nil, nil))
+			// Not "Import here…": with a focus set, that is in the menu
+			// too, for the focus group at the click (C5 of crosscheck 2026-11-17-01).
+			items = append(items, g.importItem("Import into this group…", id, nil, nil))
 		}
 	}
 	if cidr := n.Item.CIDR; cidr != "" {

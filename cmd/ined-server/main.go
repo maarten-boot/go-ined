@@ -243,6 +243,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 		}, log).Run)
 	} else {
 		log.Info("service checks disabled by config (services.enabled = false); watched services stay unknown")
+		if n, err := svc.ResetAllWatch(ctx); err != nil {
+			log.Error("watched services not reset to unknown", "err", err)
+		} else if n > 0 {
+			log.Info("watched services set to unknown", "count", n)
+		}
 	}
 	disc := discovery.New(svc, prober, "", bus, runID, discovery.Config{
 		MaxPrefix: cfg.Discovery.MaxPrefix, Rate: cfg.Discovery.Rate,

@@ -183,6 +183,31 @@ func TestImportConflictsAndUpdate(t *testing.T) {
 	}
 }
 
+// TC-132: with "update existing", a network group matched below the top
+// keeps its place too, with a warning; the new group above it in the file
+// stays empty (C4 of crosscheck 2026-11-17-01).
+func TestImportUpdateKeepsPlace(t *testing.T) {
+	a, _ := newSvc(t)
+	site := mustGroup(t, a, apitypes.GroupCreate{Name: "site"})
+	mustGroup(t, a, apitypes.GroupCreate{Name: "lan", CIDR: "10.0.1.0/24", ParentID: &site.ID})
+	f, _ := a.ExportGroup(site.ID)
+
+	b, _ := newSvc(t)
+	lan := mustGroup(t, b, apitypes.GroupCreate{Name: "lan", CIDR: "10.0.1.0/24", X: ptr(70.0), Y: ptr(80.0)})
+	rep, err := b.Import(ctx, &f, ImportOptions{Update: true})
+	if err != nil || rep.Create.Groups != 1 || rep.Update.Groups != 1 {
+		t.Fatalf("update: %v %+v", err, rep)
+	}
+	want := `"lan" (10.0.1.0/24) is updated where it is, in the top level, not moved below group "site" as in the file`
+	if len(rep.Warnings) != 1 || !strings.HasSuffix(rep.Warnings[0], want) {
+		t.Fatalf("warnings: %q", rep.Warnings)
+	}
+	g, _ := b.Group(lan.ID)
+	if g.ParentID != nil || g.X != 70 || g.Y != 80 {
+		t.Fatalf("lan moved: %+v", g)
+	}
+}
+
 // TC-133: what lands where: a skipped view, a missing custom-view group
 // made with defaults, a warning when a more specific network group
 // exists, a network group that would not fit its enclosing one, a plain
@@ -272,6 +297,9 @@ func TestImportBadFiles(t *testing.T) {
 		{func(f *apitypes.NetworkExport) { f.Group.Color = "red" }, `color must be #rrggbb`},
 		{func(f *apitypes.NetworkExport) { f.Group.Name, f.Group.CIDR = "", "" }, "group needs a name or a CIDR"},
 		{func(f *apitypes.NetworkExport) { f.ViewGroups[0].Path = nil }, "view group 1"},
+		{func(f *apitypes.NetworkExport) {
+			f.Group.Groups = append(f.Group.Groups, apitypes.ExportGroup{Name: " printers "})
+		}, `group "lan" › "printers": group "printers" is given twice in the same group`},
 		{func(f *apitypes.NetworkExport) { *f = deep }, "more than 32 levels of groups"},
 		{func(f *apitypes.NetworkExport) { *f = many }, "more than 10000 groups and hosts"},
 	} {

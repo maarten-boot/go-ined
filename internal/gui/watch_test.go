@@ -99,6 +99,12 @@ func TestWatchServicesGUI(t *testing.T) {
 	eventually(t, e.ui, "error in the dialog", func() bool { return strings.Contains(f.errL.Text, `"ssh" and "tcp:22" are the same port 22`) })
 	e.ui.Wait(func() { f.other.SetText("5432 pg"); f.Submit() })
 	eventually(t, e.ui, "word refused", func() bool { return strings.Contains(f.errL.Text, `"pg" is not a port number`) })
+	e.ui.Wait(func() { // blanks after "tcp:" are fine (L6 of crosscheck 2026-11-17-01)
+		f.other.SetText("tcp: 5432, TCP:  8080")
+		if l, err := f.list(); err != nil || strings.Join(l, ",") != "ssh,https,tcp:5432,tcp:8080" {
+			t.Errorf("tcp: with blanks: %q %v", l, err)
+		}
+	})
 	if f.done {
 		t.Fatal("the dialog closed after an error")
 	}

@@ -73,7 +73,8 @@ class FakeClient:
 
     def health(self):
         self._check()
-        return dict(self.health_, access=self.access) if self.access else dict(self.health_)
+        # A valid token gets the authenticated fields too (db, access).
+        return dict(self.health_, access=self.access, db="ok") if self.access else dict(self.health_)
 
     def hosts(self):
         self._check()

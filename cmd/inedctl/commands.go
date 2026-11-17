@@ -178,6 +178,9 @@ func hostWatch(a *app, name string, args []string) error {
 		list = []string{}
 	case len(pos) == 2:
 		list = splitList(pos[1])
+		if len(list) == 0 { // an empty variable in a script must not clear the list
+			return usagef("%s: an empty list; use --clear to watch nothing", name)
+		}
 	default:
 		// --add and --remove change the current list.
 		var cur apitypes.Host
@@ -188,7 +191,15 @@ func hostWatch(a *app, name string, args []string) error {
 			list = append(list, w.Name)
 		}
 		if given["add"] {
-			list = append(list, splitList(*add)...)
+			for _, n := range splitList(*add) {
+				c, _, err := apitypes.ParseWatched(n)
+				if err != nil {
+					return usagef("%s: %v", name, err)
+				}
+				if !slices.Contains(list, c) { // watched already: nothing to do
+					list = append(list, c)
+				}
+			}
 		} else {
 			drop := map[string]bool{}
 			for _, n := range splitList(*rm) {

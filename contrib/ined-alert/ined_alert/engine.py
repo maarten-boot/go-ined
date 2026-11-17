@@ -76,21 +76,76 @@ def svc_key(k: tuple[int, str]) -> str:
     return f"{k[0]}/{k[1]}"
 
 
+STATE_VERSION = 2
+
+
+def _number(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def _alert(v, service: bool) -> dict:
+    """An open alert from the state file, checked."""
+    if not isinstance(v, dict):
+        raise ValueError("an alert is not an object")
+    h = v.get("host")
+    if not isinstance(h, dict) or not isinstance(h.get("name"), str) or not isinstance(h.get("ip"), str):
+        raise ValueError("an alert without its host")
+    if not _number(v.get("since")) or not _number(v.get("sent")):
+        raise ValueError("an alert without since or sent")
+    to = v.get("to")
+    if not isinstance(to, dict) or not all(isinstance(a, str) and isinstance(p, list) for a, p in to.items()):
+        raise ValueError("an alert without its recipients")
+    if service and (not isinstance(v.get("service"), dict) or not isinstance(v["service"].get("name"), str)):
+        raise ValueError("a service alert without its service")
+    return v
+
+
+def parse_state(st) -> dict:
+    """Checks what a state file holds (SPEC-956) and returns it as the
+    engine keeps it: {"open", "services", "unreachable", "degraded"}.
+    Raises ValueError when it isn't a state file of version 1 or 2."""
+    if not isinstance(st, dict):
+        raise ValueError("not an object")
+    ver = st.get("version", 1)
+    if not isinstance(ver, int) or isinstance(ver, bool) or not 1 <= ver <= STATE_VERSION:
+        raise ValueError(f"version {ver!r}; this ined-alert reads versions 1 and {STATE_VERSION}")
+    parts = {}
+    for name in ("open", "services", "server"):
+        parts[name] = st.get(name, {})
+        if not isinstance(parts[name], dict):
+            raise ValueError(f'"{name}" is not an object')
+    try:
+        hosts = {int(k): _alert(v, False) for k, v in parts["open"].items()}
+    except ValueError as e:
+        raise ValueError(f'"open": {e}') from None
+    services: dict[tuple[int, str], dict] = {}
+    for k, v in parts["services"].items():
+        hid, _, name = k.partition("/")
+        try:
+            if not name:
+                raise ValueError("not host id/name")
+            services[(int(hid), name)] = _alert(v, True)
+        except ValueError as e:
+            raise ValueError(f'"services" {k!r}: {e}') from None
+    srv = parts["server"]
+    return {"open": hosts, "services": services, "unreachable": bool(srv.get("unreachable")),
+            "degraded": bool(srv.get("degraded"))}
+
+
 class Engine:
     def __init__(self, cfg: Config, routes: Routes, fetch: Callable[[int], dict | None],
                  log: logging.Logger, state: dict | None = None):
         self.cfg, self.routes, self.fetch, self.log = cfg, routes, fetch, log
-        state = state or {}
+        st = parse_state(state or {})
         # Hosts with a down mail out: id -> {"host": brief, "since", "to", "sent"}.
-        self.open: dict[int, dict] = {int(k): v for k, v in state.get("open", {}).items()}
+        self.open: dict[int, dict] = st["open"]
         # Services with a down mail out: (host id, name) -> {"host", "service", "since", "to", "sent"}.
-        self.svc_open: dict[tuple[int, str], dict] = {}
-        for k, v in state.get("services", {}).items():
-            hid, _, name = k.partition("/")
-            self.svc_open[(int(hid), name)] = v
-        srv = state.get("server", {})
-        self.server_alerted = bool(srv.get("unreachable"))
-        self.degraded_alerted = bool(srv.get("degraded"))
+        self.svc_open: dict[tuple[int, str], dict] = st["services"]
+        self.server_alerted = st["unreachable"]
+        self.degraded_alerted = st["degraded"]
+        # Hosts whose recovery the server couldn't confirm: asked again at
+        # the next tick, with their watched services.
+        self.recheck: set[int] = set()
         self.pending: dict[int, float] = {}  # down, not alerted yet: id -> down since
         self.svc_pending: dict[tuple[int, str], float] = {}  # the same for services
         self.svc_held: set[tuple[int, str]] = set()  # pending services waiting for their host (logged once)
@@ -104,7 +159,7 @@ class Engine:
     # ---- state file ----
 
     def state(self) -> dict:
-        return {"version": 2, "open": {str(k): v for k, v in sorted(self.open.items())},
+        return {"version": STATE_VERSION, "open": {str(k): v for k, v in sorted(self.open.items())},
                 "services": {svc_key(k): v for k, v in sorted(self.svc_open.items())},
                 "server": {"unreachable": self.server_alerted, "degraded": self.degraded_alerted}}
 
@@ -196,10 +251,17 @@ class Engine:
 
     def _apply_services(self, h: dict, now: float, fresh: bool) -> list[Notice]:
         ws = watched(h)
-        if ws is None:
-            return []
         hid, b = h["id"], brief(h)
+        if ws is None:
+            if fresh:  # the server no longer lists watched services (older than v0.50)
+                for k in [k for k in self.svc_pending if k[0] == hid]:
+                    self._drop_svc(k)
+                for k in [k for k in self.svc_open if k[0] == hid]:
+                    self._close_svc(k, "the server lists no watched services")
+            return []
         mon = h.get("monitored", True)
+        if mon:
+            self._renamed(hid, b, ws)
         why = "monitoring turned off" if not mon else "no longer watched"
         for k in [k for k in self.svc_pending if k[0] == hid and (not mon or k[1] not in ws)]:
             self._drop_svc(k)
@@ -228,8 +290,10 @@ class Engine:
                 try:  # confirm: an old event must not end an alert
                     h2 = self.fetch(hid)
                 except OSError as e:
-                    self.log.warning(kv(event="confirm_failed", host=b["name"], service=name, error=str(e)))
-                    h2 = h
+                    self.log.warning(kv(event="confirm_failed", host=b["name"], service=name, error=str(e),
+                                        note="asked again at the next tick"))
+                    self.recheck.add(hid)
+                    continue
                 if h2 is None:
                     self._close_svc(k, "host deleted")
                     continue
@@ -246,6 +310,23 @@ class Engine:
             out.append(Notice(UP, now, to=a["to"], host=b, service=a["service"], since=a["since"],
                               groups=self.routes.groups_of(hid)))
         return out
+
+    def _renamed(self, hid: int, b: dict, ws: dict[str, dict]) -> None:
+        """An alerted service now watched under another name for the same
+        port ("ssh" and "tcp:22") keeps its alert, as the server keeps its
+        status. (A waiting one needs nothing: the new name is down since the
+        same time.)"""
+        by_port = {w.get("port"): name for name, w in ws.items()}
+        for k in [k for k in self.svc_open if k[0] == hid and k[1] not in ws]:
+            new = by_port.get(self.svc_open[k]["service"].get("port"))
+            if new is None or (hid, new) in self.svc_open:
+                continue
+            a = self.svc_open.pop(k)
+            a["service"] = dict(a["service"], name=new)
+            self.svc_open[(hid, new)] = a
+            self.svc_pending.pop((hid, new), None)
+            self.dirty = True
+            self.log.info(kv(event="renamed", host=b["name"], ip=b["ip"], service=k[1], to=new))
 
     def _apply_host(self, h: dict, now: float, fresh: bool) -> list[Notice]:
         hid, status = h["id"], h.get("status")
@@ -270,8 +351,10 @@ class Engine:
                 try:  # confirm: an old event must not end an alert
                     h2 = self.fetch(hid)
                 except OSError as e:
-                    self.log.warning(kv(event="confirm_failed", host=b["name"], error=str(e)))
-                    h2 = h
+                    self.log.warning(kv(event="confirm_failed", host=b["name"], error=str(e),
+                                        note="asked again at the next tick"))
+                    self.recheck.add(hid)
+                    return []
                 if h2 is None:
                     self._close(hid, "deleted")
                     return []
@@ -286,7 +369,7 @@ class Engine:
     def tick(self, now: float) -> list[Notice]:
         """Alerts that are due: hosts down for down_after (checked with the
         server first), repeats, and the server's own state."""
-        out: list[Notice] = []
+        out: list[Notice] = self._recheck(now)
         for hid, since in list(self.pending.items()):
             if now - since < self.cfg.down_after:
                 continue
@@ -328,6 +411,26 @@ class Engine:
         if self.degraded_since and not self.degraded_alerted and now - self.degraded_since >= self.cfg.server_down_after:
             self.degraded_alerted, self.dirty = True, True
             out.append(Notice(DEGRADED, now, to=admins, since=self.degraded_since, text=self.degraded_reason))
+        return out
+
+    def _recheck(self, now: float) -> list[Notice]:
+        """Recoveries the server couldn't confirm before: asked again; the
+        server's answer counts as a snapshot of that host."""
+        out: list[Notice] = []
+        for hid in sorted(self.recheck):
+            if hid not in self.open and not any(k[0] == hid for k in self.svc_open):
+                self.recheck.discard(hid)
+                continue
+            try:
+                h = self.fetch(hid)
+            except OSError:
+                continue  # logged when it was first asked
+            self.recheck.discard(hid)
+            if h is None:
+                out += self.deleted(hid, now)
+                continue
+            self.hosts[hid] = h
+            out += self._apply(h, now, fresh=True)
         return out
 
     def _host_down(self, hid: int) -> bool:

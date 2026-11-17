@@ -189,6 +189,32 @@ class TestApp(unittest.TestCase):
         os.remove(p + ".bad")
         os.rmdir(d)
 
+    def test_state_file_of_the_wrong_shape(self):
+        # C1 of crosscheck 2026-11-17-01: valid JSON, wrong shape or a newer
+        # version: set aside, and the program starts empty.
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "state.json")
+        for st in ({"open": []}, {"server": None}, {"services": {"x": {}}}, {"version": 3}):
+            with open(p, "w") as f:
+                json.dump(st, f)
+            app, _, _, _, buf = self.rig([], state_file=p)
+            self.assertEqual((app.engine.open, app.engine.svc_open), ({}, {}))
+            self.assertTrue(os.path.exists(p + ".bad"), st)
+            self.assertIn("event=state_unreadable", buf.getvalue())
+            os.remove(p + ".bad")
+        os.rmdir(d)
+
+    def test_wrong_token_warning(self):
+        # L9 of crosscheck 2026-11-17-01: without the authenticated fields
+        # the token wasn't accepted; with them but no access, an older server.
+        app, client, _, _, buf = self.rig([])
+        client.access = ""
+        self.assertEqual(app.check_token(), "")
+        self.assertIn('warning="the server doesn\'t accept the token"', buf.getvalue())
+        client.health_["db"] = "ok"
+        app.check_token()
+        self.assertIn("an older server?", buf.getvalue())
+
     def test_fatal_token(self):
         app, client, sent, clock, buf = self.rig([])
         stop = threading.Event()

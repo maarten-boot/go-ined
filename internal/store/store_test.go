@@ -408,7 +408,7 @@ func TestMigration5(t *testing.T) {
 // TC-320: migration 7 adds watched services; a host keeps them in order
 // with their status, a save replaces them, and deleting the host removes
 // them.
-func TestMigration6(t *testing.T) {
+func TestMigration6And7(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "v6.db")
 	db, err := sql.Open("sqlite", "file:"+p)
 	if err != nil {

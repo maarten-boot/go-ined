@@ -316,7 +316,7 @@ func TestStaleOnlyMonitored(t *testing.T) {
 	}
 }
 
-// TC-315 (inventory part): last_seen comes from SeenAt.
+// TC-323 (inventory part): last_seen comes from SeenAt.
 func TestSeenAt(t *testing.T) {
 	s, _ := newSvc(t)
 	h := mustHost(t, s, apitypes.HostCreate{IP: "10.0.0.1"})

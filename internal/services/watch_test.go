@@ -326,3 +326,70 @@ func TestWatchConcurrency(t *testing.T) {
 	}
 	r.want(r.log.take(), "")
 }
+
+// TC-319: a list given again keeps a service's status by port, also under
+// another name ("ssh" to "tcp:22"); a check in flight for a service removed
+// meanwhile leaves no failure count for the service added again (L4, L7 of
+// crosscheck 2026-11-17-01).
+func TestWatchRenameAndRace(t *testing.T) {
+	r, _ := newWatchRig(t, WatchConfig{DownAfter: 2})
+	h := r.host("192.0.2.1", "ssh")
+	r.net.set("192.0.2.1:22", true)
+	r.round(0)
+	r.want(r.log.take(), "1 ssh up")
+	r.patch(h.ID, apitypes.HostPatch{Watch: apitypes.Some([]string{"tcp:22"})})
+	r.want(r.watch(h.ID), "tcp:22 up")
+	got, _ := r.svc.Host(h.ID)
+	if got.Watch[0].LastOK == nil {
+		t.Fatal("last_ok lost on the new name")
+	}
+
+	// tcp:22 fails once; the next check is held while the service is
+	// removed and added again.
+	r.net.set("192.0.2.1:22", false)
+	r.round(time.Hour)
+	r.net.hold = 200 * time.Millisecond
+	r.at = r.at.Add(time.Hour)
+	var wg sync.WaitGroup
+	r.w.round(ctx, &wg) // second failure in flight
+	r.patch(h.ID, apitypes.HostPatch{Watch: apitypes.Some([]string{})})
+	var wg2 sync.WaitGroup
+	r.w.round(ctx, &wg2) // forgets tcp:22 (without touching r.at, which the check reads)
+	wg2.Wait()
+	r.patch(h.ID, apitypes.HostPatch{Watch: apitypes.Some([]string{"tcp:22"})})
+	wg.Wait()
+	r.net.hold = 0
+	r.want(r.watch(h.ID), "tcp:22 unknown")
+	r.round(time.Second) // one failure of the new entry: not down yet
+	r.want(r.watch(h.ID), "tcp:22 unknown")
+	r.round(time.Hour)
+	r.want(r.watch(h.ID), "tcp:22 down")
+}
+
+// TC-318: a server started with services.enabled = false sets watched
+// services that aren't unknown to unknown, with service.status, and keeps
+// that over a restart (C3 of crosscheck 2026-11-17-01).
+func TestResetAllWatch(t *testing.T) {
+	r, path := newWatchRig(t, WatchConfig{DownAfter: 1})
+	a := r.host("192.0.2.1", "ssh", "https")
+	r.host("192.0.2.2", "ssh")
+	r.net.set("192.0.2.1:22", true)
+	r.round(0)
+	r.log.take()
+	n, err := r.svc.ResetAllWatch(ctx)
+	if err != nil || n != 3 {
+		t.Fatalf("reset: %d %v", n, err)
+	}
+	r.want(r.log.take(), "1 ssh unknown; 1 https unknown; 2 ssh unknown")
+	if n, _ := r.svc.ResetAllWatch(ctx); n != 0 {
+		t.Fatalf("again: %d", n)
+	}
+	if m := r.svc.Map(); m.Items[len(m.Items)-1].ServicesDown != 0 {
+		t.Fatal("services_down after the reset")
+	}
+	r.st.Close()
+	h, err := reopen(t, path).Host(a.ID)
+	if err != nil || h.Watch[0].Status != "unknown" || h.Watch[0].LastOK == nil {
+		t.Fatalf("after a restart: %+v %v", h.Watch, err)
+	}
+}

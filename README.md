@@ -129,6 +129,8 @@ Discovery probes IPv4 ranges up to `/16` (`discovery.max_prefix`) at 200 address
 
 Watched services: name the services that matter on a host, such as `inedctl host watch 12 ssh,https,tcp:5432`, and the server checks them every 5 minutes (`services.watch_interval`). Each gets its own status: `down` after two failed checks in a row, `up` again after one success. `inedctl host show` and `host list` show them, and every change is a `service.status` event. In `ined-gui`, a host's menu has "Watch services…" (also for several hosts at once), a host with a service down gets a small warning triangle, and the details panel has a "Watched" row. Nothing is watched until you say so.
 
+Export and import: `inedctl group export 12 -o lan.json` writes a group of the network view with everything below it (subgroups, hosts, notes, watch lists, custom-view placements) to a JSON file; `inedctl import lan.json --parent 3 --dry-run` shows what an import would do on another server, and without `--dry-run` it imports in one step. Hosts or groups that are there already refuse the import, unless `--update`. In `ined-gui` a group's menu has "Export…" and "Import here…".
+
 ## Alerting
 
 [`contrib/ined-alert`](contrib/ined-alert/README.md) sends email when a monitored host, or a watched service on it, is down for 2 minutes, and again when it is back, to the people of the groups it is in and to the admins. It runs next to the server, in Python 3.11 or later with nothing to install:

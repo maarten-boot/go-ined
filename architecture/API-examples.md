@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "66777e52b5f22648",
+  "run_id": "9d867adfd093094e",
   "access": "full"
 }
 ```
@@ -31,7 +31,7 @@ Response: `200`
 ### Create a network group (name defaults to the CIDR)
 
 ```bash
-curl -s -X POST $INED/api/v1/groups -d '{"cidr":"192.168.1.0/24","note":"home LAN","x":100,"y":100}'
+curl -s -X POST "$INED/api/v1/groups" -d '{"cidr":"192.168.1.0/24","note":"home LAN","x":100,"y":100}'
 ```
 
 Response: `201`
@@ -51,15 +51,15 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-16T15:18:03.267Z",
-  "updated_at": "2026-11-16T15:18:03.267Z"
+  "created_at": "2026-11-17T10:54:23.577Z",
+  "updated_at": "2026-11-17T10:54:23.577Z"
 }
 ```
 
 ### Create an ordinary group inside it
 
 ```bash
-curl -s -X POST $INED/api/v1/groups -d '{"name":"servers","parent_id":1,"collapsed":false}'
+curl -s -X POST "$INED/api/v1/groups" -d '{"name":"servers","parent_id":1,"collapsed":false}'
 ```
 
 Response: `201`
@@ -79,15 +79,15 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-16T15:18:03.278Z",
-  "updated_at": "2026-11-16T15:18:03.278Z"
+  "created_at": "2026-11-17T10:54:23.586Z",
+  "updated_at": "2026-11-17T10:54:23.586Z"
 }
 ```
 
 ### Add a host without parent_id (placed in the most specific network group)
 
 ```bash
-curl -s -X POST $INED/api/v1/hosts -d '{"ip":"192.168.1.10","name":"nas"}'
+curl -s -X POST "$INED/api/v1/hosts" -d '{"ip":"192.168.1.10","name":"nas"}'
 ```
 
 Response: `201`
@@ -118,15 +118,15 @@ Response: `201`
   "watch": [],
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-16T15:18:03.29Z",
-  "updated_at": "2026-11-16T15:18:03.29Z"
+  "created_at": "2026-11-17T10:54:23.595Z",
+  "updated_at": "2026-11-17T10:54:23.595Z"
 }
 ```
 
 ### Move the host into a group, set a note and a position
 
 ```bash
-curl -s -X PATCH $INED/api/v1/hosts/1 -d '{"parent_id":2,"note":"Synology, rack 2","x":140,"y":260}'
+curl -s -X PATCH "$INED/api/v1/hosts/1" -d '{"parent_id":2,"note":"Synology, rack 2","x":140,"y":260}'
 ```
 
 Response: `200`
@@ -157,15 +157,15 @@ Response: `200`
   "watch": [],
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-16T15:18:03.29Z",
-  "updated_at": "2026-11-16T15:18:03.3Z"
+  "created_at": "2026-11-17T10:54:23.595Z",
+  "updated_at": "2026-11-17T10:54:23.604Z"
 }
 ```
 
 ### Expand the network group
 
 ```bash
-curl -s -X PATCH $INED/api/v1/groups/1 -d '{"collapsed":false}'
+curl -s -X PATCH "$INED/api/v1/groups/1" -d '{"collapsed":false}'
 ```
 
 Response: `200`
@@ -185,8 +185,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-16T15:18:03.267Z",
-  "updated_at": "2026-11-16T15:18:03.311Z"
+  "created_at": "2026-11-17T10:54:23.577Z",
+  "updated_at": "2026-11-17T10:54:23.613Z"
 }
 ```
 
@@ -256,7 +256,7 @@ Response: `200`
 ### Error: duplicate IP address
 
 ```bash
-curl -s -X POST $INED/api/v1/hosts -d '{"ip":"192.168.1.10"}'
+curl -s -X POST "$INED/api/v1/hosts" -d '{"ip":"192.168.1.10"}'
 ```
 
 Response: `409`
@@ -273,7 +273,7 @@ Response: `409`
 ### Error: CIDR with host bits set
 
 ```bash
-curl -s -X POST $INED/api/v1/groups -d '{"cidr":"10.0.0.5/24"}'
+curl -s -X POST "$INED/api/v1/groups" -d '{"cidr":"10.0.0.5/24"}'
 ```
 
 Response: `400`
@@ -290,7 +290,7 @@ Response: `400`
 ### Error: nested network group outside its parent
 
 ```bash
-curl -s -X POST $INED/api/v1/groups -d '{"cidr":"10.0.0.0/24","parent_id":1}'
+curl -s -X POST "$INED/api/v1/groups" -d '{"cidr":"10.0.0.0/24","parent_id":1}'
 ```
 
 Response: `409`
@@ -350,11 +350,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: 66777e52b5f22648-10
+id: 9d867adfd093094e-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"services":null,"services_checked_at":null,"watch":[],"x":40,"y":40,"created_at":"2026-11-16T15:18:03.707Z","updated_at":"2026-11-16T15:18:03.707Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"services":null,"services_checked_at":null,"watch":[],"x":40,"y":40,"created_at":"2026-11-17T10:54:23.998Z","updated_at":"2026-11-17T10:54:23.998Z"}
 
-id: 66777e52b5f22648-11
+id: 9d867adfd093094e-11
 event: host.deleted
 data: {"id":2}
 
@@ -363,14 +363,14 @@ data: {"id":2}
 ### Start a discovery job (a network group 127.0.0.0/30 is created)
 
 ```bash
-curl -s -X POST $INED/api/v1/discovery -d '{"cidr":"127.0.0.0/30"}'
+curl -s -X POST "$INED/api/v1/discovery" -d '{"cidr":"127.0.0.0/30"}'
 ```
 
 Response: `202`
 
 ```json
 {
-  "id": "66777e52b5f22648-1",
+  "id": "9d867adfd093094e-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -379,7 +379,7 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-16T15:18:04.041Z",
+  "started_at": "2026-11-17T10:54:24.334Z",
   "finished_at": null
 }
 ```
@@ -387,14 +387,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/66777e52b5f22648-1
+curl -s $INED/api/v1/discovery/9d867adfd093094e-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "66777e52b5f22648-1",
+  "id": "9d867adfd093094e-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -403,15 +403,15 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-16T15:18:04.041Z",
-  "finished_at": "2026-11-16T15:18:04.049Z"
+  "started_at": "2026-11-17T10:54:24.334Z",
+  "finished_at": "2026-11-17T10:54:24.34Z"
 }
 ```
 
 ### Error: a range larger than discovery.max_prefix (/16)
 
 ```bash
-curl -s -X POST $INED/api/v1/discovery -d '{"cidr":"10.0.0.0/8"}'
+curl -s -X POST "$INED/api/v1/discovery" -d '{"cidr":"10.0.0.0/8"}'
 ```
 
 Response: `400`
@@ -428,7 +428,7 @@ Response: `400`
 ### Error: discovery is IPv4 only
 
 ```bash
-curl -s -X POST $INED/api/v1/discovery -d '{"cidr":"2001:db8::/120"}'
+curl -s -X POST "$INED/api/v1/discovery" -d '{"cidr":"2001:db8::/120"}'
 ```
 
 Response: `400`
@@ -474,8 +474,8 @@ Collapsed:   yes
 Labels:      inherit
 Bar colour:  none
 Position:    40, 40
-Created:     2026-11-16 16:18:06
-Updated:     2026-11-16 16:18:06
+Created:     2026-11-17 11:54:26
+Updated:     2026-11-17 11:54:26
 Note:        -
 ```
 
@@ -505,8 +505,8 @@ Services:     not checked yet
 Watched:      none
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-16 16:18:06
-Updated:      2026-11-16 16:18:06
+Created:      2026-11-17 11:54:26
+Updated:      2026-11-17 11:54:26
 Note:         2nd floor
 ```
 
@@ -570,8 +570,8 @@ inedctl --json host show 5
   "watch": [],
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-16T15:18:06.146Z",
-  "updated_at": "2026-11-16T15:18:06.146Z"
+  "created_at": "2026-11-17T10:54:26.4Z",
+  "updated_at": "2026-11-17T10:54:26.4Z"
 }
 ```
 
@@ -606,8 +606,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job 66777e52b5f22648-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job 66777e52b5f22648-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job 9d867adfd093094e-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job 9d867adfd093094e-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -656,7 +656,7 @@ Each view is its own map (a tab in the GUI). Hosts are shared: a host placed in 
 ### Create a custom view
 
 ```bash
-curl -s -X POST $INED/api/v1/views -d '{"name":"Printers"}'
+curl -s -X POST "$INED/api/v1/views" -d '{"name":"Printers"}'
 ```
 
 Response: `201`
@@ -667,15 +667,15 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-16T15:18:06.189Z",
-  "updated_at": "2026-11-16T15:18:06.189Z"
+  "created_at": "2026-11-17T10:54:26.445Z",
+  "updated_at": "2026-11-17T10:54:26.445Z"
 }
 ```
 
 ### Add a group to the view
 
 ```bash
-curl -s -X POST $INED/api/v1/groups -d '{"name":"2nd floor","view_id":2,"collapsed":false}'
+curl -s -X POST "$INED/api/v1/groups" -d '{"name":"2nd floor","view_id":2,"collapsed":false}'
 ```
 
 Response: `201`
@@ -695,15 +695,15 @@ Response: `201`
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-16T15:18:06.198Z",
-  "updated_at": "2026-11-16T15:18:06.198Z"
+  "created_at": "2026-11-17T10:54:26.454Z",
+  "updated_at": "2026-11-17T10:54:26.454Z"
 }
 ```
 
 ### Put host 5 in that group (only in this view)
 
 ```bash
-curl -s -X PUT $INED/api/v1/views/2/hosts/5 -d '{"parent_id":6}'
+curl -s -X PUT "$INED/api/v1/views/2/hosts/5" -d '{"parent_id":6}'
 ```
 
 Response: `200`
@@ -768,7 +768,7 @@ Response: `200`
 ### Error: network groups exist only in the network view
 
 ```bash
-curl -s -X POST $INED/api/v1/groups -d '{"cidr":"10.20.0.0/24","view_id":2}'
+curl -s -X POST "$INED/api/v1/groups" -d '{"cidr":"10.20.0.0/24","view_id":2}'
 ```
 
 Response: `400`
@@ -824,8 +824,8 @@ ID:      2
 Name:    Printers
 Kind:    custom
 Order:   1
-Created: 2026-11-16 16:18:06
-Updated: 2026-11-16 16:18:06
+Created: 2026-11-17 11:54:26
+Updated: 2026-11-17 11:54:26
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6
@@ -840,7 +840,7 @@ A group moves with its contents in one request; one `group.moved` event tells cl
 ### Move group 6 (in view 2) and its hosts 50 units right
 
 ```bash
-curl -s -X POST $INED/api/v1/groups/6/move -d '{"dx":50,"dy":0}'
+curl -s -X POST "$INED/api/v1/groups/6/move" -d '{"dx":50,"dy":0}'
 ```
 
 Response: `200`
@@ -860,8 +860,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 40,
-  "created_at": "2026-11-16T15:18:06.198Z",
-  "updated_at": "2026-11-16T15:18:06.253Z"
+  "created_at": "2026-11-17T10:54:26.454Z",
+  "updated_at": "2026-11-17T10:54:26.503Z"
 }
 ```
 
@@ -883,8 +883,8 @@ Collapsed:   no
 Labels:      inherit
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-16 16:18:06
-Updated:     2026-11-16 16:18:06
+Created:     2026-11-17 11:54:26
+Updated:     2026-11-17 11:54:26
 Note:        -
 ```
 
@@ -893,7 +893,7 @@ Exit code: `0`
 ### Move only the contents of group 6, not the group itself
 
 ```bash
-curl -s -X POST $INED/api/v1/groups/6/move -d '{"dx":0,"dy":30,"contents_only":true}'
+curl -s -X POST "$INED/api/v1/groups/6/move" -d '{"dx":0,"dy":30,"contents_only":true}'
 ```
 
 Response: `200`
@@ -913,8 +913,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-16T15:18:06.198Z",
-  "updated_at": "2026-11-16T15:18:06.261Z"
+  "created_at": "2026-11-17T10:54:26.454Z",
+  "updated_at": "2026-11-17T10:54:26.511Z"
 }
 ```
 
@@ -942,8 +942,8 @@ Services:     not checked yet
 Watched:      none
 Outside CIDR: no
 Position:     240, 40
-Created:      2026-11-16 16:18:06
-Updated:      2026-11-16 16:18:06
+Created:      2026-11-17 11:54:26
+Updated:      2026-11-17 11:54:26
 Note:         Toner replaced 2026-11
 ```
 
@@ -956,7 +956,7 @@ A group says what the GUI shows under the hosts inside it: `name`, `ip`, `both`,
 ### Show IP addresses under the hosts in group 6
 
 ```bash
-curl -s -X PATCH $INED/api/v1/groups/6 -d '{"labels":"ip"}'
+curl -s -X PATCH "$INED/api/v1/groups/6" -d '{"labels":"ip"}'
 ```
 
 Response: `200`
@@ -976,15 +976,15 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-16T15:18:06.198Z",
-  "updated_at": "2026-11-16T15:18:06.282Z"
+  "created_at": "2026-11-17T10:54:26.454Z",
+  "updated_at": "2026-11-17T10:54:26.529Z"
 }
 ```
 
 ### Error: unknown label mode
 
 ```bash
-curl -s -X PATCH $INED/api/v1/groups/6 -d '{"labels":"dns"}'
+curl -s -X PATCH "$INED/api/v1/groups/6" -d '{"labels":"dns"}'
 ```
 
 Response: `400`
@@ -1016,8 +1016,8 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-16 16:18:06
-Updated:     2026-11-16 16:18:06
+Created:     2026-11-17 11:54:26
+Updated:     2026-11-17 11:54:26
 Note:        -
 ```
 
@@ -1030,7 +1030,7 @@ A group can give its top bar in the GUI a colour: `"#rrggbb"` (stored in upper c
 ### Colour the top bar of group 6 blue
 
 ```bash
-curl -s -X PATCH $INED/api/v1/groups/6 -d '{"color":"#4363d8"}'
+curl -s -X PATCH "$INED/api/v1/groups/6" -d '{"color":"#4363d8"}'
 ```
 
 Response: `200`
@@ -1050,15 +1050,15 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-16T15:18:06.198Z",
-  "updated_at": "2026-11-16T15:18:06.303Z"
+  "created_at": "2026-11-17T10:54:26.454Z",
+  "updated_at": "2026-11-17T10:54:26.551Z"
 }
 ```
 
 ### Error: not a #rrggbb colour
 
 ```bash
-curl -s -X PATCH $INED/api/v1/groups/6 -d '{"color":"blue"}'
+curl -s -X PATCH "$INED/api/v1/groups/6" -d '{"color":"blue"}'
 ```
 
 Response: `400`
@@ -1090,8 +1090,8 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Position:    90, 80
-Created:     2026-11-16 16:18:06
-Updated:     2026-11-16 16:18:06
+Created:     2026-11-17 11:54:26
+Updated:     2026-11-17 11:54:26
 Note:        -
 ```
 
@@ -1104,7 +1104,7 @@ Lays out the direct members of a group (or of the view's root) on a grid, so lon
 ### Arrange the root of the network view on 160 × 80 cells
 
 ```bash
-curl -s -X POST $INED/api/v1/views/1/arrange -d '{"cell_width":160,"cell_height":80}'
+curl -s -X POST "$INED/api/v1/views/1/arrange" -d '{"cell_width":160,"cell_height":80}'
 ```
 
 Response: `200`
@@ -1120,7 +1120,7 @@ Response: `200`
 ### Error: cell size out of range
 
 ```bash
-curl -s -X POST $INED/api/v1/views/1/arrange -d '{"cell_width":5,"cell_height":80}'
+curl -s -X POST "$INED/api/v1/views/1/arrange" -d '{"cell_width":5,"cell_height":80}'
 ```
 
 Response: `400`
@@ -1153,7 +1153,7 @@ Copies a group of another view into a custom view: the same group, its subgroups
 ### Copy network group 4 (lab) with everything in it into view 2
 
 ```bash
-curl -s -X POST $INED/api/v1/views/2/copy-group -d '{"group_id":4}'
+curl -s -X POST "$INED/api/v1/views/2/copy-group" -d '{"group_id":4}'
 ```
 
 Response: `200`
@@ -1171,7 +1171,7 @@ Response: `200`
 ### Error: group 6 is in view 2 already
 
 ```bash
-curl -s -X POST $INED/api/v1/views/2/copy-group -d '{"group_id":6}'
+curl -s -X POST "$INED/api/v1/views/2/copy-group" -d '{"group_id":6}'
 ```
 
 Response: `400`
@@ -1237,7 +1237,7 @@ A host's `watch` list names the services to check every `services.watch_interval
 ### Watch SSH, HTTPS and PostgreSQL on host 5
 
 ```bash
-curl -s -X PATCH $INED/api/v1/hosts/5 -d '{"watch":["ssh","https","tcp:5432"]}'
+curl -s -X PATCH "$INED/api/v1/hosts/5" -d '{"watch":["ssh","https","tcp:5432"]}'
 ```
 
 Response: `200`
@@ -1291,15 +1291,15 @@ Response: `200`
   ],
   "x": 40,
   "y": 120,
-  "created_at": "2026-11-16T15:18:06.146Z",
-  "updated_at": "2026-11-16T15:18:06.388Z"
+  "created_at": "2026-11-17T10:54:26.4Z",
+  "updated_at": "2026-11-17T10:54:26.631Z"
 }
 ```
 
 ### Error: the same port twice
 
 ```bash
-curl -s -X PATCH $INED/api/v1/hosts/5 -d '{"watch":["ssh","tcp:22"]}'
+curl -s -X PATCH "$INED/api/v1/hosts/5" -d '{"watch":["ssh","tcp:22"]}'
 ```
 
 Response: `400`
@@ -1321,6 +1321,191 @@ inedctl host watch 5 --add http
 
 ```text
 ssh unknown, https unknown, tcp:5432 unknown, http unknown
+```
+
+Exit code: `0`
+
+## Export and import
+
+A group of the network view can be exported with everything below it as one JSON file, and imported below a group of any server in one step. Status, times and PTR names stay behind. A dry run (`dry_run=true`) only reports. Hosts or groups that are there already refuse the import with 409 and the report, unless `update=true`.
+
+### Import a network: a dry run first
+
+```bash
+curl -s -X POST "$INED/api/v1/import?dry_run=true" -d '{"format":"go-ined-network","version":1,"exported_at":"2026-11-17T09:00:00Z","server_version":"","from":"","group":{"name":"lab","cidr":"198.51.100.0/24","description":"","note":"","labels":"","color":"","collapsed":true,"x":0,"y":0,"groups":[],"hosts":[{"ip":"198.51.100.7","name":"probe","description":"","note":"","monitored":true,"watch":["ssh"],"x":40,"y":60,"views":[{"view":"Nowhere","path":[],"x":0,"y":0}]}]},"view_groups":[]}'
+```
+
+Response: `200`
+
+```json
+{
+  "dry_run": true,
+  "done": false,
+  "group_id": null,
+  "create": {
+    "groups": 1,
+    "hosts": 1,
+    "view_groups": 0,
+    "placements": 0
+  },
+  "update": {
+    "groups": 0,
+    "hosts": 0,
+    "view_groups": 0,
+    "placements": 0
+  },
+  "conflicts": [],
+  "more_conflicts": 0,
+  "skipped": [
+    "view \"Nowhere\" doesn't exist (1 placement)"
+  ],
+  "warnings": []
+}
+```
+
+### Import it (a view that doesn't exist is skipped)
+
+```bash
+curl -s -X POST "$INED/api/v1/import?x=900&y=100" -d '{"format":"go-ined-network","version":1,"exported_at":"2026-11-17T09:00:00Z","server_version":"","from":"","group":{"name":"lab","cidr":"198.51.100.0/24","description":"","note":"","labels":"","color":"","collapsed":true,"x":0,"y":0,"groups":[],"hosts":[{"ip":"198.51.100.7","name":"probe","description":"","note":"","monitored":true,"watch":["ssh"],"x":40,"y":60,"views":[{"view":"Nowhere","path":[],"x":0,"y":0}]}]},"view_groups":[]}'
+```
+
+Response: `200`
+
+```json
+{
+  "dry_run": false,
+  "done": true,
+  "group_id": 9,
+  "create": {
+    "groups": 1,
+    "hosts": 1,
+    "view_groups": 0,
+    "placements": 0
+  },
+  "update": {
+    "groups": 0,
+    "hosts": 0,
+    "view_groups": 0,
+    "placements": 0
+  },
+  "conflicts": [],
+  "more_conflicts": 0,
+  "skipped": [
+    "view \"Nowhere\" doesn't exist (1 placement)"
+  ],
+  "warnings": []
+}
+```
+
+### Export the imported group with everything below it
+
+```bash
+curl -s $INED/api/v1/groups/9/export
+```
+
+Response: `200`
+
+```json
+{
+  "format": "go-ined-network",
+  "version": 1,
+  "exported_at": "2026-11-17T10:54:26.688Z",
+  "server_version": "dev",
+  "from": "Networks › lab",
+  "group": {
+    "name": "lab",
+    "cidr": "198.51.100.0/24",
+    "description": "",
+    "note": "",
+    "labels": "",
+    "color": "",
+    "collapsed": true,
+    "x": 0,
+    "y": 0,
+    "groups": [],
+    "hosts": [
+      {
+        "ip": "198.51.100.7",
+        "name": "probe",
+        "description": "",
+        "note": "",
+        "monitored": true,
+        "watch": [
+          "ssh"
+        ],
+        "x": 40,
+        "y": 60,
+        "views": []
+      }
+    ]
+  },
+  "view_groups": []
+}
+```
+
+### Error: the same file again conflicts; nothing is changed
+
+```bash
+curl -s -X POST "$INED/api/v1/import" -d '{"format":"go-ined-network","version":1,"exported_at":"2026-11-17T09:00:00Z","server_version":"","from":"","group":{"name":"lab","cidr":"198.51.100.0/24","description":"","note":"","labels":"","color":"","collapsed":true,"x":0,"y":0,"groups":[],"hosts":[{"ip":"198.51.100.7","name":"probe","description":"","note":"","monitored":true,"watch":["ssh"],"x":40,"y":60,"views":[{"view":"Nowhere","path":[],"x":0,"y":0}]}]},"view_groups":[]}'
+```
+
+Response: `409`
+
+```json
+{
+  "error": {
+    "code": "conflict",
+    "message": "2 conflicts with what is there; nothing was changed (see report.conflicts; update=true updates them)"
+  },
+  "report": {
+    "dry_run": false,
+    "done": false,
+    "group_id": null,
+    "create": {
+      "groups": 0,
+      "hosts": 0,
+      "view_groups": 0,
+      "placements": 0
+    },
+    "update": {
+      "groups": 0,
+      "hosts": 0,
+      "view_groups": 0,
+      "placements": 0
+    },
+    "conflicts": [
+      "network group 198.51.100.0/24 exists already: group 9 in Networks › lab",
+      "IP address 198.51.100.7 exists already: host 8 \"probe\" in Networks › lab"
+    ],
+    "more_conflicts": 0,
+    "skipped": [],
+    "warnings": []
+  }
+}
+```
+
+### Export with inedctl
+
+```bash
+inedctl group export 9 -o net.json
+```
+
+```text
+exported Networks › lab: 1 group, 1 host to net.json
+```
+
+Exit code: `0`
+
+### Import with inedctl into the server it came from: a dry run with --update
+
+```bash
+inedctl import net.json --dry-run --update
+```
+
+```text
+Would create: nothing.
+Would update: 1 group, 1 host.
+Conflicts: none.
 ```
 
 Exit code: `0`

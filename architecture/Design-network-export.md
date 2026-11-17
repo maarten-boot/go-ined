@@ -1,6 +1,6 @@
 # Design: export and import of a network
 
-Status: **accepted** (2026-11-16, "OK, all"): N1–N11 as recommended. Not built yet. The order is server/API, then `inedctl`, then the GUI.
+Status: **implemented** (2026-11-17): N1–N10 as recommended ("OK, all"), on `feature/network-export` (SPEC-125, 513, 733, 905); N11 stays for later. Settled in the build: a 409 from `POST /import` carries the usual `error` with the `report` (SPEC-504 holds for every error); a dry run answers 200 even with conflicts and lists them; `inedctl import` exits 1 when the import is, or would be, refused; the GUI's menus offer "Import here…" on empty space and on groups of the network view.
 
 Notes for the build, from reading the code:
 - **Update existing (N8):** a matching group is updated where it is and is not moved (its other contents would be left behind); the file's items below it go into it. Only matching hosts move, into their group from the file.

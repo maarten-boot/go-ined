@@ -34,7 +34,7 @@ OUT="$WORK/body.md"
 # ex TITLE METHOD PATH [JSON-BODY]
 ex() {
   local title=$1 m=$2 p=$3 b=${4:-} cmd resp code body
-  if [ -n "$b" ]; then cmd="curl -s -X $m \$INED/api/v1$p -d '$b'"
+  if [ -n "$b" ]; then cmd="curl -s -X $m \"\$INED/api/v1$p\" -d '$b'"
   elif [ "$m" = GET ]; then cmd="curl -s \$INED/api/v1$p"
   else cmd="curl -s -X $m \"\$INED/api/v1$p\""; fi
   { echo "### $title"; echo; echo '```bash'; echo "$cmd"; echo '```'; echo; } >>"$OUT"
@@ -184,6 +184,20 @@ ctl "The services of a host with inedctl (--check checks first)" "host services 
 ex "Watch SSH, HTTPS and PostgreSQL on host 5" PATCH /hosts/5 '{"watch":["ssh","https","tcp:5432"]}'
 ex "Error: the same port twice" PATCH /hosts/5 '{"watch":["ssh","tcp:22"]}'
 ctl "Add a service with inedctl (a list sets, --remove and --clear also work)" "host watch 5 --add http" host watch 5 --add http
+
+# Export and import (SPEC-125, 513, 905).
+{ echo "## Export and import"; echo
+  echo 'A group of the network view can be exported with everything below it as one JSON file, and imported below a group of any server in one step. Status, times and PTR names stay behind. A dry run (`dry_run=true`) only reports. Hosts or groups that are there already refuse the import with 409 and the report, unless `update=true`.'; echo; } >>"$OUT"
+NET='{"format":"go-ined-network","version":1,"exported_at":"2026-11-17T09:00:00Z","server_version":"","from":"","group":{"name":"lab","cidr":"198.51.100.0/24","description":"","note":"","labels":"","color":"","collapsed":true,"x":0,"y":0,"groups":[],"hosts":[{"ip":"198.51.100.7","name":"probe","description":"","note":"","monitored":true,"watch":["ssh"],"x":40,"y":60,"views":[{"view":"Nowhere","path":[],"x":0,"y":0}]}]},"view_groups":[]}'
+ex "Import a network: a dry run first" POST "/import?dry_run=true" "$NET"
+ex "Import it (a view that doesn't exist is skipped)" POST "/import?x=900&y=100" "$NET"
+LAB=$(curl -s "http://$ADDR/api/v1/groups" | python3 -c 'import json,sys; print([g["id"] for g in json.load(sys.stdin) if g["cidr"] == "198.51.100.0/24"][0])')
+ex "Export the imported group with everything below it" GET "/groups/$LAB/export"
+ex "Error: the same file again conflicts; nothing is changed" POST /import "$NET"
+FILTER="sed 's|$WORK/||'"
+ctl "Export with inedctl" "group export $LAB -o net.json" group export "$LAB" -o "$WORK/net.json"
+ctl "Import with inedctl into the server it came from: a dry run with --update" "import net.json --dry-run --update" import "$WORK/net.json" --dry-run --update
+unset FILTER
 
 {
 cat <<'EOF'

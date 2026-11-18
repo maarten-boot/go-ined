@@ -41,3 +41,12 @@
    - Docs: Spec v0.57 (SPEC-206, 207, 735, 957, SPEC-501, 901, config table); TC-215–219, 756, 958; Changes `[Unreleased]` (schema 8 can't be opened by an older server); README; API examples regenerated (only the new fields); design status.
    - All Go tests with `-race` and the 54 Python tests pass; the scheduler tests 20 runs, the GUI test 5 runs in a row.
    - While the tests ran I switched to `docs/architecture` once by mistake with the code uncommitted; both branches were at the same commit, nothing changed, and I switched straight back.
+12. **User**: pushed; run the crosscheck; will do the rerun later mac resources are hogged again possibly by our work.
+   **Claude** checked the push (`main` and `docs/architecture` at `8054d74`, `feature/rescan` at `d2d7914`) and wrote `Crosscheck-2026-11-18-02.md`:
+   - Two reviewers with read-only access: (1) the server, (2) the clients. Claude did the trace, the docs and CI, and repeated the M findings.
+   - Findings: 0 H, 2 M, 7 L, 3 P.
+     - C1: one group that can't be scanned (for example after `discovery.max_prefix` was lowered) stops the whole schedule.
+     - C2: such a group can't be edited at all.
+     - Both were repeated with overlay probes.
+   - CI: `main` @ `8054d74` green, macOS included. On the user's guess about the macOS queue: the release's attempt 2 waited at the same time as `871e450`'s macOS job, so two of our own macOS jobs were queued at once, under GitHub's capacity limits.
+   - Decisions asked: D1 fix C1, C2; D2 fix L1–L3, P1–P3; D3 rerun the release when no run on `main` is queued; rescan into 0.8.0.

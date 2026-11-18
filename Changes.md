@@ -4,6 +4,10 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-18
+
+Update `ined-server` together with `ined-gui`: the GUI warns about an older server ("ined-server v0.6.0 is older than this GUI"), and only the new server rounds positions and refuses them beyond ±1,000,000,000. The database doesn't change, so going back to 0.6.0 is possible. Update `ined-alert` too, for the fix of service alerts that become `unknown`.
+
 ### Added
 - `ined-gui` explains the little triangle next to a host (a watched service is down) and the other map signs: the details show "▲ 1 watched service down: https (443) since 14:07" below the host's name; resting the pointer on a host shows a box with its address, status and the services down; and a new "Help ▾" button has "Map symbols…", a legend of every sign.
 

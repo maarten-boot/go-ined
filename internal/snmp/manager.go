@@ -17,7 +17,7 @@ type Inventory interface {
 	SNMPTargets() []inventory.SNMPTarget
 	SNMPTarget(id int64) (inventory.SNMPTarget, error)
 	SetSNMP(ctx context.Context, id int64, ip netip.Addr, a inventory.SNMPAgent) (apitypes.Host, bool, error)
-	SetSNMPValues(id int64, ip netip.Addr, a inventory.SNMPAgent, v apitypes.SNMPValues) bool
+	SetSNMPValues(id int64, ip netip.Addr, a inventory.SNMPAgent, v apitypes.SNMPValues, anyHost bool) bool
 }
 
 // Config holds the SNMP settings ([snmp] in server.toml). Zero values get
@@ -64,10 +64,28 @@ type Manager struct {
 	cfg Config
 	log *slog.Logger
 
-	mu   sync.Mutex
-	busy map[int64]bool // hosts being checked by Run
-	lost map[int64]bool // hosts whose agent stopped answering: found again
+	mu    sync.Mutex
+	busy  map[int64]bool       // hosts being checked by Run
+	state map[int64]*hostState // hosts whose reads fail; gone after a good read
 }
+
+// hostState counts the failures of a host with an agent (crosscheck
+// 2026-11-18-03 C2, C3).
+type hostState struct {
+	fails int       // value reads in a row without an answer
+	tried time.Time // the last of them
+	lost  int       // searches since the agent stopped answering
+	next  time.Time // the next search while lost
+}
+
+// maxFails is how many reads in a row may fail before the agent is looked
+// for again with every community.
+const maxFails = 3
+
+// lostWait is the wait before search n (1, 2, 3) for an agent that
+// stopped answering; after that the host waits snmp.rescan and is stored
+// as "no answer".
+var lostWait = []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute}
 
 // New returns a manager. log may be nil.
 func New(inv Inventory, cfg Config, log *slog.Logger) *Manager {
@@ -75,7 +93,7 @@ func New(inv Inventory, cfg Config, log *slog.Logger) *Manager {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Manager{inv: inv, cfg: cfg, log: log, busy: map[int64]bool{}, lost: map[int64]bool{}}
+	return &Manager{inv: inv, cfg: cfg, log: log, busy: map[int64]bool{}, state: map[int64]*hostState{}}
 }
 
 // allowed: communities may be sent to ip (snmp.networks).
@@ -104,7 +122,7 @@ func (m *Manager) Check(ctx context.Context, id int64) (apitypes.Host, error) {
 		return apitypes.Host{}, inventory.Errorf(inventory.Invalid,
 			"host %d (%s) is outside snmp.networks: no community is sent to it", id, t.IP)
 	}
-	ok, err := m.find(ctx, t)
+	ok, err := m.find(ctx, t, true)
 	if err == nil && !ok {
 		err = inventory.Errorf(inventory.Conflict, "host %d was changed or deleted during the check; try again", id)
 	}
@@ -115,8 +133,11 @@ func (m *Manager) Check(ctx context.Context, id int64) (apitypes.Host, error) {
 }
 
 // find tries every community with v2c, then v1, saves the result and, with
-// an agent, reads the values. ok = false: the host changed meanwhile.
-func (m *Manager) find(ctx context.Context, t inventory.SNMPTarget) (ok bool, err error) {
+// an agent, reads the values. ok = false: the host changed meanwhile. On
+// request (now) the result is saved as it is; in the rounds, an agent that
+// stopped answering is kept, and looked for again after lostWait, before
+// "no answer" is saved (C3).
+func (m *Manager) find(ctx context.Context, t inventory.SNMPTarget, now bool) (ok bool, err error) {
 	a := inventory.SNMPAgent{}
 	n := len(m.cfg.Communities)
 	var where string
@@ -134,14 +155,15 @@ search:
 			}
 		}
 	}
+	if a.Version == "" && t.Agent.Version != "" && !now && m.away(t.ID) {
+		m.log.Debug("SNMP agent not answering; tried again later", "host", t.ID, "ip", t.IP)
+		return true, nil
+	}
 	a.CheckedAt = m.cfg.Now()
 	_, ok, err = m.inv.SetSNMP(ctx, t.ID, t.IP, a)
 	if err != nil || !ok {
 		return ok, err
 	}
-	m.mu.Lock()
-	delete(m.lost, t.ID)
-	m.mu.Unlock()
 	switch {
 	case a.Version != "" && (a.Version != t.Agent.Version || a.Community != t.Agent.Community):
 		m.log.Info("SNMP found on " + where)
@@ -150,29 +172,68 @@ search:
 	case a.Version == "":
 		m.log.Debug("no SNMP agent answered", "host", t.ID, "ip", t.IP)
 	}
-	if a.Version != "" {
-		t.Agent = a
-		m.read(ctx, t)
+	if a.Version == "" {
+		m.forget(t.ID)
+		return true, nil
+	}
+	t.Agent = a
+	if !m.read(ctx, t, now) && !now {
+		m.away(t.ID) // found, but its values still can't be read: wait (C2)
 	}
 	return true, nil
 }
 
-// read reads the values with the host's agent; no answer marks the agent
-// lost, so the next round tries every community again.
-func (m *Manager) read(ctx context.Context, t inventory.SNMPTarget) {
+// away counts a search for a lost agent and sets when the next one is due;
+// false when the waits are used up, so "no answer" is to be saved.
+func (m *Manager) away(id int64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.state[id]
+	if st == nil {
+		st = &hostState{fails: maxFails}
+		m.state[id] = st
+	}
+	if st.lost >= len(lostWait) {
+		return false
+	}
+	st.next = m.cfg.Now().Add(lostWait[st.lost])
+	st.lost++
+	return true
+}
+
+func (m *Manager) forget(id int64) {
+	m.mu.Lock()
+	delete(m.state, id)
+	m.mu.Unlock()
+}
+
+// read reads the values with the host's agent and reports whether it
+// answered. maxFails reads in a row without an answer make the agent lost,
+// so it is looked for again; until then a failed read is tried again
+// after snmp.interval (C2). anyHost keeps values of an unmonitored host
+// too (a check on request, L8).
+func (m *Manager) read(ctx context.Context, t inventory.SNMPTarget, anyHost bool) bool {
 	v, err := m.cfg.Client.Values(ctx, t.IP, t.Agent.Community, t.Agent.Version)
 	if ctx.Err() != nil {
-		return
+		return false
 	}
 	if err != nil {
 		m.mu.Lock()
-		m.lost[t.ID] = true
+		st := m.state[t.ID]
+		if st == nil {
+			st = &hostState{}
+			m.state[t.ID] = st
+		}
+		st.fails++
+		st.tried = m.cfg.Now()
 		m.mu.Unlock()
 		m.log.Debug("SNMP values not read", "host", t.ID, "ip", t.IP, "err", err)
-		return
+		return false
 	}
+	m.forget(t.ID)
 	v.At = m.cfg.Now()
-	m.inv.SetSNMPValues(t.ID, t.IP, t.Agent, v)
+	m.inv.SetSNMPValues(t.ID, t.IP, t.Agent, v, anyHost)
+	return true
 }
 
 // work is what Run should do for t now: find the agent, read values, or
@@ -181,19 +242,35 @@ func (m *Manager) work(t inventory.SNMPTarget, now time.Time) func(context.Conte
 	if !t.Monitored || !m.allowed(t.IP) {
 		return nil
 	}
+	var st hostState
 	m.mu.Lock()
-	lost := m.lost[t.ID]
+	if p := m.state[t.ID]; p != nil {
+		st = *p
+	}
 	m.mu.Unlock()
 	a := t.Agent
-	switch {
-	case a.CheckedAt.IsZero(), lost, a.Version == "" && now.Sub(a.CheckedAt) >= m.cfg.Rescan:
-		return func(ctx context.Context) {
-			if _, err := m.find(ctx, t); err != nil && ctx.Err() == nil {
-				m.log.Error("SNMP check failed", "host", t.ID, "err", err)
-			}
+	find := func(ctx context.Context) {
+		if _, err := m.find(ctx, t, false); err != nil && ctx.Err() == nil {
+			m.log.Error("SNMP check failed", "host", t.ID, "err", err)
 		}
-	case a.Version != "" && (t.ReadAt.IsZero() || now.Sub(t.ReadAt) >= m.cfg.Interval):
-		return func(ctx context.Context) { m.read(ctx, t) }
+	}
+	switch {
+	case a.CheckedAt.IsZero(), a.Version == "" && now.Sub(a.CheckedAt) >= m.cfg.Rescan:
+		return find
+	case a.Version == "":
+		return nil
+	case st.fails >= maxFails:
+		if now.Before(st.next) {
+			return nil
+		}
+		return find
+	}
+	last := t.ReadAt
+	if st.tried.After(last) {
+		last = st.tried
+	}
+	if last.IsZero() || now.Sub(last) >= m.cfg.Interval {
+		return func(ctx context.Context) { m.read(ctx, t, false) }
 	}
 	return nil
 }
@@ -208,8 +285,10 @@ func (m *Manager) Run(ctx context.Context) {
 	defer tick.Stop()
 	for {
 		now := m.cfg.Now()
+		all := m.inv.SNMPTargets()
+		m.prune(all)
 	targets:
-		for _, t := range m.inv.SNMPTargets() {
+		for _, t := range all {
 			m.mu.Lock()
 			busy := m.busy[t.ID]
 			m.mu.Unlock()
@@ -242,6 +321,24 @@ func (m *Manager) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
+		}
+	}
+}
+
+// prune forgets the state of hosts that are gone (L3).
+func (m *Manager) prune(all []inventory.SNMPTarget) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.state) == 0 {
+		return
+	}
+	have := make(map[int64]bool, len(all))
+	for _, t := range all {
+		have[t.ID] = true
+	}
+	for id := range m.state {
+		if !have[id] {
+			delete(m.state, id)
 		}
 	}
 }

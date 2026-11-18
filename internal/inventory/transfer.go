@@ -610,6 +610,7 @@ func (p *importPlan) hosts(hs []impHost) {
 				h.Monitored, h.Stale = src.Monitored, src.Monitored
 				if !h.Monitored {
 					h.Watch, p.watchReset[h.ID] = resetWatch(h.Watch, p.s.stamp(), false)
+					h.SNMPValues = nil // as UpdateHost (SPEC-313; crosscheck 2026-11-18-03 L1)
 				}
 			}
 			h.UpdatedAt = p.s.stamp()

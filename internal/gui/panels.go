@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -118,6 +119,9 @@ func (s *statusBar) conn(st client.StreamState) { s.connL.SetText(ConnText(st)) 
 func (s *statusBar) stopped(err error) { s.connL.SetText("stopped: " + err.Error()) }
 
 func (s *statusBar) message(m string) {
+	// One line: the label truncates with an ellipsis, and Fyne panics laying
+	// out a "\r" there (crosscheck 2026-11-18-03 C1).
+	m = strings.Join(strings.FieldsFunc(m, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }), " ")
 	line := time.Now().Format("15:04:05") + " " + m
 	s.log = append(s.log, line)
 	if len(s.log) > statusLogSize {

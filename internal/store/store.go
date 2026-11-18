@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/netip"
 	"net/url"
 	"os"
@@ -183,6 +184,16 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err := migrate(ctx, db, migrations); err != nil {
 		db.Close()
 		return nil, err
+	}
+	// The database holds SNMP communities (SPEC-312): readable only by the
+	// server's user, also a database made by an older version; SQLite
+	// gives its -wal and -shm files the database's mode (crosscheck
+	// 2026-11-18-03 L13). On Windows only the read-only bit exists.
+	for _, f := range []string{abs, abs + "-wal", abs + "-shm"} {
+		if err := os.Chmod(f, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			db.Close()
+			return nil, fmt.Errorf("store: %w", err)
+		}
 	}
 	return &Store{db: db}, nil
 }

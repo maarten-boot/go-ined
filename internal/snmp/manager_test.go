@@ -213,12 +213,15 @@ func TestNoAgentLostAndCheck(t *testing.T) {
 	eventually(t, "found after Rescan", func() bool { h, _ := r.svc.Host(web.ID); return h.SNMP.Version == V1 })
 	eventually(t, "values", func() bool { h, _ := r.svc.Host(web.ID); return h.SNMP.Values != nil && h.SNMP.Values.CPUPct == nil })
 
-	// Lost: the agent's community changes; the next read fails and the
-	// list is tried again.
+	// Lost: the agent's community changes; after three failed reads, one
+	// per interval, the list is tried again (crosscheck 2026-11-18-03 C2).
 	a.mu.Lock()
 	a.community = "public"
 	a.mu.Unlock()
-	r.clk.add(5 * time.Minute)
+	for range 3 {
+		r.clk.add(5 * time.Minute)
+		time.Sleep(300 * time.Millisecond) // a read without an answer takes the timeout
+	}
 	eventually(t, "found again", func() bool {
 		tg, _ := r.svc.SNMPTarget(web.ID)
 		return tg.Agent.Community == "public"
@@ -237,5 +240,146 @@ func TestNoAgentLostAndCheck(t *testing.T) {
 	h, err = r.svc.UpdateHost(ctx, web.ID, apitypes.HostPatch{IP: apitypes.Some("127.0.0.3")})
 	if err != nil || h.SNMP != nil {
 		t.Errorf("after a new IP: %+v %v", h.SNMP, err)
+	}
+}
+
+// scripted is a Client whose agent can stop answering, or answer the
+// system group but not the values.
+type scripted struct {
+	mu           sync.Mutex
+	down, noVals bool
+	sysN, valN   int
+}
+
+func (s *scripted) System(context.Context, netip.Addr, string, string) (inventory.SNMPSystem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sysN++
+	if s.down {
+		return inventory.SNMPSystem{}, errNoAnswer
+	}
+	return inventory.SNMPSystem{Name: "web"}, nil
+}
+
+func (s *scripted) Values(context.Context, netip.Addr, string, string) (apitypes.SNMPValues, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.valN++
+	if s.down || s.noVals {
+		return apitypes.SNMPValues{}, errNoAnswer
+	}
+	return apitypes.SNMPValues{}, nil
+}
+
+func (s *scripted) set(f func(*scripted)) { s.mu.Lock(); f(s); s.mu.Unlock() }
+func (s *scripted) counts() (int, int)    { s.mu.Lock(); defer s.mu.Unlock(); return s.sysN, s.valN }
+
+// settle lets Run do what is due now.
+func settle() { time.Sleep(60 * time.Millisecond) }
+
+// TC-327 (crosscheck 2026-11-18-03 C2, C3): a value read that fails is
+// tried again after the interval, not at every tick; after 3 failed reads
+// the agent is looked for again, then after 1, 5 and 30 min while its
+// values can't be read; an agent that stops answering is kept through a
+// short outage and stored as "no answer" only after those waits.
+func TestFailingAgent(t *testing.T) {
+	c := &scripted{}
+	r := newRig(t, nil, Config{Client: c, Interval: 5 * time.Minute})
+	h := r.host(t, "127.0.0.1", true)
+	r.run(t)
+	eventually(t, "values", func() bool { x, _ := r.svc.Host(h.ID); return x.SNMP != nil && x.SNMP.Values != nil })
+
+	// Values fail: one try per interval.
+	c.set(func(s *scripted) { s.noVals = true })
+	sys0, _ := c.counts()
+	for i := 1; i <= 2; i++ {
+		r.clk.add(5 * time.Minute)
+		settle()
+		if _, v := c.counts(); v != 1+i {
+			t.Fatalf("read %d: %d value reads", i, v)
+		}
+	}
+	// The third failure makes it lost: looked for again at the next tick,
+	// found, its read fails, and the next search waits 1 min.
+	r.clk.add(5 * time.Minute)
+	settle()
+	if s, v := c.counts(); s != sys0+1 || v != 5 {
+		t.Fatalf("after 3 failures: %d searches, %d reads", s-sys0, v)
+	}
+	settle()
+	if s, v := c.counts(); s != sys0+1 || v != 5 {
+		t.Fatalf("again before 1 min: %d searches, %d reads", s-sys0, v)
+	}
+	r.clk.add(time.Minute)
+	settle()
+	if s, _ := c.counts(); s != sys0+2 {
+		t.Fatalf("not searched after 1 min: %d", s-sys0)
+	}
+	// Values come back: all is well again.
+	c.set(func(s *scripted) { s.noVals = false })
+	r.clk.add(5 * time.Minute)
+	settle()
+	if x, _ := r.svc.Host(h.ID); x.SNMP.Version != V2c || !x.SNMP.Values.At.Equal(r.clk.now()) {
+		t.Fatalf("after recovery: %+v", x.SNMP)
+	}
+
+	// A short outage: the agent is kept.
+	c.set(func(s *scripted) { s.down = true })
+	for range 3 {
+		r.clk.add(5 * time.Minute)
+		settle()
+	}
+	settle() // lost: searched, nothing answers
+	c.set(func(s *scripted) { s.down = false })
+	if x, _ := r.svc.Host(h.ID); x.SNMP.Version != V2c {
+		t.Fatalf("agent dropped after a short outage: %+v", x.SNMP)
+	}
+	r.clk.add(5 * time.Minute) // the next search (after 5 min) finds it
+	eventually(t, "back", func() bool {
+		x, _ := r.svc.Host(h.ID)
+		return x.SNMP.Values != nil && x.SNMP.Values.At.Equal(r.clk.now())
+	})
+
+	// A long outage: "no answer" after 1, 5 and 30 min of searching.
+	c.set(func(s *scripted) { s.down = true })
+	for range 3 {
+		r.clk.add(5 * time.Minute)
+		settle()
+	}
+	settle()
+	for _, w := range []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute} {
+		if x, _ := r.svc.Host(h.ID); x.SNMP.Version != V2c {
+			t.Fatalf("dropped before the wait of %v", w)
+		}
+		r.clk.add(w)
+		settle()
+	}
+	if x, _ := r.svc.Host(h.ID); x.SNMP.Version != "" {
+		t.Fatalf("still kept: %+v", x.SNMP)
+	}
+}
+
+// TC-327 (crosscheck 2026-11-18-03 L3, L8): a check on request of an
+// unmonitored host keeps its values; the state of a deleted host is
+// forgotten.
+func TestCheckUnmonitoredAndPrune(t *testing.T) {
+	c := &scripted{noVals: true}
+	r := newRig(t, nil, Config{Client: c})
+	off := r.host(t, "127.0.0.1", false)
+	if h, err := r.m.Check(context.Background(), off.ID); err != nil || h.SNMP.Values != nil {
+		t.Fatalf("failing read: %+v %v", h.SNMP, err)
+	}
+	c.set(func(s *scripted) { s.noVals = false })
+	if h, err := r.m.Check(context.Background(), off.ID); err != nil || h.SNMP.Values == nil {
+		t.Fatalf("unmonitored host on request: %+v %v", h.SNMP, err)
+	}
+	r.m.mu.Lock()
+	r.m.state[999] = &hostState{fails: 1}
+	r.m.mu.Unlock()
+	r.m.prune(r.svc.SNMPTargets())
+	r.m.mu.Lock()
+	defer r.m.mu.Unlock()
+	if len(r.m.state) != 0 {
+		t.Errorf("state kept: %v", r.m.state)
 	}
 }

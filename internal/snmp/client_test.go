@@ -3,6 +3,7 @@ package snmp
 import (
 	"context"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -72,5 +73,58 @@ func TestClientValues(t *testing.T) {
 		if err != nil || got.CPUPct != nil || len(got.Storage) != 0 || got.UptimeS != 1234 {
 			t.Errorf("%s without HOST-RESOURCES: %+v %v", ver, got, err)
 		}
+	}
+}
+
+// TC-324 (crosscheck 2026-11-18-03 C1, C5): an agent's text is one line:
+// CR, LF, tab and ESC become spaces, runs of spaces one, at most 255
+// runes, invalid UTF-8 replaced.
+func TestClientText(t *testing.T) {
+	ctx := context.Background()
+	a := newAgent(t, "public", gosnmp.Version2c)
+	a.system("core-1\r\n", "Cisco IOS Software\r\nTechnical Support: x\r\n\tCopyright \x1b[31m(c)\x00")
+	a.set(oidSysLocation, gosnmp.OctetString, []byte(strings.Repeat("é", 300)+"\xff"))
+	sys, err := udp(a).System(ctx, lo, "public", V2c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sys.Name != "core-1" || sys.Descr != "Cisco IOS Software Technical Support: x Copyright [31m(c)" {
+		t.Errorf("%q %q", sys.Name, sys.Descr)
+	}
+	if r := []rune(sys.Location); len(r) != 255 || strings.ContainsAny(sys.Location, "\r\n\x1b") {
+		t.Errorf("location: %d runes", len(r))
+	}
+}
+
+// TC-325 (crosscheck 2026-11-18-03 C4): a load outside 0–100 is left out;
+// storage rows with a negative size or used value, or a size beyond int64,
+// are left out; % used is at most 100.
+func TestClientValuesOutOfRange(t *testing.T) {
+	a := newAgent(t, "public", gosnmp.Version2c)
+	a.system("x", "y")
+	a.set(oidProcessorLoad+".1", gosnmp.Integer, -5)
+	a.set(oidProcessorLoad+".2", gosnmp.Integer, 255)
+	a.set(oidProcessorLoad+".3", gosnmp.Integer, 40)
+	row := func(idx string, units, size, used any) {
+		a.set(oidStorageEntry+".2."+idx, gosnmp.ObjectIdentifier, oidStorageDisk)
+		a.set(oidStorageEntry+".3."+idx, gosnmp.OctetString, []byte("d"+idx))
+		a.set(oidStorageEntry+".4."+idx, gosnmp.Integer, units)
+		a.set(oidStorageEntry+".5."+idx, gosnmp.Integer, size)
+		a.set(oidStorageEntry+".6."+idx, gosnmp.Integer, used)
+	}
+	row("1", 4096, 1000, -300)          // negative used
+	row("2", 4096, 1000, 3000)          // more used than size: 100 %
+	row("3", 2000000000, 2000000000, 1) // fine: 4e18 fits
+	a.set(oidStorageEntry+".2.4", gosnmp.ObjectIdentifier, oidStorageDisk)
+	a.set(oidStorageEntry+".4.4", gosnmp.Gauge32, uint(4000000000))
+	a.set(oidStorageEntry+".5.4", gosnmp.Gauge32, uint(4000000000)) // 1.6e19: beyond int64
+	a.set(oidStorageEntry+".6.4", gosnmp.Gauge32, uint(1))
+	v, err := udp(a).Values(context.Background(), lo, "public", V2c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.CPUPct == nil || *v.CPUPct != 40 || len(v.Storage) != 2 || v.Storage[0].Name != "d2" || v.Storage[0].UsedPct != 100 ||
+		v.Storage[1].Name != "d3" || v.Storage[1].SizeBytes != 4000000000000000000 {
+		t.Errorf("%+v cpu %v", v.Storage, v.CPUPct)
 	}
 }

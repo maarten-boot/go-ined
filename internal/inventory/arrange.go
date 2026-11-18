@@ -93,11 +93,11 @@ func (s *Service) Arrange(ctx context.Context, view int64, parent *int64, cellW,
 			ch.Placements = append(ch.Placements, sub.Placements...)
 		case view == NetworkView:
 			h := *s.m.Hosts[m.id]
-			h.X, h.Y, h.UpdatedAt = nx, ny, now
+			h.X, h.Y, h.UpdatedAt = roundPos(nx), roundPos(ny), now
 			ch.Hosts = append(ch.Hosts, h)
 		default:
 			pl := *s.m.Placements[view][m.id]
-			pl.X, pl.Y = nx, ny
+			pl.X, pl.Y = roundPos(nx), roundPos(ny)
 			ch.Placements = append(ch.Placements, pl)
 		}
 	}

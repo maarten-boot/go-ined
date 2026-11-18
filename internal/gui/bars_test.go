@@ -59,7 +59,7 @@ func TestDropOut(t *testing.T) {
 	})
 	eventually(t, e.ui, "web out of lan", func() bool {
 		h := must(c.Host(ctx, web.ID))
-		return h.ParentID != nil && *h.ParentID == site.ID && h.X == fx && h.Y == 300+bottom+mapmodel.OutGap-top &&
+		return h.ParentID != nil && *h.ParentID == site.ID && near(h.X, fx) && near(h.Y, 300+bottom+mapmodel.OutGap-top) &&
 			strings.Contains(g.status.Text(), `web moved out of "lan"`)
 	})
 

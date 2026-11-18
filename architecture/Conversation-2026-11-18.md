@@ -63,3 +63,8 @@
    - On `fix/ci-concurrency` (merged), CI's gui job got the concurrency group `ci-gui-${{ matrix.runner }}` without cancel-in-progress: one GUI build per runner type, and a newer push replaces one still waiting. TC-010 checks it; SPEC-007 v0.59.
    - The release's own GUI jobs aren't in the group. Otherwise a push to `main` would replace a release job still waiting.
    - actionlint couldn't be run: the session wasn't allowed to download it. The YAML parses and TC-010 passes.
+15. **User**: rerun started (attempt 4 of the release run).
+   **Claude** watched the run. The macOS job got a runner at once (19:04:10 UTC) and passed, and the run was green; 0.7.0 was published at 19:04:56 UTC.
+   - Checked as for 0.6.0: 11 archives and SHA256SUMS, every checksum OK.
+   - The linux/amd64 binaries print `v0.7.0`, the darwin and linux/arm64 GUI binaries are of the right architecture, `ined-gui.exe` is in the Windows zip, and the release text equals the `[0.7.0]` section.
+   - Plan: "Release 0.7.0" done; TC-011 names the runs.

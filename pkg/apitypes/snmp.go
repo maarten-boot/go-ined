@@ -57,9 +57,12 @@ type SNMPValuesEvent struct {
 }
 
 // Same reports whether two value sets differ only in time and uptime:
-// the same CPU and the same storage, in whole percents.
+// the same CPU and the same storage, in whole percents, and the busiest
+// CPU in the same step of 5 %.
 func (v SNMPValues) Same(o SNMPValues) bool {
-	if !sameInt(v.CPUPct, o.CPUPct) || !sameInt(v.CPUMaxPct, o.CPUMaxPct) || v.CPUs != o.CPUs || len(v.Storage) != len(o.Storage) {
+	// The busiest CPU moves at nearly every read: compared in steps of 5 %
+	// (crosscheck 2026-11-18-04 L2).
+	if !sameInt(v.CPUPct, o.CPUPct) || !sameInt(step5(v.CPUMaxPct), step5(o.CPUMaxPct)) || v.CPUs != o.CPUs || len(v.Storage) != len(o.Storage) {
 		return false
 	}
 	for i := range v.Storage {
@@ -72,4 +75,12 @@ func (v SNMPValues) Same(o SNMPValues) bool {
 
 func sameInt(a, b *int) bool {
 	return (a == nil) == (b == nil) && (a == nil || *a == *b)
+}
+
+func step5(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	s := *p / 5
+	return &s
 }

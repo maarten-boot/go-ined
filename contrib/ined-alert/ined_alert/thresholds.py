@@ -10,8 +10,14 @@ below it again.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 METRICS = ("cpu", "cpu_max", "memory", "disk")
+
+# Values older than this are no values: the server keeps a host's last
+# values while it doesn't answer (crosscheck 2026-11-18-04 C3); three reads
+# at the default interval of 5 min.
+STALE_S = 900.0
 _LABEL = {"cpu": "CPU", "cpu_max": "busiest CPU", "memory": "memory", "disk": "disk"}
 
 
@@ -22,15 +28,41 @@ class Threshold:
     for_s: float = 300.0
 
 
-def readings(h: dict, rules: list[Threshold]) -> dict[tuple[str, str], dict]:
-    """The values of a host that the rules look at, by (metric, item):
-    {"metric", "item", "label", "value", "above", "for_s"}. item is the
-    disk's name, or "" for the others. Empty when the host has no SNMP
-    values (no agent, monitoring off, or not read since the server
-    started). With two rules for one metric, the lower line counts."""
+def _at(s) -> float | None:
+    try:
+        return datetime.fromisoformat(str(s)[:26].rstrip("Z") + "+00:00" if str(s).endswith("Z") else str(s)).timestamp()
+    except ValueError:
+        return None
+
+
+def values_of(h: dict, now: float | None = None) -> dict | None:
+    """A host's SNMP values, or None: no agent, monitoring off, not read
+    since the server started, or older than STALE_S at now."""
     v = ((h.get("snmp") or {}).get("values")) or None
     if not isinstance(v, dict):
+        return None
+    if now is not None:
+        at = _at(v.get("at"))
+        if at is not None and now - at > STALE_S:
+            return None
+    return v
+
+
+def disk_name(name: str) -> str:
+    """ "C:\\ Label:  Serial Number 1234" -> "C:\\" (Windows); others as they are (L6)."""
+    return name.split(" Label:")[0].strip() or name
+
+
+def readings(h: dict, rules: list[Threshold], now: float | None = None) -> dict[tuple[str, str], dict]:
+    """The values of a host that the rules look at, by (metric, item):
+    {"metric", "item", "label", "value", "above", "for_s"}. item is the
+    disk's or memory's name, or "" for the CPU. Empty when the host has no
+    SNMP values (values_of). With two rules for one metric, the lower line
+    counts."""
+    v = values_of(h, now)
+    if v is None:
         return {}
+    mems = [s for s in v.get("storage") or [] if isinstance(s, dict) and s.get("kind") == "memory"]
     out: dict[tuple[str, str], dict] = {}
 
     def put(rule: Threshold, item: str, value, label: str) -> None:
@@ -51,7 +83,13 @@ def readings(h: dict, rules: list[Threshold]) -> dict[tuple[str, str], dict]:
             for s in v.get("storage") or []:
                 if isinstance(s, dict) and s.get("kind") == r.metric:
                     name = str(s.get("name", ""))
-                    put(r, name, s.get("used_pct"), f"{_LABEL[r.metric]} {name}" if r.metric == "disk" else "memory")
+                    if r.metric == "disk":
+                        label = f"disk {disk_name(name)}"
+                    elif len(mems) > 1:  # "Physical memory" and "Virtual memory" (C5)
+                        label = f"memory ({name})"
+                    else:
+                        label = "memory"
+                    put(r, name, s.get("used_pct"), label)
     return out
 
 

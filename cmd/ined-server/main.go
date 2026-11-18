@@ -133,6 +133,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 		return err
 	}
 	defer st.Close()
+	if w := st.Warning(); w != "" {
+		log.Warn(w, "db", cfg.Storage.DBPath)
+	}
 	svc, err := inventory.NewService(ctx, st)
 	if err != nil {
 		return err

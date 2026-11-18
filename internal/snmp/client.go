@@ -261,9 +261,21 @@ func text(v gosnmp.SnmpPDU) string {
 }
 
 func oneLine(s string) string {
+	// Format characters (bidirectional overrides, zero-width ones) go too:
+	// they can make a text read as another (crosscheck 2026-11-18-04 L5).
+	s = strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s)
 	s = strings.Join(strings.FieldsFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }), " ")
 	if r := []rune(s); len(r) > maxText {
-		s = strings.TrimSpace(string(r[:maxText]))
+		n := maxText
+		for n > 0 && unicode.Is(unicode.Mn, r[n]) { // don't cut off a letter's marks
+			n--
+		}
+		s = strings.TrimSpace(string(r[:n]))
 	}
 	return s
 }

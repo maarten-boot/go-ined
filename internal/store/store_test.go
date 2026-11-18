@@ -533,25 +533,43 @@ func TestMigration9(t *testing.T) {
 	}
 }
 
-// TC-326 (store; crosscheck 2026-11-18-03 L13): the database is readable
-// only by its owner, also one made earlier with a wider mode.
+// TC-326 (store; crosscheck 2026-11-18-03 L13, 2026-11-18-04 L4): a new
+// database is readable only by its owner; an existing one loses only the
+// bits for others (a group set on purpose stays); nothing to change gives
+// no warning.
 func TestDatabaseMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("no Unix modes")
 	}
-	p := filepath.Join(t.TempDir(), "ined.db")
-	if err := os.WriteFile(p, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	s, err := Open(ctx, p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	for _, f := range []string{p, p + "-wal"} {
-		st, err := os.Stat(f)
-		if err == nil && st.Mode().Perm() != 0o600 {
-			t.Errorf("%s: mode %v", filepath.Base(f), st.Mode().Perm())
+	for _, c := range []struct {
+		name   string
+		before os.FileMode // 0: no file yet
+		want   os.FileMode
+	}{
+		{"new", 0, 0o600},
+		{"wide", 0o644, 0o640},
+		{"group", 0o640, 0o640},
+		{"private", 0o600, 0o600},
+	} {
+		p := filepath.Join(t.TempDir(), "ined.db")
+		if c.before != 0 {
+			if err := os.WriteFile(p, nil, c.before); err != nil {
+				t.Fatal(err)
+			}
+			os.Chmod(p, c.before) // the umask may have taken bits
 		}
+		s, err := Open(ctx, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range []string{p, p + "-wal"} {
+			if st, err := os.Stat(f); err == nil && st.Mode().Perm() != c.want {
+				t.Errorf("%s: %s mode %v, want %v", c.name, filepath.Base(f), st.Mode().Perm(), c.want)
+			}
+		}
+		if s.Warning() != "" {
+			t.Errorf("%s: warning %q", c.name, s.Warning())
+		}
+		s.Close()
 	}
 }

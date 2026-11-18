@@ -103,7 +103,8 @@ def subject(items: list[tuple[E.Notice, list[str]]]) -> str:
                 return f"[ined] STILL HIGH {_metric(n)} on {_host(n)} for {span(n.at - n.since)}"
             case E.SUMMARY:
                 s = f"[ined] ined-alert started: {_count(len(n.hosts), 'host')} down"
-                return s + (f", {_count(len(n.services), 'service')} down" if n.services else "")
+                s += f", {_count(len(n.services), 'service')} down" if n.services else ""
+                return s + (f", {_count(len(n.values), 'value')} high" if n.values else "")
     kinds = [n.kind for n, _ in items]
     svcs = any(n.service for n, _ in items)
     if all(k == E.DOWN for k in kinds):
@@ -191,6 +192,12 @@ def body(items: list[tuple[E.Notice, list[str]]], server_url: str, now: float) -
                         name = f"{h['name']} ({h['ip']})" if h["name"] != h["ip"] else h["ip"]
                         out.append(f"  {_svc_long(h['service'])} on {name} since {when(h['since'], now)}"
                                    + (f"  [{', '.join(h['groups'])}]" if h["groups"] else ""))
+                if n.values:
+                    out.append("These values are high:")
+                    for h in n.values:
+                        name = f"{h['name']} ({h['ip']})" if h["name"] != h["ip"] else h["ip"]
+                        out.append(f"  {h['metric']['label']} {_pct(h['metric']['value'])} (above {_pct(h['metric']['above'])}) on {name}"
+                                   f" since {when(h['since'], now)}" + (f"  [{', '.join(h['groups'])}]" if h["groups"] else ""))
         out.append("")
     out.append(f"Server: {server_url}")
     out.append("-- ")

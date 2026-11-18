@@ -22,7 +22,7 @@ from typing import Callable
 from .config import Config
 from .logs import kv
 from .routes import Routes
-from .thresholds import key_parse, key_str, readings
+from .thresholds import key_parse, key_str, readings, values_of
 
 # Notice kinds.
 DOWN, UP, STILL_DOWN = "down", "up", "still_down"
@@ -43,6 +43,7 @@ class Notice:
     hosts: list[dict] = field(default_factory=list)  # summary: the hosts down
     service: dict | None = None  # {"name", "port", "last_ok"} for a service alert
     services: list[dict] = field(default_factory=list)  # summary: the services down
+    values: list[dict] = field(default_factory=list)  # summary: the values high (SPEC-958)
     metric: dict | None = None  # {"metric", "item", "label", "value", "above"} for a threshold alert
 
 
@@ -323,20 +324,35 @@ class Engine:
         self.log.info(kv(event="closed", host=a["host"]["name"], ip=a["host"]["ip"], metric=a["metric"]["label"],
                          reason=reason, note="no OK mail"))
 
+    def _why_gone(self, h: dict, metric: str, now: float) -> str:
+        """Why a threshold alert's value isn't there any more (L7)."""
+        if metric not in {r.metric for r in self.cfg.thresholds}:
+            return "no rule"
+        if not h.get("monitored", True) or values_of(h) is None:
+            return "no values"
+        if values_of(h, now) is None:
+            return "values too old"
+        return "not reported any more"
+
     def _apply_thresholds(self, h: dict, now: float) -> list[Notice]:
         hid, b = h["id"], brief(h)
-        rd = readings(h, self.cfg.thresholds) if h.get("monitored", True) else {}
+        rd = readings(h, self.cfg.thresholds, now) if h.get("monitored", True) else {}
         for k in [k for k in self.th_pending if k[0] == hid and (k[1], k[2]) not in rd]:
             del self.th_pending[k]
-            self.log.info(kv(event="cancelled", host=b["name"], ip=b["ip"], metric=k[1], item=k[2], reason="no values"))
+            self.log.info(kv(event="cancelled", host=b["name"], ip=b["ip"], metric=k[1], item=k[2],
+                             reason=self._why_gone(h, k[1], now)))
         for k in [k for k in self.th_open if k[0] == hid and (k[1], k[2]) not in rd]:
-            self._close_th(k, "no values")
+            self._close_th(k, self._why_gone(h, k[1], now))
         out: list[Notice] = []
         for (metric, item), r in rd.items():
             k = (hid, metric, item)
             if r["value"] > r["above"]:
                 if k in self.th_open:
-                    self.th_open[k]["metric"]["value"] = r["value"]
+                    # The current rule's line and label (crosscheck 2026-11-18-04 C4).
+                    m = self.th_open[k]["metric"]
+                    if (m["above"], m["label"]) != (r["above"], r["label"]):
+                        self.dirty = True
+                    m.update(value=r["value"], above=r["above"], label=r["label"])
                 elif k not in self.th_pending:
                     self.th_pending[k] = {"since": now, "for_s": r["for_s"]}
                     self.log.info(kv(event="high", host=b["name"], ip=b["ip"], metric=r["label"], value=r["value"],
@@ -348,7 +364,7 @@ class Engine:
             if k in self.th_open:
                 a = self.th_open.pop(k)
                 self.dirty = True
-                m = dict(a["metric"], value=r["value"])
+                m = dict(a["metric"], value=r["value"], above=r["above"], label=r["label"])
                 self.log.info(kv(event="normal", host=b["name"], ip=b["ip"], metric=r["label"], value=r["value"],
                                  high_for=f"{int(now - a['since'])}s"))
                 out.append(Notice(NORMAL, now, to=a["to"], host=b, since=a["since"], metric=m,
@@ -360,8 +376,8 @@ class Engine:
         fetched: dict[int, dict | None] = {}  # one read per host per tick
         for k, p in list(self.th_pending.items()):
             hid, metric, item = k
-            if now - p["since"] < p["for_s"]:
-                continue
+            if now - p["since"] < p["for_s"] or self._host_down(hid):
+                continue  # a host down says enough; held until it is back (C3)
             if hid not in fetched:
                 try:  # confirm with the server: an old value must not cause a mail
                     fetched[hid] = self.fetch(hid)
@@ -373,7 +389,7 @@ class Engine:
                 del self.th_pending[k]
                 continue
             self.hosts[hid] = h
-            r = (readings(h, self.cfg.thresholds) if h.get("monitored", True) else {}).get((metric, item))
+            r = (readings(h, self.cfg.thresholds, now) if h.get("monitored", True) else {}).get((metric, item))
             del self.th_pending[k]
             if r is None or r["value"] <= r["above"]:
                 self.log.info(kv(event="cancelled", host=h.get("display_name"), metric=metric, item=item,
@@ -536,6 +552,11 @@ class Engine:
             out.append(Notice(DOWN, now, to=to, host=b, since=since, groups=self.routes.groups_of(hid)))
         out += self._tick_services(now)
         out += self._tick_thresholds(now)
+        # Open threshold alerts whose values grew old end without mail (C3).
+        for k in [k for k in self.th_open if k[0] in self.hosts]:
+            h = self.hosts[k[0]]
+            if (k[1], k[2]) not in (readings(h, self.cfg.thresholds, now) if h.get("monitored", True) else {}):
+                self._close_th(k, self._why_gone(h, k[1], now))
         if self.cfg.repeat > 0:
             for hid, a in self.open.items():
                 if now - a["sent"] >= self.cfg.repeat:
@@ -550,7 +571,7 @@ class Engine:
                     out.append(Notice(STILL_DOWN, now, to=a["to"], host=a["host"], service=a["service"],
                                       since=a["since"], groups=self.routes.groups_of(hid)))
             for (hid, _, _), a in self.th_open.items():
-                if now - a["sent"] >= self.cfg.repeat:
+                if now - a["sent"] >= self.cfg.repeat and not self._host_down(hid):
                     a["sent"] = now
                     self.dirty = True
                     out.append(Notice(STILL_HIGH, now, to=a["to"], host=a["host"], metric=dict(a["metric"]),
@@ -680,4 +701,7 @@ class Engine:
                     svcs.append(brief(h) | {"service": svc_brief(w), "since": self._since(w, now),
                                             "groups": self.routes.groups_of(h["id"])})
         svcs.sort(key=lambda d: (d["name"], d["service"]["name"]))
-        return Notice(SUMMARY, now, to={a: [] for a in self.cfg.admins}, hosts=down, services=svcs)
+        vals = [dict(a["host"], metric=dict(a["metric"]), since=a["since"], groups=self.routes.groups_of(k[0]))
+                for k, a in self.th_open.items()]  # L8
+        vals.sort(key=lambda d: (d["name"], d["metric"]["label"]))
+        return Notice(SUMMARY, now, to={a: [] for a in self.cfg.admins}, hosts=down, services=svcs, values=vals)

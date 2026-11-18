@@ -23,6 +23,8 @@ down_after = 2               # Failed rounds in a row before a host is marked do
 max_prefix  = 16             # Largest range allowed (smallest prefix length): /16.
 rate        = 200            # Probes per second.
 concurrency = 64             # Probes in flight at the same time.
+scheduled   = true           # Scan network groups again on their own schedule ("Rescan", SPEC-206);
+                             # false runs none of them (the groups keep their setting).
 
 [dns]                        # SPEC-401
 enabled     = true           # false = no reverse lookups; PTR names stay as stored.

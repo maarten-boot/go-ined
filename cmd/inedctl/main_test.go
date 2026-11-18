@@ -125,7 +125,14 @@ func TestCommands(t *testing.T) {
 	contains(t, ok(t, u, "group", "labels", "2", "both"), "Labels:      name and IP")
 	contains(t, ok(t, u, "group", "labels", "2", "inherit"), "Labels:      inherit", "Bar colour:  none")
 	contains(t, ok(t, u, "group", "color", "2", "#f58231"), "Bar colour:  #F58231")
-	contains(t, ok(t, u, "group", "color", "2", "none"), "Bar colour:  none")
+	contains(t, ok(t, u, "group", "color", "2", "none"), "Bar colour:  none", "Rescan:      off")
+	// TC-219: rescan on a network group; a plain group gets 400 (exit 1).
+	contains(t, ok(t, u, "group", "rescan", "1", "24h"), "Rescan:      every 24h, not scanned yet")
+	contains(t, ok(t, u, "group", "rescan", "1", "90m"), "Rescan:      every 1h30m, not scanned yet")
+	contains(t, ok(t, u, "group", "rescan", "1", "off"), "Rescan:      off")
+	if r := ctl(t, u, "group", "rescan", "2", "1h"); r.code != 1 || !strings.Contains(r.errOut, "network group") {
+		t.Fatalf("rescan on a plain group: %+v", r)
+	}
 	contains(t, ok(t, u, "group", "add", "--name", "red", "--color", "#e6194b"), "Bar colour:  #E6194B")
 	contains(t, ok(t, u, "group", "add", "--name", "ips", "--labels", "ip"), "Name:        ips", "Labels:      ip")
 	contains(t, ok(t, u, "group", "edit", "2", "--name", "lab2"), "Name:        lab2")
@@ -218,6 +225,8 @@ func TestExitCodes(t *testing.T) {
 		{2, []string{u, "group", "labels", "1"}},
 		{2, []string{u, "group", "labels", "1", "dns"}},
 		{2, []string{u, "group", "color", "1"}},
+		{2, []string{u, "group", "rescan", "1", "daily"}},
+		{2, []string{u, "group", "rescan", "1", "5m"}},
 		{2, []string{u, "group", "color", "1", "red"}},
 		{2, []string{u, "group", "add", "--name", "x", "--color", "#12345"}},
 		{2, []string{u, "group", "rm", "1", "--reparent", "--cascade"}},
@@ -297,6 +306,7 @@ func TestDiscoverWait(t *testing.T) {
 		t.Fatalf("--wait output:\n%s", out)
 	}
 	contains(t, ok(t, u, "discover", "status", strings.Fields(lines[0])[1]), "done")
+	contains(t, ok(t, u, "discover", "list"), strings.Fields(lines[0])[1]+" 10.1.0.0/28 done") // TC-217
 	if out := ok(t, u, "host", "list"); strings.Count(out, "\n") != 8 {
 		t.Fatalf("hosts:\n%s", out)
 	}

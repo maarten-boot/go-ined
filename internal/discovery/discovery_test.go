@@ -270,8 +270,8 @@ func TestProgressCancelFail(t *testing.T) {
 
 type failingInv struct{ *inventory.Service }
 
-func (failingInv) AddDiscovered(context.Context, int64, []inventory.Found) (int, error) {
-	return 0, errors.New("disk full")
+func (failingInv) AddDiscovered(context.Context, int64, []inventory.Found) ([]netip.Addr, error) {
+	return nil, errors.New("disk full")
 }
 
 // TC-205, TC-209: by group id; by CIDR reusing a group or creating one

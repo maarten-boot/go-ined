@@ -127,11 +127,23 @@ func clock(t time.Time) string {
 	return t.Format(time.DateTime)
 }
 
+// rescanText: "off", or the interval with the last scan (SPEC-206).
+func rescanText(g apitypes.Group) string {
+	switch {
+	case g.Rescan == "":
+		return "off"
+	case g.RescanLast == nil:
+		return "every " + g.Rescan + ", not scanned yet"
+	default:
+		return fmt.Sprintf("every %s, last %s, %d new", g.Rescan, clock(*g.RescanLast), g.RescanFound)
+	}
+}
+
 func (a *app) groupDetails(g apitypes.Group) {
 	a.details([][2]string{
 		{"ID", id(g.ID)}, {"Name", g.Name}, {"CIDR", dash(g.CIDR)}, {"Description", g.Description},
 		{"View", id(g.ViewID)}, {"Parent", parent(g.ParentID)}, {"Status", g.Status}, {"Collapsed", yesNo(g.Collapsed)},
-		{"Labels", labelsText(g.Labels)}, {"Bar colour", colorText(g.Color)}, {"Position", pos(g.X, g.Y)},
+		{"Labels", labelsText(g.Labels)}, {"Bar colour", colorText(g.Color)}, {"Rescan", rescanText(g)}, {"Position", pos(g.X, g.Y)},
 		{"Created", g.CreatedAt.Local().Format(time.DateTime)}, {"Updated", g.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(g.Note)},
 	}, false)

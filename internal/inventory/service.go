@@ -72,6 +72,16 @@ type Service struct {
 	now       func() time.Time
 	warnings  []string
 	notify    Notifier
+	maxScan   int // discovery.max_prefix: the largest range with a rescan interval (SPEC-206)
+}
+
+// SetScanLimit sets discovery.max_prefix, the largest range a rescan
+// interval may be set on (SPEC-206; default 16). Call it before the
+// Service is shared.
+func (s *Service) SetScanLimit(maxPrefix int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.maxScan = maxPrefix
 }
 
 // SetNotifier sets where change events go. nil turns events off. Call it
@@ -107,7 +117,7 @@ func NewService(ctx context.Context, repo Repository) (*Service, error) {
 		return nil, fmt.Errorf("inventory: load: %w", err)
 	}
 	s := &Service{repo: repo, m: NewModel(), nextHost: max(1, st.NextHostID), nextGroup: max(1, st.NextGroupID),
-		nextView: max(NetworkView+1, st.NextViewID), now: time.Now, notify: nopNotifier{}}
+		nextView: max(NetworkView+1, st.NextViewID), now: time.Now, notify: nopNotifier{}, maxScan: 16}
 	for i := range st.Views {
 		v := st.Views[i]
 		s.m.Views[v.ID] = &v
@@ -322,6 +332,7 @@ func (s *Service) MapOf(view int64) (apitypes.Map, error) {
 			Type: apitypes.TypeGroup, ID: g.ID, ParentID: parentPtr(g.ParentID),
 			X: g.X, Y: g.Y, Name: g.Name, Status: agg[id].Status(),
 			HasNote: g.Note != "", Collapsed: g.Collapsed, Labels: g.Labels, Color: g.Color,
+			Rescan: apitypes.FormatRescan(g.Rescan),
 		}
 		if g.IsNetwork() {
 			it.CIDR = g.CIDR.String()
@@ -641,6 +652,22 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	}
 	if p.Color.Set {
 		g.Color = p.Color.Value
+	}
+	if p.Rescan.Set {
+		d, err := apitypes.ParseRescan(p.Rescan.Value)
+		if err != nil {
+			return apitypes.Group{}, invalidf("%v", err)
+		}
+		if d > 0 && cur.Rescan == 0 {
+			g.RescanLast = time.Time{} // newly on: due at once
+		}
+		g.Rescan = d
+	}
+	if g.CIDR != cur.CIDR {
+		g.RescanLast, g.RescanFound = time.Time{}, 0 // another range: not scanned yet
+	}
+	if err := s.checkRescan(&g); err != nil {
+		return apitypes.Group{}, err
 	}
 	if p.ParentID.Set {
 		parent := Root
@@ -1047,11 +1074,32 @@ func (s *Service) hostViews(id int64) []int64 {
 	return out
 }
 
+// checkRescan: a rescan interval needs an IPv4 network group no larger
+// than discovery.max_prefix (SPEC-206). Caller holds the lock.
+func (s *Service) checkRescan(g *Group) error {
+	switch {
+	case g.Rescan == 0:
+		return nil
+	case !g.IsNetwork():
+		return invalidf("rescan needs a network group (with a CIDR); turn rescan off first")
+	case !g.CIDR.Addr().Is4():
+		return invalidf("rescan needs an IPv4 network; discovery is IPv4 only")
+	case g.CIDR.Bits() < s.maxScan:
+		return invalidf("range %s is too large to rescan: the largest allowed is /%d (discovery.max_prefix)", g.CIDR, s.maxScan)
+	}
+	return nil
+}
+
 func groupView(g *Group, c Counts) apitypes.Group {
 	v := apitypes.Group{
 		ID: g.ID, Name: g.Name, Description: g.Description, Note: g.Note,
 		ViewID: g.ViewID, ParentID: parentPtr(g.ParentID), Collapsed: g.Collapsed, Labels: g.Labels, Color: g.Color, Status: c.Status(),
+		Rescan: apitypes.FormatRescan(g.Rescan), RescanFound: g.RescanFound,
 		X: g.X, Y: g.Y, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt,
+	}
+	if !g.RescanLast.IsZero() {
+		t := g.RescanLast
+		v.RescanLast = &t
 	}
 	if g.IsNetwork() {
 		v.CIDR = g.CIDR.String()

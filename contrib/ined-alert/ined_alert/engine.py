@@ -26,6 +26,7 @@ from .routes import Routes
 # Notice kinds.
 DOWN, UP, STILL_DOWN = "down", "up", "still_down"
 SERVER_DOWN, SERVER_UP, DEGRADED, PINGS_AGAIN, SUMMARY = "server_down", "server_up", "degraded", "pings_again", "summary"
+NEW = "new"  # a host was added (SPEC-957)
 
 
 @dataclass
@@ -150,6 +151,8 @@ class Engine:
         self.svc_pending: dict[tuple[int, str], float] = {}  # the same for services
         self.svc_held: set[tuple[int, str]] = set()  # pending services waiting for their host (logged once)
         self.hosts: dict[int, dict] = {}
+        # New hosts to mail (SPEC-957), once the routes know them: id -> added at.
+        self.new: dict[int, float] = {}
         self.unreachable_since = 0.0
         self.unreachable_reason = ""
         self.degraded_since = 0.0
@@ -195,8 +198,29 @@ class Engine:
         self.hosts[h["id"]] = h
         return self._apply(h, now, fresh=False)
 
+    def created(self, h: dict, now: float) -> list[Notice]:
+        """A host.created event: alerted as any host, and with
+        [new_hosts] enabled, mailed as new once the routes are loaded
+        again (new_hosts)."""
+        if self.cfg.new_hosts:
+            self.new[h["id"]] = now
+            self.log.info(kv(event="new_host", host=brief(h)["name"], ip=h.get("ip", "")))
+        return self.update(h, now)
+
+    def new_hosts(self, now: float) -> list[Notice]:
+        """The notices for the new hosts; call it when the routes have been
+        loaded after their host.created. A host deleted meanwhile is left out."""
+        out = []
+        for hid, at in sorted(self.new.items()):
+            h = self.hosts.get(hid)
+            if h is not None:
+                out.append(Notice(NEW, at, to=self.routes.recipients(hid), host=brief(h), groups=self.routes.groups_of(hid)))
+        self.new.clear()
+        return out
+
     def deleted(self, hid: int, now: float) -> list[Notice]:
         self.hosts.pop(hid, None)
+        self.new.pop(hid, None)
         if self.pending.pop(hid, None) is not None:
             self.log.info(kv(event="cancelled", host_id=hid, reason="host deleted"))
         if hid in self.open:

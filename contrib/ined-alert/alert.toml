@@ -20,6 +20,10 @@ startup_summary   = false        # true: at start, mail the admins a list of the
 state_file        = ""           # "" = $XDG_STATE_HOME/ined-alert/state.json (~/.local/state/...).
 server_down_after = "5m"         # Mail the admins when the server can't be reached, or can't ping, this long.
 
+[new_hosts]
+enabled = false                  # true: mail every host added (found by a scan, or added by hand) to the
+                                 # admins and the routes of its groups, as "[ined] NEW ..." (SPEC-957).
+
 # A route sends the alerts of a group, and of everything below it, to a list.
 # The path starts with the view: "Networks/dc/lan", "Payroll/app servers";
 # a view alone ("Payroll") covers the whole view. A host in several routed

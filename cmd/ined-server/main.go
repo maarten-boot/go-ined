@@ -143,6 +143,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	runID := newRunID()
 	bus := events.New(runID, cfg.Events.Buffer)
 	svc.SetNotifier(bus)
+	svc.SetScanLimit(cfg.Discovery.MaxPrefix)
 
 	// ICMP (SPEC-304): without a working mode the server keeps running,
 	// hosts stay unknown and /health reports the error. The prober is also
@@ -252,7 +253,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	disc := discovery.New(svc, prober, "", bus, runID, discovery.Config{
 		MaxPrefix: cfg.Discovery.MaxPrefix, Rate: cfg.Discovery.Rate,
 		Concurrency: cfg.Discovery.Concurrency, Timeout: cfg.Monitor.Timeout,
-		Ready: discoveryReady,
+		Ready: discoveryReady, Scheduled: cfg.Discovery.Scheduled,
 	}, log)
 
 	// stopBackground follows the shutdown order of SPEC-804 up to the HTTP

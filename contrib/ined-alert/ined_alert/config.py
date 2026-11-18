@@ -31,6 +31,7 @@ class Config:
     batch: float = 30.0
     repeat: float = 0.0  # 0 = no repeat
     startup_summary: bool = False
+    new_hosts: bool = False  # [new_hosts] enabled: mail every new host (SPEC-957)
     state_file: str = ""
     server_down_after: float = 300.0
     routes: list[Route] = field(default_factory=list)
@@ -74,6 +75,7 @@ _SECTIONS = {
     "server": {"url", "token"},
     "mail": {"host", "port", "from"},
     "alert": {"admins", "down_after", "batch", "repeat", "startup_summary", "state_file", "server_down_after"},
+    "new_hosts": {"enabled"},
     "syslog": {"address", "facility"},
     "log": {"level"},
 }
@@ -137,6 +139,7 @@ def load(path: str | os.PathLike, env: dict[str, str] | None = None) -> Config:
         setattr(c, key, parse_duration(get("alert", key, str, default), "alert." + key))
     c.startup_summary = get("alert", "startup_summary", bool, False)
     c.state_file = get("alert", "state_file", str, c.state_file) or default_state_file()
+    c.new_hosts = get("new_hosts", "enabled", bool, False)
     routes = doc.get("route", [])
     if not isinstance(routes, list):
         raise ConfigError("route: use [[route]] tables")

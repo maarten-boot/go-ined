@@ -57,6 +57,7 @@ type Options struct {
 // Discovery is what the API needs from discovery.Manager.
 type Discovery interface {
 	Start(ctx context.Context, in apitypes.DiscoveryCreate) (apitypes.Discovery, error)
+	List() []apitypes.Discovery
 	Get(id string) (apitypes.Discovery, error)
 	Cancel(id string) (apitypes.Discovery, error)
 }
@@ -134,7 +135,7 @@ func newServer(svc *inventory.Service, opts Options) (*server, http.Handler) {
 		route("/events", map[string]http.HandlerFunc{"GET": s.events})
 	}
 	if opts.Discovery != nil {
-		route("/discovery", map[string]http.HandlerFunc{"POST": s.startDiscovery})
+		route("/discovery", map[string]http.HandlerFunc{"GET": s.listDiscovery, "POST": s.startDiscovery})
 		route("/discovery/{id}", map[string]http.HandlerFunc{"GET": s.getDiscovery, "DELETE": s.cancelDiscovery})
 	}
 	route("/hosts", map[string]http.HandlerFunc{"GET": s.listHosts, "POST": s.createHost})
@@ -392,6 +393,11 @@ func (s *server) startDiscovery(w http.ResponseWriter, r *http.Request) {
 	}
 	d, err := s.opts.Discovery.Start(r.Context(), in)
 	s.respond(w, http.StatusAccepted, d, err)
+}
+
+// listDiscovery lists the jobs, scheduled ones too (SPEC-205, 206).
+func (s *server) listDiscovery(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.opts.Discovery.List())
 }
 
 func (s *server) getDiscovery(w http.ResponseWriter, r *http.Request) {

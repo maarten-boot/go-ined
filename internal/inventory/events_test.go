@@ -341,14 +341,14 @@ func TestAddDiscovered(t *testing.T) {
 	r.take()
 	applies := repo.applies
 	at := time.Unix(300, 0)
-	n, err := s.AddDiscovered(context.Background(), wide.ID, []Found{
+	ips, err := s.AddDiscovered(context.Background(), wide.ID, []Found{
 		{IP: netip.MustParseAddr("10.0.0.5"), RTTms: 1, At: at},
 		{IP: netip.MustParseAddr("10.0.1.5"), RTTms: 2, LossPct: 50, At: at},
 		{IP: netip.MustParseAddr("10.0.2.5"), RTTms: 3, At: at}, // only inside wide's subtree counts
 		{IP: netip.MustParseAddr("10.0.0.9"), RTTms: 4, At: at}, // exists: skipped, not moved
 	})
-	if err != nil || n != 3 || repo.applies != applies+1 {
-		t.Fatalf("n=%d err=%v applies=%d", n, err, repo.applies-applies)
+	if err != nil || fmt.Sprint(ips) != "[10.0.0.5 10.0.1.5 10.0.2.5]" || repo.applies != applies+1 {
+		t.Fatalf("added %v err=%v applies=%d", ips, err, repo.applies-applies)
 	}
 	want := map[string]int64{"10.0.0.5": wide.ID, "10.0.1.5": sub.ID, "10.0.2.5": wide.ID, "10.0.0.9": sub.ID}
 	pos := map[[2]float64]bool{}

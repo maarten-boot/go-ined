@@ -154,6 +154,27 @@
             }
           }
         }
+      },
+      "get": {
+        "summary": "List the discovery jobs (SPEC-205): running ones and the last 100 finished, oldest first",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Discovery"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/discovery/{id}": {
@@ -1253,6 +1274,22 @@
             "pattern": "^(#[0-9A-Fa-f]{6})?$",
             "description": "The colour of the group's top bar in the GUI (SPEC-727): \"#RRGGBB\" (stored in upper case) or \"\" (none: the usual frame colour)"
           },
+          "rescan": {
+            "type": "string",
+            "description": "Scan the network again every this long (SPEC-206): a Go duration such as \"6h\" or \"24h\", 15m to 8760h; \"\" = off. Only on IPv4 network groups no larger than discovery.max_prefix."
+          },
+          "rescan_last": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the last finished scan covering the whole range ended, scheduled or by hand (SPEC-206); null = not yet"
+          },
+          "rescan_found": {
+            "type": "integer",
+            "description": "The new hosts that scan added in the range (SPEC-206)"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -1290,6 +1327,9 @@
           "collapsed",
           "labels",
           "color",
+          "rescan",
+          "rescan_last",
+          "rescan_found",
           "status",
           "x",
           "y",
@@ -1375,6 +1415,10 @@
             "type": "string",
             "pattern": "^(#[0-9A-Fa-f]{6})?$",
             "description": "groups only (SPEC-727): the top bar's colour, \"#RRGGBB\"; left out when none"
+          },
+          "rescan": {
+            "type": "string",
+            "description": "Network groups only: the rescan interval (SPEC-206), as in Group; left out when off"
           },
           "cidr": {
             "type": "string",
@@ -1602,6 +1646,10 @@
             "type": "string",
             "pattern": "^(#[0-9A-Fa-f]{6})?$",
             "description": "The colour of the group's top bar in the GUI (SPEC-727): \"#rrggbb\" (stored in upper case) or \"\" (none)"
+          },
+          "rescan": {
+            "type": "string",
+            "description": "Scan the network again every this long (SPEC-206): \"6h\", \"24h\", … (15m to 8760h); \"\" or \"off\" = off. 400 on a group without an IPv4 CIDR or one larger than discovery.max_prefix. Turning it on makes a scan due at once; a new CIDR clears rescan_last."
           },
           "x": {
             "type": "number",
@@ -1838,6 +1886,10 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "scheduled": {
+            "type": "boolean",
+            "description": "Started by the schedule of its group (SPEC-206); a manual job over an overlapping range cancels it (SPEC-207)"
           }
         },
         "additionalProperties": false,
@@ -1852,7 +1904,8 @@
           "added",
           "errors",
           "started_at",
-          "finished_at"
+          "finished_at",
+          "scheduled"
         ]
       },
       "Health": {

@@ -65,6 +65,9 @@ type DiscoverySection struct {
 	MaxPrefix   int `toml:"max_prefix"`
 	Rate        int `toml:"rate"`
 	Concurrency int `toml:"concurrency"`
+	// Scheduled runs the scans on a schedule of network groups
+	// (SPEC-206, 207); false keeps the groups' settings but runs none.
+	Scheduled bool `toml:"scheduled"`
 }
 
 // DNSSection holds the reverse-DNS settings (SPEC-401).
@@ -154,7 +157,7 @@ func DefaultServer() Server {
 	return Server{
 		Server:    ServerSection{Listen: "127.0.0.1:8470"},
 		Monitor:   MonitorSection{Enabled: true, Interval: 60 * time.Second, Count: 3, Timeout: time.Second, DownAfter: 2},
-		Discovery: DiscoverySection{MaxPrefix: 16, Rate: 200, Concurrency: 64},
+		Discovery: DiscoverySection{MaxPrefix: 16, Rate: 200, Concurrency: 64, Scheduled: true},
 		DNS:       DNSSection{Enabled: true, Refresh: time.Hour, Concurrency: 20},
 		Services: ServicesSection{Enabled: true, Refresh: 6 * time.Hour, Timeout: time.Second,
 			WatchInterval: 5 * time.Minute, WatchDownAfter: 2, WatchConcurrency: 50},

@@ -126,6 +126,9 @@ func (s *Server) boot() {
 	s.mu.Unlock()
 	bus := events.New(run, 1000)
 	svc.SetNotifier(bus)
+	if s.opts.Discovery.MaxPrefix > 0 {
+		svc.SetScanLimit(s.opts.Discovery.MaxPrefix)
+	}
 	disc := discovery.New(svc, prober{s.opts}, "", bus, run, s.opts.Discovery, nil)
 	scfg := s.opts.Services
 	if scfg.Dial == nil {

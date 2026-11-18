@@ -82,6 +82,8 @@ def subject(items: list[tuple[E.Notice, list[str]]]) -> str:
                 return "[ined] ined-server has a problem: " + n.text
             case E.PINGS_AGAIN:
                 return "[ined] ined-server is OK again"
+            case E.NEW:
+                return f"[ined] NEW {_host(n)}" + (f" in {n.groups[0]}" if n.groups else "")
             case E.SUMMARY:
                 s = f"[ined] ined-alert started: {_count(len(n.hosts), 'host')} down"
                 return s + (f", {_count(len(n.services), 'service')} down" if n.services else "")
@@ -106,9 +108,11 @@ def subject(items: list[tuple[E.Notice, list[str]]]) -> str:
         for one, is_svc in (("host", False), ("service", True)):
             if c := sum(1 for n, _ in items if n.kind == k and bool(n.service) == is_svc):
                 parts.append(f"{_count(c, one)} {word}")
+    if c := kinds.count(E.NEW):
+        parts.append(_count(c, "new host"))
     if kinds.count(E.SUMMARY):
         parts.append("ined-alert started")
-    if other := len(kinds) - sum(kinds.count(k) for k in _WORD) - kinds.count(E.SUMMARY):
+    if other := len(kinds) - sum(kinds.count(k) for k in _WORD) - kinds.count(E.SUMMARY) - kinds.count(E.NEW):
         parts.append(f"{other} server message{'s' if other > 1 else ''}")
     return "[ined] " + ", ".join(parts)
 
@@ -128,6 +132,10 @@ def body(items: list[tuple[E.Notice, list[str]]], server_url: str, now: float) -
                     out.append(f"{'':<10} last seen: {when(n.host['last_seen'], now)}")
             case E.UP:
                 out.append(f"{'UP':<10} {_what_long(n)} at {when(n.at, now)}, down for {span(n.at - n.since)}")
+                if n.groups:
+                    out.append(f"{'':<10} groups: {', '.join(n.groups)}")
+            case E.NEW:
+                out.append(f"{'NEW':<10} {_host(n)} added at {when(n.at, now)}")
                 if n.groups:
                     out.append(f"{'':<10} groups: {', '.join(n.groups)}")
             case E.SERVER_DOWN:

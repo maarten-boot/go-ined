@@ -1,6 +1,6 @@
 # Design: explaining the service marker (details pane and hover)
 
-Status: **accepted** (2026-11-18): E1, E2a, E3 and E4 as recommended ("OK, all three designs").
+Status: **implemented** (2026-11-18): E1, E2a, E3 and E4 as recommended ("OK, all three designs"), on `feature/marker-help`. Settled in the build: the map knows only the number of services down, so the hover box shows that at once and asks the server for the host (`GET /hosts/{id}`) for the names and "since"; the Help menu is a "Help ▾" button in the toolbar, as the GUI has no menu bar; the legend is a small map drawn with the map's own code.
 
 User question: "the little red triangle on the bottom right of a host means what? it would be nice to have a explanation in the right details pane when we select the host or a hover ?"
 

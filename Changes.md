@@ -4,6 +4,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- `ined-gui` explains the little triangle next to a host (a watched service is down) and the other map signs: the details show "▲ 1 watched service down: https (443) since 14:07" below the host's name; resting the pointer on a host shows a box with its address, status and the services down; and a new "Help ▾" button has "Map symbols…", a legend of every sign.
+
 ### Changed
 - `ined-gui`: "Export…" and "Import…" open your desktop's own file dialog, a window you can move and resize, with your bookmarks: GNOME's or KDE's on Linux (through the desktop portal), the system's on Windows and macOS. Where there is none, Fyne's dialog opens as before, now at 90 % of the window. Folders in it are an outline instead of a black shape. Exported files are only readable by you (mode 0600), as with `inedctl`.
 - Positions are saved with one decimal (`"x": 24.7` instead of `24.666666666666668`); exports are rounded the same way, also for positions saved before. Nothing visible moves: 0.1 is under half a pixel at the largest zoom.

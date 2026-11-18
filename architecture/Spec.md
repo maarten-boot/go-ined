@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.63** (2026-11-18)
+Status: **draft v0.64** (2026-11-18)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.

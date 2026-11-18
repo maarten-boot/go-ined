@@ -119,3 +119,14 @@
      - State file version 3. The four tests that had version 3 as "too new", or expected version 2, were updated.
      - 61 Python tests pass.
    - Docs: Spec v0.63 (SPEC-958, SPEC-956, §13); TC-959; Changes; the `ined-alert` README and `alert.toml`; the design status (implemented); the Plan.
+22. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (all five refs arrived; `main` at `6e46a56`) and wrote `Crosscheck-2026-11-18-04.md`:
+   - Two reviewers with read-only access: (1) the Go side, (2) `ined-alert`'s thresholds. Claude ran the full Go suite (green, TestDiscoveryDialog included), did the trace and CI, and repeated the M findings with probes.
+   - Findings: 0 H, 5 M, 8 L, 3 P.
+     - C1: an agent that answers but never gives values is searched every tick once the waits are used up.
+     - C2: "no answer" isn't written, so every such host is tried again after a restart.
+     - C3: old values keep a threshold alert open and repeating.
+     - C4: an OK mail shows the old line after a rule change.
+     - C5: two memory entries read the same.
+   - CI on `main` @ `6e46a56` green.
+   - Decisions asked: D1 C1–C5; D2 L1–L8, P1–P3; D3 release 0.8.0 after them.

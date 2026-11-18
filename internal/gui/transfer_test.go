@@ -3,18 +3,13 @@ package gui
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
-
-type closeBuf struct {
-	bytes.Buffer
-	closed bool
-}
-
-func (b *closeBuf) Close() error { b.closed = true; return nil }
 
 // TC-751: "Export…" and "Import into this group…" on groups of the network
 // view (not in custom views) and "Import here…" on empty space; with a
@@ -69,14 +64,16 @@ func TestExportImportGUI(t *testing.T) {
 		}
 	})
 
-	buf := &closeBuf{}
-	e.ui.Wait(func() { g.exportTo(lan.ID, buf, "lan.json") })
+	file := filepath.Join(t.TempDir(), "lan.json")
+	useNative(t, file)
+	e.ui.Wait(func() { g.exportItem(lan.ID, "lan").Action() })
 	eventually(t, e.ui, "exported", func() bool {
 		return strings.Contains(g.status.Text(), "Exported Networks › lan to lan.json: 1 group, 1 host")
 	})
 	var f apitypes.NetworkExport
-	if err := json.Unmarshal(buf.Bytes(), &f); err != nil || !buf.closed || f.Group.CIDR != "10.0.1.0/24" {
-		t.Fatalf("file: %v closed %v %+v", err, buf.closed, f.Group)
+	buf := bytes.NewBuffer(must(os.ReadFile(file)))
+	if err := json.Unmarshal(buf.Bytes(), &f); err != nil || f.Group.CIDR != "10.0.1.0/24" {
+		t.Fatalf("file: %v %+v", err, f.Group)
 	}
 
 	// A copy for another range: a new import.

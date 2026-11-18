@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -19,20 +18,12 @@ import (
 )
 
 // Export and import of a network (SPEC-733; Design-network-export.md N10).
-// The menu items open Fyne's file dialogs; exportTo and importFrom do the
-// work, so tests can call them without the dialogs.
+// The menu items open the file dialogs (filedialog.go); importFrom does
+// the import's work, so tests can call it without the dialogs.
 
 // exportItem is "Export…" on a group of the network view.
 func (g *GUI) exportItem(id int64, name string) *fyne.MenuItem {
-	return fyne.NewMenuItem("Export…", func() {
-		g.saveFile("Export "+name, fileName(name)+".json", []string{".json"}, func(w io.WriteCloser, file string, err error) {
-			if err != nil {
-				g.status.message("Export: " + err.Error())
-				return
-			}
-			g.exportTo(id, w, file)
-		})
-	})
+	return fyne.NewMenuItem("Export…", func() { g.export(id, name) })
 }
 
 // fileName makes a group name usable as a file name: "10.0.1.0/24" is
@@ -50,30 +41,42 @@ func fileName(s string) string {
 	return s
 }
 
-// exportTo writes the export of group id to w and closes it; the status
-// bar says how it went.
-func (g *GUI) exportTo(id int64, w io.WriteCloser, name string) {
+// export reads the export of group id from the server first and only
+// then asks where to save it, so a failing server leaves every file as it
+// was (crosscheck 2026-11-18-01 C3); the status bar says how it went.
+func (g *GUI) export(id int64, name string) {
+	g.status.message(fmt.Sprintf("Reading %s for the export…", name))
 	go func() {
 		f, err := g.c.ExportGroup(g.ctx, id)
+		var b []byte
 		if err == nil {
-			var b []byte
 			b, err = json.MarshalIndent(f, "", "  ")
-			if err == nil {
-				_, err = w.Write(append(b, '\n'))
-			}
-		}
-		if cerr := w.Close(); err == nil {
-			err = cerr
 		}
 		g.do(func() {
 			if err != nil {
-				g.status.message(fmt.Sprintf("Export to %s failed: %v", name, err))
+				g.status.message(fmt.Sprintf("Export of %s failed: %v", name, err))
 				return
 			}
-			gs, hs := countGroups(f.Group)
-			g.status.message(fmt.Sprintf("Exported %s to %s: %s, %s", f.From, name, nCount(gs, "group"), nCount(hs, "host")))
+			g.saveFile("Export "+name, fileName(name)+".json", []string{".json"}, func(write writeFunc, file string, err error) {
+				if err == nil {
+					err = write(append(b, '\n'))
+				}
+				if err != nil {
+					g.status.message(fmt.Sprintf("Export to %s failed: %v", orName(file, name), err))
+					return
+				}
+				gs, hs := countGroups(f.Group)
+				g.status.message(fmt.Sprintf("Exported %s to %s: %s, %s", f.From, file, nCount(gs, "group"), nCount(hs, "host")))
+			})
 		})
 	}()
+}
+
+func orName(file, name string) string {
+	if file == "" {
+		return name
+	}
+	return file
 }
 
 func countGroups(e apitypes.ExportGroup) (groups, hosts int) {

@@ -139,6 +139,37 @@ class TestServiceAlerts(unittest.TestCase):
         (u,) = r.e.service(event(r, "tcp:22", "up", r.clock()), r.clock())
         self.assertEqual((u.kind, u.service["name"]), (E.UP, "tcp:22"))
 
+    def test_renamed_drops_a_held_new_name(self):
+        # L5 of crosscheck 2026-11-18-01: the new name's waiting entry goes,
+        # also from the "held" set, so its line is logged again later.
+        r = Rig([web(ssh=svc("ssh", "down", iso(T0 - 600)))])
+        r.e.snapshot(r.client.hosts(), r.clock())
+        r.e.tick(r.clock())
+        r.e.svc_pending[(1, "tcp:22")] = T0
+        r.e.svc_held.add((1, "tcp:22"))
+        r.client.hosts_[1]["watch"][1]["name"] = "tcp:22"
+        r.e.update(dict(r.client.hosts_[1]), r.clock.add(10))
+        self.assertEqual((list(r.e.svc_open), r.e.svc_pending, r.e.svc_held), ([(1, "tcp:22")], {}, set()))
+
+    def test_unknown_closes_an_open_alert(self):
+        # C11 of crosscheck 2026-11-18-01: a service that becomes unknown
+        # (services turned off, a new IP) ends its alert without a mail and
+        # without STILL DOWN repeats.
+        r = Rig([web(https=svc("https", "down", iso(T0 - 600)))], repeat=3600)
+        r.e.snapshot(r.client.hosts(), r.clock())
+        self.assertEqual(kinds(r.e.tick(r.clock())), [(E.DOWN, "https")])
+        self.assertEqual(r.e.service(event(r, "https", "unknown", r.clock()), r.clock.add(1)), [])
+        self.assertEqual(r.e.svc_open, {})
+        self.assertEqual(r.e.tick(r.clock.add(3600)), [], "no STILL DOWN")
+        self.assertIn('service=https reason="status unknown" note="no recovery mail"', r.buf.getvalue())
+        # The same from a snapshot (a restart with services off).
+        r.client.hosts_[1]["watch"][0].update(status="down", last_change=iso(r.clock()))
+        r.e.snapshot(r.client.hosts(), r.clock())
+        self.assertEqual(kinds(r.e.tick(r.clock.add(600))), [(E.DOWN, "https")])
+        r.client.hosts_[1]["watch"][0].update(status="unknown", last_change=iso(r.clock()))
+        self.assertEqual(r.e.snapshot(r.client.hosts(), r.clock.add(1)), [])
+        self.assertEqual(r.e.svc_open, {})
+
     def test_older_server_closes_service_alerts(self):
         # L8 of crosscheck 2026-11-17-01: after a downgrade below v0.50 the
         # hosts have no "watch"; a snapshot closes their service alerts.

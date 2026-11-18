@@ -105,8 +105,10 @@ type GUI struct {
 	// lastFyneDialog is Fyne's file dialog shown last, when the desktop has
 	// none of its own (for tests).
 	lastFyneDialog dialog.Dialog
-	hover          *hoverBox // the hover box shown (Design-marker-explained.md E2a)
-	lastLegend     *MapView  // the legend's map shown last (for tests)
+	fileDialog     bool            // a file dialog is open (SPEC-733; crosscheck 2026-11-18-01 C5)
+	hover          *hoverBox       // the hover box shown (Design-marker-explained.md E2a)
+	hoverLayer     *fyne.Container // where it is drawn
+	lastLegend     *MapView        // the legend's map shown last (for tests)
 	// colorPicked is the callback of the colour picker opened last (for
 	// tests).
 	colorPicked func(color.Color)
@@ -167,7 +169,10 @@ func New(a fyne.App, opt Options) *GUI {
 	split := container.NewHSplit(g.tabs, g.details.obj)
 	split.Offset = 0.75
 	top := container.NewVBox(g.toolbar(), g.trailRow())
-	g.win.SetContent(container.NewBorder(top, g.status.obj, nil, nil, split))
+	// The hover box is drawn in a layer over everything that takes no
+	// input (Design-marker-explained.md E2a).
+	g.hoverLayer = container.NewWithoutLayout()
+	g.win.SetContent(container.NewStack(container.NewBorder(top, g.status.obj, nil, nil, split), g.hoverLayer))
 	g.win.Resize(fyne.NewSize(1200, 800))
 	g.shortcuts()
 	g.win.Canvas().SetOnTypedKey(g.onKey)
@@ -507,6 +512,10 @@ func (g *GUI) mapView(view int64) *MapView {
 }
 
 func (g *GUI) selectTab(ti *container.TabItem) {
+	for _, m := range g.maps {
+		m.endHover() // the box belongs to the map left (L3)
+	}
+	g.hideHover()
 	mv, ok := ti.Content.(*MapView)
 	if !ok {
 		return

@@ -391,6 +391,10 @@ func (s *Service) Import(ctx context.Context, f *apitypes.NetworkExport, o Impor
 			return rep, err
 		}
 	}
+	// Positions plus the import's offset stay in range (C10).
+	if err := checkRange(p.ch); err != nil {
+		return rep, err
+	}
 	if o.DryRun {
 		return rep, nil
 	}

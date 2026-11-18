@@ -46,8 +46,8 @@ func TestZoomMenu(t *testing.T) {
 		if g.zoomBtn.Text != zoomButtonText(g.maps[1].Viewport().Zoom) {
 			t.Errorf("after fit: %q", g.zoomBtn.Text)
 		}
-		// The toolbar: the Zoom button, then "Show:" and the list.
-		bar := g.win.Content().(*fyne.Container).Objects[1].(*fyne.Container).Objects[0].(*fyne.Container)
+		// The toolbar (under the hover layer): the Zoom button, then "Show:" and the list.
+		bar := g.win.Content().(*fyne.Container).Objects[0].(*fyne.Container).Objects[1].(*fyne.Container).Objects[0].(*fyne.Container)
 		zoom := bar.Objects[0].(*fyne.Container).Objects[0]
 		show := bar.Objects[1].(*fyne.Container)
 		if zoom != g.zoomBtn || show.Objects[0].(*widget.Label).Text != "Show:" ||

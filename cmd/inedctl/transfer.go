@@ -38,8 +38,12 @@ func groupExport(a *app, name string, args []string) error {
 	if err := os.WriteFile(*out, append(raw, '\n'), 0o600); err != nil {
 		return usagef("%s: %v", name, err)
 	}
-	if err := os.Chmod(*out, 0o600); err != nil { // WriteFile keeps an existing file's mode
-		return usagef("%s: %v", name, err)
+	// WriteFile keeps an existing file's mode; a device or pipe such as
+	// /dev/stdout keeps its own (crosscheck 2026-11-18-01 L7).
+	if st, err := os.Stat(*out); err == nil && st.Mode().IsRegular() {
+		if err := os.Chmod(*out, 0o600); err != nil {
+			return fmt.Errorf("%s: %v", name, err)
+		}
 	}
 	var f apitypes.NetworkExport
 	if err := json.Unmarshal(raw, &f); err != nil {

@@ -63,6 +63,7 @@ type watchKey struct {
 	ip   netip.Addr
 	name string
 	port int
+	gen  uint64 // inventory.Watched.Gen: a service added again is new (L8)
 }
 
 // Watcher checks the watched services of monitored hosts every Interval,
@@ -124,9 +125,9 @@ func (w *Watcher) round(ctx context.Context, wg *sync.WaitGroup) {
 		hosts[t.ID] = true
 		prev, seen := w.upAt[t.ID]
 		backUp := seen && !t.UpSince.IsZero() && t.UpSince.After(prev)
-		var due []apitypes.ServicePort
+		var due []inventory.WatchService
 		for _, s := range t.Services {
-			k := watchKey{t.ID, t.IP, s.Name, s.Port}
+			k := watchKey{t.ID, t.IP, s.Name, s.Port, s.Gen}
 			live[k] = true
 			if n, ok := w.next[k]; backUp || !ok || !now.Before(n) {
 				due = append(due, s)
@@ -140,7 +141,7 @@ func (w *Watcher) round(ctx context.Context, wg *sync.WaitGroup) {
 			continue
 		}
 		for _, s := range due {
-			w.next[watchKey{t.ID, t.IP, s.Name, s.Port}] = now.Add(w.cfg.Interval)
+			w.next[watchKey{t.ID, t.IP, s.Name, s.Port, s.Gen}] = now.Add(w.cfg.Interval)
 		}
 		w.busy[t.ID] = true
 		wg.Go(func() {
@@ -170,7 +171,7 @@ func (w *Watcher) round(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 // check connects to every service of one host and saves the results.
-func (w *Watcher) check(ctx context.Context, id int64, ip netip.Addr, svcs []apitypes.ServicePort) {
+func (w *Watcher) check(ctx context.Context, id int64, ip netip.Addr, svcs []inventory.WatchService) {
 	ok := make([]bool, len(svcs))
 	var wg sync.WaitGroup
 	for i, s := range svcs {
@@ -198,8 +199,8 @@ func (w *Watcher) check(ctx context.Context, id int64, ip netip.Addr, svcs []api
 	rs := make([]inventory.WatchResult, len(svcs))
 	w.mu.Lock()
 	for i, s := range svcs {
-		k := watchKey{id, ip, s.Name, s.Port}
-		r := inventory.WatchResult{HostID: id, IP: ip, Name: s.Name, Port: s.Port, OK: ok[i], At: at}
+		k := watchKey{id, ip, s.Name, s.Port, s.Gen}
+		r := inventory.WatchResult{HostID: id, IP: ip, Name: s.Name, Port: s.Port, Gen: s.Gen, OK: ok[i], At: at}
 		_, live := w.next[k]
 		switch {
 		case !live:

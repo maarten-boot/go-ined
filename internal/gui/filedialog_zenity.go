@@ -4,6 +4,7 @@ package gui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/ncruces/zenity"
@@ -11,6 +12,9 @@ import (
 
 // On Windows and macOS the system's dialog comes through zenity: the
 // Windows Save/Open dialog, the macOS panel (Design-file-dialogs.md F1a).
+// zenity reports no error after the user chose a file, so any error but
+// a cancel means the dialog couldn't be shown: Fyne's opens instead
+// (crosscheck 2026-11-18-01 C4).
 
 func init() {
 	nativeSave = zenitySave
@@ -30,16 +34,20 @@ func zenityFilter(exts []string) zenity.FileFilters {
 
 func zenitySave(_, title, name string, exts []string) (string, error) {
 	p, err := zenity.SelectFileSave(zenity.Title(title), zenity.Filename(name), zenity.ConfirmOverwrite(), zenityFilter(exts))
-	if errors.Is(err, zenity.ErrCanceled) {
-		return "", nil
-	}
-	return p, err
+	return zenityResult(p, err)
 }
 
 func zenityOpen(_, title string, exts []string) (string, error) {
 	p, err := zenity.SelectFile(zenity.Title(title), zenityFilter(exts))
-	if errors.Is(err, zenity.ErrCanceled) {
+	return zenityResult(p, err)
+}
+
+func zenityResult(p string, err error) (string, error) {
+	switch {
+	case errors.Is(err, zenity.ErrCanceled):
 		return "", nil
+	case err != nil:
+		return "", fmt.Errorf("%w: %v", errNoNative, err)
 	}
-	return p, err
+	return p, nil
 }

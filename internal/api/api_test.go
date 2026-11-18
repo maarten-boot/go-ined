@@ -586,9 +586,11 @@ func TestMoveGroupAPI(t *testing.T) {
 	}
 	e.wantErr(404, "not_found", "POST", "/groups/999/move", apitypes.GroupMove{DX: 1})
 	e.wantErr(400, "invalid_argument", "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": "far"}`)
-	// A position that overflows to infinity is refused.
-	e.want(200, "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": 1.7e308, "dy": 0}`, nil)
+	// A move or a result beyond ±1e9 is refused, so nothing can reach
+	// infinity (crosscheck 2026-11-18-01 C10).
 	e.wantErr(400, "invalid_argument", "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": 1.7e308, "dy": 0}`)
+	e.want(200, "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": 999999000, "dy": 0}`, nil)
+	e.wantErr(400, "invalid_argument", "POST", "/groups/"+itoa(g.ID)+"/move", `{"dx": 999999000, "dy": 0}`)
 	e.wantErr(405, "method_not_allowed", "GET", "/groups/"+itoa(g.ID)+"/move", nil)
 }
 

@@ -691,6 +691,10 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	}
 	ch := s.subtreeShift(cur, dx, dy, cur.UpdatedAt)
 	ch.Groups = append([]Group{*cur}, ch.Groups...)
+	if err := checkRange(ch); err != nil {
+		*cur = old
+		return apitypes.Group{}, err
+	}
 	if err := s.repo.Apply(ctx, ch); err != nil {
 		*cur = old
 		return apitypes.Group{}, err
@@ -744,6 +748,9 @@ func (s *Service) moveGroup(ctx context.Context, id int64, dx, dy float64, conte
 	}
 	if !contents && contentsOnly {
 		return groupView(cur, s.m.In(cur.ViewID).Aggregate()[id]), nil
+	}
+	if err := checkRange(ch); err != nil {
+		return apitypes.Group{}, err
 	}
 	if err := s.repo.Apply(ctx, ch); err != nil {
 		return apitypes.Group{}, err

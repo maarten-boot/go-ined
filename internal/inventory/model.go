@@ -87,6 +87,11 @@ type Watched struct {
 	Status     string    // apitypes.StatusUp, StatusDown or StatusUnknown
 	LastChange time.Time // zero = never
 	LastOK     time.Time // zero = never answered
+	// Gen tells this watching apart from an earlier one of the same
+	// service: a service removed and added again gets a new Gen, so a
+	// check started before counts for nothing (crosscheck 2026-11-18-01
+	// L8). Not saved; 0 for what was loaded.
+	Gen uint64
 }
 
 // ServicesDown returns the number of watched services that are down.
@@ -490,12 +495,49 @@ func checkText(field, s string, max int) error {
 // fixPos checks a position and rounds it to one decimal: 0.1 map unit is
 // under half a pixel at the largest zoom, and more digits only lengthen the
 // API and the export (Design-positions.md P1). Moves (dx, dy) are rounded
-// the same way.
+// the same way. Beyond ±maxPos a position is refused (crosscheck
+// 2026-11-18-01 C10).
 func fixPos(x, y *float64) error {
 	if math.IsNaN(*x) || math.IsNaN(*y) || math.IsInf(*x, 0) || math.IsInf(*y, 0) {
 		return invalidf("position must be finite")
 	}
+	if !posInRange(*x) || !posInRange(*y) {
+		return errPosRange()
+	}
 	*x, *y = roundPos(*x), roundPos(*y)
+	return nil
+}
+
+// maxPos bounds every coordinate: far beyond any map, and far below where
+// a sum of two could overflow to infinity, which JSON can't carry.
+const maxPos = 1e9
+
+func posInRange(v float64) bool { return math.Abs(v) <= maxPos } // false for NaN
+
+func errPosRange() error {
+	return invalidf("position out of range: coordinates are at most ±%g", float64(maxPos))
+}
+
+// checkRange: every position that ch saves is within ±maxPos. For changes
+// that move items by an offset (a move, a reparent, reflow, copy, import),
+// whose results fixPos hasn't seen.
+func checkRange(ch Changes) error {
+	ok := func(x, y float64) bool { return posInRange(x) && posInRange(y) }
+	for _, g := range ch.Groups {
+		if !ok(g.X, g.Y) {
+			return errPosRange()
+		}
+	}
+	for _, h := range ch.Hosts {
+		if !ok(h.X, h.Y) {
+			return errPosRange()
+		}
+	}
+	for _, p := range ch.Placements {
+		if !ok(p.X, p.Y) {
+			return errPosRange()
+		}
+	}
 	return nil
 }
 

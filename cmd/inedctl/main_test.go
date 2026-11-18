@@ -604,6 +604,9 @@ func TestHostWatch(t *testing.T) {
 	contains(t, ok(t, u, "host", "watch", "1", "--add", "vnc:1"), "ssh unknown, https unknown, tcp:5432 unknown, vnc :1 unknown\n")
 	contains(t, ok(t, u, "host", "watch", "1", "--remove", "https,TCP:5432"), "ssh unknown, vnc :1 unknown\n")
 	contains(t, ok(t, u, "host", "watch", "1", "--add", "SSH"), "ssh unknown, vnc :1 unknown\n") // watched already
+	// The same port under another name: nothing to do either (L6 of
+	// crosscheck 2026-11-18-01).
+	contains(t, ok(t, u, "host", "watch", "1", "--add", "tcp:22,tcp:5901"), "ssh unknown, vnc :1 unknown\n")
 	contains(t, ok(t, u, "host", "show", "1"), "Watched:", "ssh unknown, vnc :1 unknown")
 	contains(t, ok(t, u, "host", "list"), "SVC", "unknown")
 	contains(t, ok(t, u, "--json", "host", "watch", "1"), `"watch": [`, `"name": "ssh",`, `"port": 22,`)
@@ -654,6 +657,9 @@ func TestExportImport(t *testing.T) {
 	if st, err := os.Stat(file); err != nil || st.Mode().Perm() != 0o600 {
 		t.Fatalf("existing file: %v %v", st, err)
 	}
+	// A device keeps its mode, without an error (L7 of crosscheck
+	// 2026-11-18-01).
+	ok(t, ua, "group", "export", "1", "-o", os.DevNull)
 	contains(t, ok(t, ua, "group", "export", "1"), `"format": "go-ined-network"`, `"watch": [`)
 
 	contains(t, ok(t, ub, "import", file, "--dry-run"), "Would create: 1 group, 1 host.\nConflicts: none.\n")

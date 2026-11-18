@@ -284,6 +284,12 @@ class Engine:
                 self._drop_svc(k)
                 self.log.info(kv(event="cancelled", host=b["name"], ip=b["ip"], service=name,
                                  reason="up again within down_after" if status == "up" else f"status {status}"))
+            if status == "unknown" and k in self.svc_open:
+                # Nothing checks it now (services turned off, a new IP):
+                # the alert ends without a mail, as for a host whose
+                # monitoring is turned off (crosscheck 2026-11-18-01 C11).
+                self._close_svc(k, "status unknown")
+                continue
             if status != "up" or k not in self.svc_open:
                 continue
             if not fresh:
@@ -324,7 +330,7 @@ class Engine:
             a = self.svc_open.pop(k)
             a["service"] = dict(a["service"], name=new)
             self.svc_open[(hid, new)] = a
-            self.svc_pending.pop((hid, new), None)
+            self._drop_svc((hid, new))
             self.dirty = True
             self.log.info(kv(event="renamed", host=b["name"], ip=b["ip"], service=k[1], to=new))
 

@@ -78,7 +78,9 @@ func (s *Service) Arrange(ctx context.Context, view int64, parent *int64, cellW,
 	var ch Changes
 	moved := 0
 	for i, m := range ms {
-		nx, ny := ox+float64(i%cols)*cellW, oy+float64(i/cols)*cellH
+		// Rounded before the comparison, and for groups too (SPEC-106;
+		// crosscheck 2026-11-18-01 C9).
+		nx, ny := roundPos(ox+float64(i%cols)*cellW), roundPos(oy+float64(i/cols)*cellH)
 		if nx == m.x && ny == m.y {
 			continue
 		}
@@ -86,23 +88,26 @@ func (s *Service) Arrange(ctx context.Context, view int64, parent *int64, cellW,
 		switch {
 		case m.group:
 			g := *s.m.Groups[m.id]
-			sub := s.subtreeShift(&g, nx-g.X, ny-g.Y, now)
+			sub := s.subtreeShift(&g, roundPos(nx-g.X), roundPos(ny-g.Y), now)
 			g.X, g.Y, g.UpdatedAt = nx, ny, now
 			ch.Groups = append(append(ch.Groups, g), sub.Groups...)
 			ch.Hosts = append(ch.Hosts, sub.Hosts...)
 			ch.Placements = append(ch.Placements, sub.Placements...)
 		case view == NetworkView:
 			h := *s.m.Hosts[m.id]
-			h.X, h.Y, h.UpdatedAt = roundPos(nx), roundPos(ny), now
+			h.X, h.Y, h.UpdatedAt = nx, ny, now
 			ch.Hosts = append(ch.Hosts, h)
 		default:
 			pl := *s.m.Placements[view][m.id]
-			pl.X, pl.Y = roundPos(nx), roundPos(ny)
+			pl.X, pl.Y = nx, ny
 			ch.Placements = append(ch.Placements, pl)
 		}
 	}
 	if moved == 0 {
 		return 0, nil
+	}
+	if err := checkRange(ch); err != nil {
+		return 0, err
 	}
 	if err := s.repo.Apply(ctx, ch); err != nil {
 		return 0, err

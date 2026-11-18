@@ -65,6 +65,7 @@ func TestCIWorkflow(t *testing.T) {
 		"make fmt-check", "go vet ./...", "go run $STATICCHECK", "go run $GOVULNCHECK", "make nogui-check",
 		"go mod verify", "go test -race", "INED_TEST_RAW_ICMP=1", "scripts/build-release.sh", "sha256sum -c",
 		"permissions:\n  contents: read", "workflow_call",
+		"group: ci-gui-${{ matrix.runner }}\n      cancel-in-progress: false", // one GUI build per runner type
 	} {
 		if !strings.Contains(ci, want) {
 			t.Errorf("ci.yml lacks %q", want)

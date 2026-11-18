@@ -100,6 +100,12 @@ jobs:
   # in a release the release workflow builds and uploads these.
   gui:
     if: github.ref == 'refs/heads/main'
+    # One GUI build per runner type at a time (macOS runners are scarce:
+    # queued jobs were cancelled after 15 min, also the release's). A newer
+    # push replaces a build still waiting; a running one finishes.
+    concurrency:
+      group: ci-gui-${{ matrix.runner }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:

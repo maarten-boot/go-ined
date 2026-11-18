@@ -73,3 +73,15 @@
    - Tests.md: TC-005, 702, 705, 708 (manual part), 747, 749, 751, 752 and 754.
    - Plan: the three open items for the visual check and TC-702, and the notes on the dialogs, the marker help, the file dialogs and the rescan menu.
    - Still open in the Plan: the SNMP items and the flaky TestDiscoveryDialog.
+17. **User**: start with snmp.
+   **Claude** wrote `Design-snmp.md`, covering both open SNMP items (`Design-connect.md` C7 and `Design-alerting.md` A10):
+   - Part 1, the server:
+     - N1: gosnmp as the library.
+     - N2: off by default (community strings go out in clear text), with a `networks` list of where they may be tried (N2a, recommended) or a per-group setting (N2b).
+     - N3: finding the agent per host. The communities are tried with v2c and then v1 on the system group. The community that worked is stored but never shown in the API, events, export or log; schema 9.
+     - N4: CPU, disks, memory and uptime from HOST-RESOURCES-MIB every 5 min. Only the latest values are kept, in memory, and `snmp.values` is sent only when a whole-percent value changes.
+     - N5: the API, `inedctl host snmp`, GUI details rows and "Check SNMP now".
+     - N6: tests against a fake agent.
+   - Part 2, `ined-alert`: N7 `[[threshold]]` rules (HIGH and OK mails), N8 no rules by default.
+   - Not now: v3, traps, history, interfaces.
+   - Waiting for the user's OK.

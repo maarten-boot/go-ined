@@ -24,7 +24,8 @@ It is the **service marker** (SPEC-732, v0.52): the host has at least one **watc
   - **E2b:** only on the triangle, with the line of E1.
   - Groups get no hover box now (their frame label already shows name and status).
   - Colours from the theme (white box, black text, a border), so every preset keeps its contrast.
-  - Nothing is fetched on hover: the map model already has the name, status and watched services.
+  - The box shows at once what the map model has (name, address, status, the number of services down) and fills in the services' names and "since" from `GET /hosts/{id}` (as built; crosscheck 2026-11-18-01 P1).
+  - As fixed after crosscheck 2026-11-18-01: the box is drawn in a layer of the window that takes no input (a Fyne pop-up swallowed the next click), stays inside the window, and closes when the host changes on the map or another tab is chosen.
 - **E3 A legend.** A new **Help** menu with **"Map symbols…"**: a small dialog listing the host glyphs (● up, ✕ down, ? unknown, – not monitored, the hollow "stale" sign), the service marker, the dashed frame of a network group, and the bottom bar. Recommended: yes; it answers "what does this mean?" for every symbol, not only the triangle.
 - **E4 Docs.** README's GUI section names the triangle; Spec: SPEC-708 (E1), SPEC-732 (E2) and a new SPEC item for the Help menu (E3); tests in Tests.md.
 

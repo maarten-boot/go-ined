@@ -8,8 +8,19 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 - `ined-gui` explains the little triangle next to a host (a watched service is down) and the other map signs: the details show "▲ 1 watched service down: https (443) since 14:07" below the host's name; resting the pointer on a host shows a box with its address, status and the services down; and a new "Help ▾" button has "Map symbols…", a legend of every sign.
 
 ### Changed
-- `ined-gui`: "Export…" and "Import…" open your desktop's own file dialog, a window you can move and resize, with your bookmarks: GNOME's or KDE's on Linux (through the desktop portal), the system's on Windows and macOS. Where there is none, Fyne's dialog opens as before, now at 90 % of the window. Folders in it are an outline instead of a black shape. Exported files are only readable by you (mode 0600), as with `inedctl`.
+- `ined-gui`: "Export…", "Import here…" and "Import into this group…" open your desktop's own file dialog, a window you can move and resize, with your bookmarks: GNOME's or KDE's on Linux (through the desktop portal), the system's on Windows and macOS. Where there is none, Fyne's dialog opens as before, now at 90 % of the window. Folders in it are an outline instead of a black shape. Exported files are only readable by you (mode 0600), as with `inedctl`, also when they replace an existing file. Only one file dialog opens at a time.
 - Positions are saved with one decimal (`"x": 24.7` instead of `24.666666666666668`); exports are rounded the same way, also for positions saved before. Nothing visible moves: 0.1 is under half a pixel at the largest zoom.
+- Positions beyond ±1,000,000,000 are refused ("position out of range"), also when a move, reflow, copy or import would put an item there. Such a position could become infinite, after which the host couldn't be sent to any client.
+
+### Fixed
+- `ined-gui`, export: the network is read from the server before the file dialog opens, and the file is replaced only when it is complete. Until now a failing server or a full disk left an earlier export empty (since 0.6.0).
+- `ined-gui`, desktop file dialog: file names with `+`, `%`, `#` or `?` are used as chosen (until now `a+b.json` became `a b.json`, and `a#b.json` became `a`); a desktop dialog that ends without an answer no longer closes the GUI; an error after you chose a file is shown in the status bar instead of opening a second dialog.
+- `ined-gui`, hover box: a click next to it reaches the map; it stays inside the window near the right and bottom edges; it closes when the host changes or you switch tabs.
+- `ined-gui`: a file to import that is larger than 64 MiB is reported as such, not as "not a JSON file".
+- Reflow saves groups with one decimal too.
+- `ined-alert`: a service alert ends without a mail when the service becomes `unknown` (for example at every start of a server with `services.enabled = false`). Until now it stayed open and sent STILL DOWN mails.
+- `inedctl host watch --add tcp:22` with `ssh` watched (the same port) does nothing, instead of an error from the server; `inedctl group export -o /dev/stdout` no longer fails after writing.
+- The server: a check of a watched service that was removed and added again before the next round no longer counts for the new one.
 
 ## [0.6.0] - 2026-11-17
 

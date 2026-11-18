@@ -1,6 +1,6 @@
 # Design: file dialogs that can be moved and resized, and outlined folders
 
-Status: **accepted** (2026-11-18): F1a, F2 and F3 as recommended ("OK, all three designs").
+Status: **implemented** (2026-11-18): F1a, F2 and F3 as recommended ("OK, all three designs"), on `feature/file-dialogs`. Settled in the build: the folder has no line below the tab, since Fyne paints the symbols of special folders (Desktop, Downloads…) over the middle in the background colour, which cut that line; those symbols are therefore not seen on the outline. A file saved through the desktop's dialog gets mode 0600, as `inedctl group export -o` (SPEC-905).
 
 User request: "when doing a export the file dialog is not movable or resizable, can we fix that? and the folders as black is a bit massive, the outline is ok as the symbol is now 40 years part of our culture."
 

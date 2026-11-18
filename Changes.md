@@ -5,6 +5,7 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 ## [Unreleased]
 
 ### Changed
+- `ined-gui`: "Export…" and "Import…" open your desktop's own file dialog, a window you can move and resize, with your bookmarks: GNOME's or KDE's on Linux (through the desktop portal), the system's on Windows and macOS. Where there is none, Fyne's dialog opens as before, now at 90 % of the window. Folders in it are an outline instead of a black shape. Exported files are only readable by you (mode 0600), as with `inedctl`.
 - Positions are saved with one decimal (`"x": 24.7` instead of `24.666666666666668`); exports are rounded the same way, also for positions saved before. Nothing visible moves: 0.1 is under half a pixel at the largest zoom.
 
 ## [0.6.0] - 2026-11-17

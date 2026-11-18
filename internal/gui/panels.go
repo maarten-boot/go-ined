@@ -149,10 +149,16 @@ type details struct {
 	g     *GUI
 	obj   fyne.CanvasObject
 	title *widget.Label
-	form  *fyne.Container
-	body  *fyne.Container // the rows, then the note (D2)
-	note  *widget.Entry
-	save  *widget.Button
+	// problem is the line below the title when watched services are down
+	// (Design-marker-explained.md E1), with the map's marker.
+	problem     *fyne.Container
+	top         *fyne.Container // the title and the problem line
+	problemText *widget.Label
+	problemIcon *fyne.Container
+	form        *fyne.Container
+	body        *fyne.Container // the rows, then the note (D2)
+	note        *widget.Entry
+	save        *widget.Button
 
 	view     int64
 	key      *mapmodel.Key
@@ -176,7 +182,14 @@ func newDetails(g *GUI) *details {
 	// The note follows the rows and takes the rest of the height (D2).
 	rows := container.NewThemeOverride(d.form, compactTheme{detailsSpacing})
 	d.body = container.New(growLayout{grow: 2}, rows, widget.NewLabel("Note"), d.note, g.bordered(d.save))
-	d.obj = container.NewBorder(d.title, nil, nil, nil, container.NewVScroll(d.body))
+	d.problemText = widget.NewLabel("")
+	d.problemText.Wrapping = fyne.TextWrapWord
+	d.problemText.Selectable = true
+	d.problemIcon = container.NewCenter()
+	d.problem = container.NewBorder(nil, nil, d.problemIcon, nil, d.problemText)
+	d.problem.Hide()
+	d.top = container.NewVBox(d.title, d.problem)
+	d.obj = container.NewBorder(d.top, nil, nil, nil, container.NewVScroll(d.body))
 	return d
 }
 
@@ -297,6 +310,7 @@ func (d *details) clear() {
 	d.seq++
 	d.key, d.host, d.group = nil, nil, nil
 	d.title.SetText("Nothing selected")
+	d.setProblem("")
 	d.form.Objects = nil
 	d.form.Refresh()
 	d.note.SetText("")
@@ -448,6 +462,30 @@ func when(t *time.Time) string {
 	return t.Local().Format(time.DateTime)
 }
 
+// setProblem shows line below the title with the marker, or hides it.
+func (d *details) setProblem(line string) {
+	if line == "" {
+		if d.problem.Visible() {
+			d.problem.Hide()
+			d.relayout() // the rows move up again
+		}
+		return
+	}
+	d.problemText.SetText(line)
+	d.problemIcon.Objects = []fyne.CanvasObject{d.g.markerImage()} // in the current preset's colour
+	d.problemIcon.Refresh()
+	d.problem.Show()
+	d.relayout()
+}
+
+// relayout lays the panel out again after the title area changed height.
+func (d *details) relayout() {
+	d.top.Refresh()
+	if b, ok := d.obj.(*fyne.Container); ok {
+		b.Refresh()
+	}
+}
+
 // fill writes the rows of the selected item.
 func (d *details) fill() {
 	var rows [][2]string
@@ -455,6 +493,7 @@ func (d *details) fill() {
 	case d.host != nil:
 		h := d.host
 		d.title.SetText("Host " + h.DisplayName)
+		d.setProblem(downLine(h.Watch))
 		rtt, loss := "-", "-"
 		if h.RTTms != nil {
 			rtt = strconv.FormatFloat(*h.RTTms, 'f', 2, 64) + " ms"
@@ -477,6 +516,7 @@ func (d *details) fill() {
 	case d.group != nil:
 		gr := d.group
 		d.title.SetText("Group " + gr.Name)
+		d.setProblem("")
 		d.g.mu.Lock()
 		view, _ := d.g.model.View(gr.ViewID)
 		d.g.mu.Unlock()

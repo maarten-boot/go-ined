@@ -22,7 +22,7 @@ type command func(a *app, name string, args []string) error
 var commands = map[string]map[string]command{
 	"host": {
 		"list": hostList, "add": hostAdd, "show": hostShow, "edit": hostEdit,
-		"rm": hostRm, "move": hostMove, "services": hostServices,
+		"rm": hostRm, "move": hostMove, "services": hostServices, "snmp": hostSNMP,
 		"watch": hostWatch,
 	},
 	"group": {
@@ -141,6 +141,27 @@ func hostServices(a *app, name string, args []string) error {
 	show := func() { fmt.Fprintln(a.out, servicesText(h)) }
 	if *check {
 		return a.call(http.MethodPost, path("host", id)+"/check-services", nil, &h, show)
+	}
+	return a.call(http.MethodGet, path("host", id), nil, &h, show)
+}
+
+// hostSNMP shows a host's SNMP agent and latest values (SPEC-312, 313);
+// --check finds the agent and reads the values now.
+func hostSNMP(a *app, name string, args []string) error {
+	fs := a.flags(name)
+	check := fs.Bool("check", false, "find the agent and read the values now (up to every community and version times snmp.timeout)")
+	pos, err := a.parse(fs, args, 1, 1)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	var h apitypes.Host
+	show := func() { a.snmpDetails(h) }
+	if *check {
+		return a.call(http.MethodPost, path("host", id)+"/check-snmp", nil, &h, show)
 	}
 	return a.call(http.MethodGet, path("host", id), nil, &h, show)
 }

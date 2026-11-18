@@ -24,6 +24,7 @@ import (
 	"github.com/maarten-boot/go-ined/internal/inventory"
 	"github.com/maarten-boot/go-ined/internal/monitor"
 	"github.com/maarten-boot/go-ined/internal/services"
+	"github.com/maarten-boot/go-ined/internal/snmp"
 	"github.com/maarten-boot/go-ined/internal/store"
 )
 
@@ -46,6 +47,9 @@ type Options struct {
 	// Services configures "check services" (SPEC-309). Without a Dial,
 	// every port is closed at once, so tests don't touch the network.
 	Services services.Config
+	// SNMP, if set, turns "check SNMP" on (SPEC-312); give it a Client so
+	// tests don't touch the network. The background rounds don't run.
+	SNMP *snmp.Config
 }
 
 // Server is a running test server. Its URL stays the same across Restart.
@@ -137,6 +141,7 @@ func (s *Server) boot() {
 	var h http.Handler = api.New(svc, api.Options{
 		Token: s.opts.Token, Version: cmp.Or(s.opts.Version, "test"), RunID: run, DBPing: st.Ping, Events: bus,
 		Discovery: disc, Services: services.New(svc, scfg, nil), Keepalive: s.opts.Keepalive, WriteTimeout: s.opts.WriteTimeout,
+		SNMP: snmpChecker(svc, s.opts.SNMP),
 		ICMP: func() api.ICMPInfo { return api.ICMPInfo{Mode: "unprivileged"} },
 	})
 	s.mu.Lock()
@@ -196,4 +201,11 @@ func (p prober) Ping(ctx context.Context, ip netip.Addr, count int, _ time.Durat
 		return monitor.Result{Sent: count}, nil
 	}
 	return monitor.Result{Sent: count, Received: count, RTTs: []time.Duration{time.Millisecond}, LastReply: time.Now()}, nil
+}
+
+func snmpChecker(svc *inventory.Service, cfg *snmp.Config) api.SNMPChecker {
+	if cfg == nil {
+		return nil
+	}
+	return snmp.New(svc, *cfg, nil)
 }

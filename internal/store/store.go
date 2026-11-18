@@ -10,6 +10,7 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -131,6 +132,12 @@ var migrations = []string{
 	`ALTER TABLE groups ADD COLUMN rescan INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE groups ADD COLUMN rescan_last TEXT;
 	ALTER TABLE groups ADD COLUMN rescan_found INTEGER NOT NULL DEFAULT 0;`,
+	// 8 → 9: a host's SNMP agent (SPEC-312): the version and community that
+	// answered, the system group as JSON, and when it was checked.
+	`ALTER TABLE hosts ADD COLUMN snmp_version TEXT NOT NULL DEFAULT '';
+	ALTER TABLE hosts ADD COLUMN snmp_community TEXT NOT NULL DEFAULT '';
+	ALTER TABLE hosts ADD COLUMN snmp_system TEXT NOT NULL DEFAULT '';
+	ALTER TABLE hosts ADD COLUMN snmp_checked_at TEXT;`,
 }
 
 // Store is a SQLite-backed inventory.Repository.
@@ -368,7 +375,8 @@ func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
 
 func (s *Store) loadHosts(ctx context.Context) ([]inventory.Host, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, ip, ptr_name, name, description, note, parent_id, monitored, status,
-		rtt_ms, loss_pct, last_seen, last_change, services, services_checked_at, x, y, created_at, updated_at FROM hosts ORDER BY id`)
+		rtt_ms, loss_pct, last_seen, last_change, services, services_checked_at,
+		snmp_version, snmp_community, snmp_system, snmp_checked_at, x, y, created_at, updated_at FROM hosts ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("store: load hosts: %w", err)
 	}
@@ -378,10 +386,11 @@ func (s *Store) loadHosts(ctx context.Context) ([]inventory.Host, error) {
 		var h inventory.Host
 		var ip string
 		var rtt, loss sql.NullFloat64
-		var seen, change, checked, created, updated sql.NullString
-		var services string
+		var seen, change, checked, snmpAt, created, updated sql.NullString
+		var services, snmpSys string
 		if err := rows.Scan(&h.ID, &ip, &h.PTRName, &h.Name, &h.Description, &h.Note, &h.ParentID, &h.Monitored, &h.Status,
-			&rtt, &loss, &seen, &change, &services, &checked, &h.X, &h.Y, &created, &updated); err != nil {
+			&rtt, &loss, &seen, &change, &services, &checked,
+			&h.SNMP.Version, &h.SNMP.Community, &snmpSys, &snmpAt, &h.X, &h.Y, &created, &updated); err != nil {
 			return nil, fmt.Errorf("store: scan host: %w", err)
 		}
 		if h.IP, err = netip.ParseAddr(ip); err != nil {
@@ -396,10 +405,15 @@ func (s *Store) loadHosts(ctx context.Context) ([]inventory.Host, error) {
 		if services != "" {
 			h.Services = strings.Split(services, ",")
 		}
+		if snmpSys != "" {
+			if err := json.Unmarshal([]byte(snmpSys), &h.SNMP.System); err != nil {
+				return nil, fmt.Errorf("store: host %d: bad snmp_system: %w", h.ID, err)
+			}
+		}
 		for _, p := range []struct {
 			dst *time.Time
 			src sql.NullString
-		}{{&h.LastSeen, seen}, {&h.LastChange, change}, {&h.ServicesAt, checked}, {&h.CreatedAt, created}, {&h.UpdatedAt, updated}} {
+		}{{&h.LastSeen, seen}, {&h.LastChange, change}, {&h.ServicesAt, checked}, {&h.SNMP.CheckedAt, snmpAt}, {&h.CreatedAt, created}, {&h.UpdatedAt, updated}} {
 			if *p.dst, err = parseTime(p.src); err != nil {
 				return nil, fmt.Errorf("store: host %d: %w", h.ID, err)
 			}
@@ -502,15 +516,24 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 		}
 	}
 	for _, h := range c.Hosts {
+		snmpSys := ""
+		if h.SNMP.System != (inventory.SNMPSystem{}) {
+			b, _ := json.Marshal(h.SNMP.System)
+			snmpSys = string(b)
+		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO hosts (id, ip, ptr_name, name, description, note, parent_id, monitored, status,
-				rtt_ms, loss_pct, last_seen, last_change, services, services_checked_at, x, y, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				rtt_ms, loss_pct, last_seen, last_change, services, services_checked_at,
+				snmp_version, snmp_community, snmp_system, snmp_checked_at, x, y, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET ip=excluded.ip, ptr_name=excluded.ptr_name, name=excluded.name,
 				description=excluded.description, note=excluded.note, parent_id=excluded.parent_id, monitored=excluded.monitored,
 				status=excluded.status, rtt_ms=excluded.rtt_ms, loss_pct=excluded.loss_pct, last_seen=excluded.last_seen,
-				last_change=excluded.last_change, services=excluded.services, services_checked_at=excluded.services_checked_at, x=excluded.x, y=excluded.y, updated_at=excluded.updated_at`,
+				last_change=excluded.last_change, services=excluded.services, services_checked_at=excluded.services_checked_at,
+				snmp_version=excluded.snmp_version, snmp_community=excluded.snmp_community, snmp_system=excluded.snmp_system,
+				snmp_checked_at=excluded.snmp_checked_at, x=excluded.x, y=excluded.y, updated_at=excluded.updated_at`,
 			h.ID, h.IP.String(), h.PTRName, h.Name, h.Description, h.Note, h.ParentID, h.Monitored, h.Status,
-			h.RTTms, h.LossPct, nullTime(h.LastSeen), nullTime(h.LastChange), strings.Join(h.Services, ","), nullTime(h.ServicesAt), h.X, h.Y, fmtTime(h.CreatedAt), fmtTime(h.UpdatedAt))
+			h.RTTms, h.LossPct, nullTime(h.LastSeen), nullTime(h.LastChange), strings.Join(h.Services, ","), nullTime(h.ServicesAt),
+			h.SNMP.Version, h.SNMP.Community, snmpSys, nullTime(h.SNMP.CheckedAt), h.X, h.Y, fmtTime(h.CreatedAt), fmtTime(h.UpdatedAt))
 		if err != nil {
 			return fmt.Errorf("store: upsert host %d: %w", h.ID, err)
 		}

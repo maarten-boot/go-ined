@@ -341,6 +341,11 @@ func (e Event) Short() string {
 		if e.Decode(&p) == nil {
 			return fmt.Sprintf("view %d host %d removed", p.ViewID, p.HostID)
 		}
+	case apitypes.EventSNMPValues:
+		var v apitypes.SNMPValuesEvent
+		if e.Decode(&v) == nil {
+			return fmt.Sprintf("host %d %s %s %s", v.HostID, v.IP, v.DisplayName, SNMPValuesLine(v.Values))
+		}
 	case apitypes.EventResync:
 		var r apitypes.ResyncEvent
 		if e.Decode(&r) == nil {
@@ -363,4 +368,49 @@ func DiscoveryLine(d apitypes.Discovery) string {
 		s += ": " + d.Error
 	}
 	return s
+}
+
+// SNMPValuesLine is "CPU 13 %, memory 63 %, / 91 %, /data 40 %" (SPEC-313):
+// the CPU, then memory, then each disk; "uptime only" for an agent
+// without HOST-RESOURCES-MIB.
+func SNMPValuesLine(v apitypes.SNMPValues) string {
+	var parts []string
+	if v.CPUPct != nil {
+		parts = append(parts, fmt.Sprintf("CPU %d %%", *v.CPUPct))
+	}
+	for _, kind := range []string{apitypes.StorageMemory, apitypes.StorageDisk} {
+		for _, s := range v.Storage {
+			if s.Kind != kind {
+				continue
+			}
+			name := s.Name
+			if kind == apitypes.StorageMemory {
+				name = "memory"
+			}
+			parts = append(parts, fmt.Sprintf("%s %d %%", name, s.UsedPct))
+		}
+	}
+	if len(parts) == 0 {
+		return "uptime only"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// UptimeText is "45 s", "18 min", "2 h 5 min" or "12 d 3 h".
+func UptimeText(sec int64) string {
+	switch {
+	case sec < 60:
+		return fmt.Sprintf("%d s", max(sec, 0))
+	case sec < 3600:
+		return fmt.Sprintf("%d min", sec/60)
+	case sec < 86400:
+		if m := sec % 3600 / 60; m > 0 {
+			return fmt.Sprintf("%d h %d min", sec/3600, m)
+		}
+		return fmt.Sprintf("%d h", sec/3600)
+	}
+	if h := sec % 86400 / 3600; h > 0 {
+		return fmt.Sprintf("%d d %d h", sec/86400, h)
+	}
+	return fmt.Sprintf("%d d", sec/86400)
 }

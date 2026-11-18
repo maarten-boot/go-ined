@@ -52,6 +52,7 @@ Commands:
   host rm <id>
   host move <id> <group-id|root>              (moves it next to its new parent)
   host services <id> [--check]                (SSH, RDP, VNC, HTTP(S) found; --check checks now)
+  host snmp <id> [--check]                    (the SNMP agent and its CPU, memory and disks; --check now)
   host watch <id> [LIST | --add LIST | --remove LIST | --clear]
                                               (watched services; LIST like ssh,https,tcp:5432)
   group list [--view ID]

@@ -469,6 +469,7 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 			// SPEC-309).
 			h.PTRName = ""
 			h.Services, h.ServicesAt = nil, time.Time{}
+			h.SNMP, h.SNMPValues = SNMPAgent{}, nil // found again for the new address (SPEC-312)
 			h.Watch, watchChanged = resetWatch(h.Watch, s.stamp(), true)
 			if h.Status != apitypes.StatusUnknown {
 				h.Status = apitypes.StatusUnknown
@@ -486,6 +487,7 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 			// monitoring is turned back on is stale until its next round.
 			h.Stale = h.Monitored
 			if !h.Monitored {
+				h.SNMPValues = nil // not read any more (SPEC-313)
 				// Not checked any more: unknown (SPEC-310).
 				var idx []int
 				h.Watch, idx = resetWatch(h.Watch, s.stamp(), false)
@@ -1062,6 +1064,7 @@ func (s *Service) hostView(h *Host) apitypes.Host {
 			v.Services = []string{}
 		}
 	}
+	v.SNMP = snmpView(h)
 	return v
 }
 

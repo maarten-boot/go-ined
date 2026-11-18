@@ -47,6 +47,9 @@ type Options struct {
 	// Services checks a host's services on request (SPEC-309); nil = the
 	// endpoint answers 503 (services.enabled = false).
 	Services ServiceChecker
+	// SNMP checks a host's SNMP agent on request (SPEC-312); nil = SNMP is
+	// off and the endpoint answers 503.
+	SNMP SNMPChecker
 	// Keepalive is the SSE keepalive interval; 0 = 30 s (SPEC-502).
 	Keepalive time.Duration
 	// WriteTimeout disconnects an SSE client that accepts no data for this
@@ -60,6 +63,11 @@ type Discovery interface {
 	List() []apitypes.Discovery
 	Get(id string) (apitypes.Discovery, error)
 	Cancel(id string) (apitypes.Discovery, error)
+}
+
+// SNMPChecker is what the API needs from snmp.Manager.
+type SNMPChecker interface {
+	Check(ctx context.Context, id int64) (apitypes.Host, error)
 }
 
 // ServiceChecker is what the API needs from services.Checker.
@@ -141,6 +149,7 @@ func newServer(svc *inventory.Service, opts Options) (*server, http.Handler) {
 	route("/hosts", map[string]http.HandlerFunc{"GET": s.listHosts, "POST": s.createHost})
 	route("/hosts/{id}", map[string]http.HandlerFunc{"GET": s.getHost, "PATCH": s.patchHost, "DELETE": s.deleteHost})
 	route("/hosts/{id}/check-services", map[string]http.HandlerFunc{"POST": s.checkServices})
+	route("/hosts/{id}/check-snmp", map[string]http.HandlerFunc{"POST": s.checkSNMP})
 	route("/groups", map[string]http.HandlerFunc{"GET": s.listGroups, "POST": s.createGroup})
 	route("/groups/{id}", map[string]http.HandlerFunc{"GET": s.getGroup, "PATCH": s.patchGroup, "DELETE": s.deleteGroup})
 	route("/groups/{id}/move", map[string]http.HandlerFunc{"POST": s.moveGroup})
@@ -281,6 +290,27 @@ func (s *server) checkServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h, err := s.opts.Services.Check(r.Context(), id)
+	s.respond(w, http.StatusOK, h, err)
+}
+
+// checkSNMP finds a host's SNMP agent now and reads its values (SPEC-312,
+// SPEC-514). Without an agent it takes every community and version times
+// snmp.timeout.
+func (s *server) checkSNMP(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if s.opts.SNMP == nil {
+		if _, err := s.svc.Host(id); err != nil {
+			s.respond(w, http.StatusOK, nil, err)
+			return
+		}
+		writeError(w, http.StatusServiceUnavailable, apitypes.CodeUnavailable,
+			"SNMP is turned off on the server (snmp.enabled = false)")
+		return
+	}
+	h, err := s.opts.SNMP.Check(r.Context(), id)
 	s.respond(w, http.StatusOK, h, err)
 }
 

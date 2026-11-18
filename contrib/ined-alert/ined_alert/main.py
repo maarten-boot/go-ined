@@ -167,6 +167,8 @@ class App:
             self.notices(self.engine.update(ev.data, now), now)
         elif ev.type == "service.status":
             self.notices(self.engine.service(ev.data, now), now)
+        elif ev.type == "snmp.values":
+            self.notices(self.engine.snmp_values(ev.data, now), now)
         elif ev.type == "host.deleted":
             self.notices(self.engine.deleted(ev.data["id"], now), now)
         elif ev.type == "resync":

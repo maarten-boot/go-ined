@@ -154,7 +154,7 @@ class TestApp(unittest.TestCase):
             ("pay@example.com", "[ined] DOWN https on web (192.0.2.1)"),
         ])
         st = load_state(app.cfg.state_file, app.log)
-        self.assertEqual((st["version"], list(st["services"])), (2, ["1/https"]))
+        self.assertEqual((st["version"], list(st["services"])), (3, ["1/https"]))
         self.assertIn("event=alert_queued kind=down host=web service=https", buf.getvalue())
 
     def test_unreachable_and_routes_reload(self):
@@ -194,7 +194,7 @@ class TestApp(unittest.TestCase):
         # version: set aside, and the program starts empty.
         d = tempfile.mkdtemp()
         p = os.path.join(d, "state.json")
-        for st in ({"open": []}, {"server": None}, {"services": {"x": {}}}, {"version": 3}):
+        for st in ({"open": []}, {"server": None}, {"services": {"x": {}}}, {"version": 4}, {"thresholds": {"1/disk//": {}}}):
             with open(p, "w") as f:
                 json.dump(st, f)
             app, _, _, _, buf = self.rig([], state_file=p)

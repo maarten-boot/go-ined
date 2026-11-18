@@ -22,11 +22,13 @@ from typing import Callable
 from .config import Config
 from .logs import kv
 from .routes import Routes
+from .thresholds import key_parse, key_str, readings
 
 # Notice kinds.
 DOWN, UP, STILL_DOWN = "down", "up", "still_down"
 SERVER_DOWN, SERVER_UP, DEGRADED, PINGS_AGAIN, SUMMARY = "server_down", "server_up", "degraded", "pings_again", "summary"
 NEW = "new"  # a host was added (SPEC-957)
+HIGH, NORMAL, STILL_HIGH = "high", "normal", "still_high"  # SNMP thresholds (SPEC-958)
 
 
 @dataclass
@@ -41,6 +43,7 @@ class Notice:
     hosts: list[dict] = field(default_factory=list)  # summary: the hosts down
     service: dict | None = None  # {"name", "port", "last_ok"} for a service alert
     services: list[dict] = field(default_factory=list)  # summary: the services down
+    metric: dict | None = None  # {"metric", "item", "label", "value", "above"} for a threshold alert
 
 
 _FRACTION = re.compile(r"(\.\d{6})\d+")
@@ -77,7 +80,7 @@ def svc_key(k: tuple[int, str]) -> str:
     return f"{k[0]}/{k[1]}"
 
 
-STATE_VERSION = 2
+STATE_VERSION = 3  # 3: open threshold alerts (SPEC-958)
 
 
 def _number(x) -> bool:
@@ -101,17 +104,25 @@ def _alert(v, service: bool) -> dict:
     return v
 
 
+def _th_alert(v) -> dict:
+    v = _alert(v, False)
+    m = v.get("metric")
+    if not isinstance(m, dict) or not isinstance(m.get("label"), str) or not _number(m.get("above")):
+        raise ValueError("a threshold alert without its metric")
+    return v
+
+
 def parse_state(st) -> dict:
     """Checks what a state file holds (SPEC-956) and returns it as the
     engine keeps it: {"open", "services", "unreachable", "degraded"}.
-    Raises ValueError when it isn't a state file of version 1 or 2."""
+    Raises ValueError when it isn't a state file of version 1 to 3."""
     if not isinstance(st, dict):
         raise ValueError("not an object")
     ver = st.get("version", 1)
     if not isinstance(ver, int) or isinstance(ver, bool) or not 1 <= ver <= STATE_VERSION:
-        raise ValueError(f"version {ver!r}; this ined-alert reads versions 1 and {STATE_VERSION}")
+        raise ValueError(f"version {ver!r}; this ined-alert reads versions 1 to {STATE_VERSION}")
     parts = {}
-    for name in ("open", "services", "server"):
+    for name in ("open", "services", "server", "thresholds"):
         parts[name] = st.get(name, {})
         if not isinstance(parts[name], dict):
             raise ValueError(f'"{name}" is not an object')
@@ -128,8 +139,14 @@ def parse_state(st) -> dict:
             services[(int(hid), name)] = _alert(v, True)
         except ValueError as e:
             raise ValueError(f'"services" {k!r}: {e}') from None
+    thresholds: dict[tuple[int, str, str], dict] = {}
+    for k, v in parts["thresholds"].items():
+        try:
+            thresholds[key_parse(k)] = _th_alert(v)
+        except ValueError as e:
+            raise ValueError(f'"thresholds" {k!r}: {e}') from None
     srv = parts["server"]
-    return {"open": hosts, "services": services, "unreachable": bool(srv.get("unreachable")),
+    return {"open": hosts, "services": services, "thresholds": thresholds, "unreachable": bool(srv.get("unreachable")),
             "degraded": bool(srv.get("degraded"))}
 
 
@@ -142,6 +159,11 @@ class Engine:
         self.open: dict[int, dict] = st["open"]
         # Services with a down mail out: (host id, name) -> {"host", "service", "since", "to", "sent"}.
         self.svc_open: dict[tuple[int, str], dict] = st["services"]
+        # Values over a threshold (SPEC-958): (host id, metric, item) -> the
+        # alert ({"host", "metric", "since", "to", "sent"}), and those not
+        # alerted yet -> {"since", "for_s"}.
+        self.th_open: dict[tuple[int, str, str], dict] = st["thresholds"]
+        self.th_pending: dict[tuple[int, str, str], dict] = {}
         self.server_alerted = st["unreachable"]
         self.degraded_alerted = st["degraded"]
         # Hosts whose recovery the server couldn't confirm: asked again at
@@ -164,6 +186,7 @@ class Engine:
     def state(self) -> dict:
         return {"version": STATE_VERSION, "open": {str(k): v for k, v in sorted(self.open.items())},
                 "services": {svc_key(k): v for k, v in sorted(self.svc_open.items())},
+                "thresholds": {key_str(k): v for k, v in sorted(self.th_open.items())},
                 "server": {"unreachable": self.server_alerted, "degraded": self.degraded_alerted}}
 
     # ---- hosts ----
@@ -189,6 +212,12 @@ class Engine:
         for k in list(self.svc_pending):
             if k[0] not in self.hosts:
                 self._drop_svc(k)
+        for k in list(self.th_pending):
+            if k[0] not in self.hosts:
+                del self.th_pending[k]
+        for k in list(self.th_open):
+            if k[0] not in self.hosts:
+                self._close_th(k, "host deleted")
         for h in hosts:
             out += self._apply(h, now, fresh=True)
         return out
@@ -229,6 +258,10 @@ class Engine:
             self._drop_svc(k)
         for k in [k for k in self.svc_open if k[0] == hid]:
             self._close_svc(k, "host deleted")
+        for k in [k for k in self.th_pending if k[0] == hid]:
+            del self.th_pending[k]
+        for k in [k for k in self.th_open if k[0] == hid]:
+            self._close_th(k, "host deleted")
         return []
 
     def service(self, e: dict, now: float) -> list[Notice]:
@@ -271,7 +304,88 @@ class Engine:
                          note="no recovery mail"))
 
     def _apply(self, h: dict, now: float, fresh: bool) -> list[Notice]:
-        return self._apply_host(h, now, fresh) + self._apply_services(h, now, fresh)
+        return self._apply_host(h, now, fresh) + self._apply_services(h, now, fresh) + self._apply_thresholds(h, now)
+
+    # ---- SNMP thresholds (SPEC-958) ----
+
+    def snmp_values(self, e: dict, now: float) -> list[Notice]:
+        """An snmp.values event: {"host_id", "display_name", "ip", "values"}."""
+        h = self.hosts.get(e.get("host_id"))
+        if h is None or not isinstance(e.get("values"), dict):
+            return []  # a host event or the next snapshot brings it
+        h = dict(h, snmp=dict(h.get("snmp") or {}, values=e["values"]))
+        self.hosts[h["id"]] = h
+        return self._apply_thresholds(h, now)
+
+    def _close_th(self, k: tuple[int, str, str], reason: str) -> None:
+        a = self.th_open.pop(k)
+        self.dirty = True
+        self.log.info(kv(event="closed", host=a["host"]["name"], ip=a["host"]["ip"], metric=a["metric"]["label"],
+                         reason=reason, note="no OK mail"))
+
+    def _apply_thresholds(self, h: dict, now: float) -> list[Notice]:
+        hid, b = h["id"], brief(h)
+        rd = readings(h, self.cfg.thresholds) if h.get("monitored", True) else {}
+        for k in [k for k in self.th_pending if k[0] == hid and (k[1], k[2]) not in rd]:
+            del self.th_pending[k]
+            self.log.info(kv(event="cancelled", host=b["name"], ip=b["ip"], metric=k[1], item=k[2], reason="no values"))
+        for k in [k for k in self.th_open if k[0] == hid and (k[1], k[2]) not in rd]:
+            self._close_th(k, "no values")
+        out: list[Notice] = []
+        for (metric, item), r in rd.items():
+            k = (hid, metric, item)
+            if r["value"] > r["above"]:
+                if k in self.th_open:
+                    self.th_open[k]["metric"]["value"] = r["value"]
+                elif k not in self.th_pending:
+                    self.th_pending[k] = {"since": now, "for_s": r["for_s"]}
+                    self.log.info(kv(event="high", host=b["name"], ip=b["ip"], metric=r["label"], value=r["value"],
+                                     above=r["above"], alert_in=f"{int(r['for_s'])}s"))
+                continue
+            if self.th_pending.pop(k, None) is not None:
+                self.log.info(kv(event="cancelled", host=b["name"], ip=b["ip"], metric=r["label"], value=r["value"],
+                                 reason="below the line again within for"))
+            if k in self.th_open:
+                a = self.th_open.pop(k)
+                self.dirty = True
+                m = dict(a["metric"], value=r["value"])
+                self.log.info(kv(event="normal", host=b["name"], ip=b["ip"], metric=r["label"], value=r["value"],
+                                 high_for=f"{int(now - a['since'])}s"))
+                out.append(Notice(NORMAL, now, to=a["to"], host=b, since=a["since"], metric=m,
+                                  groups=self.routes.groups_of(hid)))
+        return out
+
+    def _tick_thresholds(self, now: float) -> list[Notice]:
+        out: list[Notice] = []
+        fetched: dict[int, dict | None] = {}  # one read per host per tick
+        for k, p in list(self.th_pending.items()):
+            hid, metric, item = k
+            if now - p["since"] < p["for_s"]:
+                continue
+            if hid not in fetched:
+                try:  # confirm with the server: an old value must not cause a mail
+                    fetched[hid] = self.fetch(hid)
+                except OSError as e:
+                    self.log.warning(kv(event="confirm_failed", host_id=hid, metric=metric, error=str(e)))
+                    continue
+            h = fetched[hid]
+            if h is None:
+                del self.th_pending[k]
+                continue
+            self.hosts[hid] = h
+            r = (readings(h, self.cfg.thresholds) if h.get("monitored", True) else {}).get((metric, item))
+            del self.th_pending[k]
+            if r is None or r["value"] <= r["above"]:
+                self.log.info(kv(event="cancelled", host=h.get("display_name"), metric=metric, item=item,
+                                 reason="not above the line on the server"))
+                continue
+            b = brief(h)
+            m = {k2: r[k2] for k2 in ("metric", "item", "label", "value", "above")}
+            to = self.routes.recipients(hid)
+            self.th_open[k] = {"host": b, "metric": m, "since": p["since"], "to": to, "sent": now}
+            self.dirty = True
+            out.append(Notice(HIGH, now, to=to, host=b, since=p["since"], metric=dict(m), groups=self.routes.groups_of(hid)))
+        return out
 
     def _apply_services(self, h: dict, now: float, fresh: bool) -> list[Notice]:
         ws = watched(h)
@@ -421,6 +535,7 @@ class Engine:
             self.dirty = True
             out.append(Notice(DOWN, now, to=to, host=b, since=since, groups=self.routes.groups_of(hid)))
         out += self._tick_services(now)
+        out += self._tick_thresholds(now)
         if self.cfg.repeat > 0:
             for hid, a in self.open.items():
                 if now - a["sent"] >= self.cfg.repeat:
@@ -433,6 +548,12 @@ class Engine:
                     a["sent"] = now
                     self.dirty = True
                     out.append(Notice(STILL_DOWN, now, to=a["to"], host=a["host"], service=a["service"],
+                                      since=a["since"], groups=self.routes.groups_of(hid)))
+            for (hid, _, _), a in self.th_open.items():
+                if now - a["sent"] >= self.cfg.repeat:
+                    a["sent"] = now
+                    self.dirty = True
+                    out.append(Notice(STILL_HIGH, now, to=a["to"], host=a["host"], metric=dict(a["metric"]),
                                       since=a["since"], groups=self.routes.groups_of(hid)))
         admins = {a: [] for a in self.cfg.admins}
         if self.unreachable_since and not self.server_alerted and now - self.unreachable_since >= self.cfg.server_down_after:

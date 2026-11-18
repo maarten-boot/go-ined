@@ -121,7 +121,7 @@ class TestEngine(unittest.TestCase):
         # C1 of crosscheck 2026-11-17-01: a state file of the wrong shape or
         # a newer version is refused (the program sets it aside).
         for st in ({"open": []}, {"server": None}, {"services": {"x": {}}}, {"services": {"1": {}}},
-                   {"open": {"1": {}}}, {"open": {"x": {}}}, {"version": 3}, {"version": "2"}, []):
+                   {"open": {"1": {}}}, {"open": {"x": {}}}, {"version": 4}, {"thresholds": {"x": {}}}, {"version": "2"}, []):
             with self.assertRaises(ValueError, msg=repr(st)):
                 E.parse_state(st)
         self.assertEqual(E.parse_state({})["open"], {})

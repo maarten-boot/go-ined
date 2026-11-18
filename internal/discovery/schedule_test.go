@@ -3,8 +3,8 @@ package discovery
 import (
 	"context"
 	"log/slog"
-	"strings"
 	"net/netip"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -263,7 +263,6 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 	}
 	t.Fatalf("no %s", what)
 }
-
 
 // TC-216 (crosscheck 2026-11-18-02 C1): a group whose range became larger
 // than max_prefix is passed over with one warning, and the others are

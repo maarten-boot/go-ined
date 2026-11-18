@@ -32,6 +32,7 @@ import (
 	"github.com/maarten-boot/go-ined/internal/inventory"
 	"github.com/maarten-boot/go-ined/internal/monitor"
 	"github.com/maarten-boot/go-ined/internal/services"
+	"github.com/maarten-boot/go-ined/internal/snmp"
 	"github.com/maarten-boot/go-ined/internal/store"
 	"github.com/maarten-boot/go-ined/internal/version"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -250,6 +251,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 			log.Info("watched services set to unknown", "count", n)
 		}
 	}
+	var snmpCheck api.SNMPChecker // nil: the endpoint answers 503
+	if cfg.SNMP.Enabled {
+		m := snmp.New(svc, snmp.Config{
+			Communities: cfg.SNMP.Communities, Networks: cfg.SNMP.SNMPNetworks(),
+			Interval: cfg.SNMP.Interval, Rescan: cfg.SNMP.Rescan, Concurrency: cfg.SNMP.Concurrency,
+			Client: snmp.UDP{Port: uint16(cfg.SNMP.Port), Timeout: cfg.SNMP.Timeout, Retries: cfg.SNMP.Retries},
+		}, log)
+		goBG(m.Run)
+		snmpCheck = m
+		log.Info("SNMP enabled", "communities", len(cfg.SNMP.Communities), "networks", cfg.SNMP.Networks)
+	}
 	disc := discovery.New(svc, prober, "", bus, runID, discovery.Config{
 		MaxPrefix: cfg.Discovery.MaxPrefix, Rate: cfg.Discovery.Rate,
 		Concurrency: cfg.Discovery.Concurrency, Timeout: cfg.Monitor.Timeout,
@@ -269,7 +281,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 
 	handler := api.New(svc, api.Options{
 		Token: cfg.Server.Token, ReadToken: cfg.Server.ReadToken, Version: version.Version, RunID: runID, DBPing: st.Ping, Logger: log,
-		Events: bus, Discovery: disc, Services: checker,
+		Events: bus, Discovery: disc, Services: checker, SNMP: snmpCheck,
 		ICMP: func() api.ICMPInfo {
 			icmpMu.Lock()
 			defer icmpMu.Unlock()

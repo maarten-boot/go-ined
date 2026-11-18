@@ -494,3 +494,40 @@ func TestMigration8(t *testing.T) {
 		t.Fatalf("saved: %+v %v", st.Groups, err)
 	}
 }
+
+// TC-326 (store): migration 9 adds a host's SNMP agent; a schema-8 host has
+// none, and an agent with its community and system values is saved and
+// loaded.
+func TestMigration9(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v8.db")
+	db, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(ctx, db, migrations[:8]); err != nil {
+		t.Fatal(err)
+	}
+	ts := "2026-11-01T10:00:00Z"
+	if _, err := db.Exec(`INSERT INTO hosts (id, ip, created_at, updated_at) VALUES (4, '192.0.2.4', ?1, ?1)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s, err := Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	st, err := s.Load(ctx)
+	if err != nil || len(st.Hosts) != 1 || st.Hosts[0].SNMP != (inventory.SNMPAgent{}) {
+		t.Fatalf("hosts after migration: %+v %v", st.Hosts, err)
+	}
+	h := st.Hosts[0]
+	h.SNMP = inventory.SNMPAgent{Version: "v2c", Community: "s3cret", CheckedAt: time.Date(2026, 11, 18, 3, 0, 0, 0, time.UTC),
+		System: inventory.SNMPSystem{Name: "web", Descr: "Linux \"web\"", Location: "rack 4"}}
+	if err := s.Apply(ctx, inventory.Changes{Hosts: []inventory.Host{h}}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err = s.Load(ctx); err != nil || st.Hosts[0].SNMP != h.SNMP {
+		t.Fatalf("saved: %+v %v", st.Hosts[0].SNMP, err)
+	}
+}

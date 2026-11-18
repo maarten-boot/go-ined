@@ -507,9 +507,12 @@ func (d *details) fill() {
 			{"Stale", yesNo(h.Stale)}, {"Monitored", yesNo(h.Monitored)}, {"Round-trip time", rtt},
 			{"Packet loss", loss}, {"Last seen", when(h.LastSeen)}, {"Last change", when(h.LastChange)},
 			{"Services", servicesText(*h)}, {"Watched", watchedText(h.Watch)},
+		}
+		rows = append(rows, snmpRows(*h)...)
+		rows = append(rows, [][2]string{
 			{"Parent (this view)", d.parentName()}, {"Views", d.viewNames(h.Views)},
 			{"Description", dash(h.Description)},
-		}
+		}...)
 		if d.view == mapmodel.NetworkView {
 			rows = append(rows, [2]string{"Outside its CIDR", yesNo(h.OutsideCIDR)})
 		}
@@ -583,6 +586,14 @@ func (d *details) onEvent(ev client.Event) {
 				}
 			}
 			d.host.Watch = ws
+			d.fill()
+		}
+	case apitypes.EventSNMPValues:
+		var s apitypes.SNMPValuesEvent
+		if json.Unmarshal(ev.Data, &s) == nil && d.host != nil && k == mapmodel.HostKey(s.HostID) && d.host.SNMP != nil {
+			c := *d.host.SNMP
+			c.Values = &s.Values
+			d.host.SNMP = &c
 			d.fill()
 		}
 	case apitypes.EventGroupUpdated:

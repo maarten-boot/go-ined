@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
@@ -31,6 +32,7 @@ type Server struct {
 	Discovery DiscoverySection `toml:"discovery"`
 	DNS       DNSSection       `toml:"dns"`
 	Services  ServicesSection  `toml:"services"`
+	SNMP      SNMPSection      `toml:"snmp"`
 	Events    EventsSection    `toml:"events"`
 	Log       LogSection       `toml:"log"`
 }
@@ -86,6 +88,31 @@ type ServicesSection struct {
 	WatchInterval    time.Duration `toml:"watch_interval"`
 	WatchDownAfter   int           `toml:"watch_down_after"`
 	WatchConcurrency int           `toml:"watch_concurrency"`
+}
+
+// SNMPSection holds the SNMP settings (SPEC-312–314). Off by default:
+// community strings go out in clear text to every host they are tried on.
+type SNMPSection struct {
+	Enabled     bool          `toml:"enabled"`
+	Communities []string      `toml:"communities"` // tried in this order
+	Networks    []string      `toml:"networks"`    // CIDRs where they may be tried; empty = everywhere
+	Port        int           `toml:"port"`
+	Timeout     time.Duration `toml:"timeout"`
+	Retries     int           `toml:"retries"`
+	Concurrency int           `toml:"concurrency"`
+	Interval    time.Duration `toml:"interval"` // between value reads
+	Rescan      time.Duration `toml:"rescan"`   // between tries of a host without an agent
+}
+
+// SNMPNetworks returns snmp.networks as prefixes (checked by Validate).
+func (s SNMPSection) SNMPNetworks() []netip.Prefix {
+	var out []netip.Prefix
+	for _, n := range s.Networks {
+		if p, err := netip.ParsePrefix(strings.TrimSpace(n)); err == nil {
+			out = append(out, p.Masked())
+		}
+	}
+	return out
 }
 
 // EventsSection holds the event buffer settings (SPEC-503).
@@ -161,6 +188,8 @@ func DefaultServer() Server {
 		DNS:       DNSSection{Enabled: true, Refresh: time.Hour, Concurrency: 20},
 		Services: ServicesSection{Enabled: true, Refresh: 6 * time.Hour, Timeout: time.Second,
 			WatchInterval: 5 * time.Minute, WatchDownAfter: 2, WatchConcurrency: 50},
+		SNMP: SNMPSection{Communities: []string{"public"}, Networks: []string{}, Port: 161, Timeout: time.Second, Retries: 1,
+			Concurrency: 20, Interval: 5 * time.Minute, Rescan: 24 * time.Hour},
 		Events: EventsSection{Buffer: 1000},
 		Log:    LogSection{Level: "info", Format: "text"},
 	}
@@ -328,6 +357,7 @@ func (c Server) Validate() error {
 	if c.Services.WatchInterval < 10*time.Second || c.Services.WatchDownAfter < 1 || c.Services.WatchConcurrency < 1 {
 		errs = append(errs, errors.New("services.watch_interval must be at least 10s, services.watch_down_after and services.watch_concurrency at least 1"))
 	}
+	errs = append(errs, c.SNMP.check()...)
 	if c.Events.Buffer < 1 {
 		errs = append(errs, errors.New("events.buffer must be at least 1"))
 	}
@@ -341,4 +371,32 @@ func (c Server) Validate() error {
 		return fmt.Errorf("config: %w", errors.Join(errs...))
 	}
 	return nil
+}
+
+// check validates [snmp] (SPEC-314).
+func (s SNMPSection) check() []error {
+	var errs []error
+	if s.Enabled && len(s.Communities) == 0 {
+		errs = append(errs, errors.New("snmp.communities must list at least one community when snmp.enabled = true"))
+	}
+	for i, c := range s.Communities {
+		if c == "" {
+			errs = append(errs, fmt.Errorf("snmp.communities: entry %d is empty", i+1))
+		}
+	}
+	for _, n := range s.Networks {
+		if _, err := netip.ParsePrefix(strings.TrimSpace(n)); err != nil {
+			errs = append(errs, fmt.Errorf("snmp.networks: %q is not a CIDR such as 10.0.0.0/8", n))
+		}
+	}
+	if s.Port < 1 || s.Port > 65535 {
+		errs = append(errs, errors.New("snmp.port must be between 1 and 65535"))
+	}
+	if s.Timeout <= 0 || s.Retries < 0 || s.Retries > 5 || s.Concurrency < 1 {
+		errs = append(errs, errors.New("snmp.timeout must be positive, snmp.retries between 0 and 5, snmp.concurrency at least 1"))
+	}
+	if s.Interval < 10*time.Second || s.Rescan < time.Minute {
+		errs = append(errs, errors.New("snmp.interval must be at least 10s and snmp.rescan at least 1m"))
+	}
+	return errs
 }

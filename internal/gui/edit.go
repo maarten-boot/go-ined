@@ -215,7 +215,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 			items = append(items, g.watchItem([]int64{k.ID}))
 		}
 		if h != nil {
-			items = append(items, g.connectItem(h))
+			items = append(items, g.connectItem(h), g.checkSNMPItem(*h))
 		}
 		if remove != nil {
 			items = append(items, remove)

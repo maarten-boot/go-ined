@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
+	"github.com/maarten-boot/go-ined/pkg/client"
 )
 
 // Tables and detail views (SPEC-902). Status is always written out as a
@@ -52,12 +53,52 @@ func (a *app) hostDetails(h apitypes.Host) {
 		{"Description", h.Description}, {"Parent", parent(h.ParentID)}, {"Monitored", yesNo(h.Monitored)},
 		{"Status", status(h.Status, h.Stale)}, {"RTT", ms(h.RTTms)}, {"Loss", loss},
 		{"Last seen", when(h.LastSeen)}, {"Last change", when(h.LastChange)}, {"Services", servicesText(h)},
-		{"Watched", watchedText(h)},
+		{"Watched", watchedText(h)}, {"SNMP", snmpText(h)},
 		{"Outside CIDR", yesNo(h.OutsideCIDR)}, {"Position", pos(h.X, h.Y)},
 		{"Created", h.CreatedAt.Local().Format(time.DateTime)}, {"Updated", h.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(h.Note)},
 	}, false)
 	a.noteBlock(h.Note)
+}
+
+// snmpText is "v2c · web · CPU 13 %, memory 63 %, / 91 %", "no answer
+// (checked …)" or "not checked yet" (SPEC-312, 313).
+func snmpText(h apitypes.Host) string {
+	s := h.SNMP
+	switch {
+	case s == nil:
+		return "not checked yet"
+	case s.Version == "":
+		return "no answer (checked " + clock(s.CheckedAt) + ")"
+	}
+	out := s.Version
+	if s.Name != "" {
+		out += " · " + s.Name
+	}
+	if s.Values != nil {
+		out += " · " + client.SNMPValuesLine(*s.Values)
+	}
+	return out
+}
+
+// snmpDetails prints the agent's system values and its latest values.
+func (a *app) snmpDetails(h apitypes.Host) {
+	s := h.SNMP
+	if s == nil || s.Version == "" {
+		fmt.Fprintln(a.out, "SNMP: "+snmpText(h))
+		return
+	}
+	rows := [][2]string{
+		{"SNMP", s.Version + " (checked " + clock(s.CheckedAt) + ")"}, {"Name", s.Name}, {"Description", s.Descr},
+		{"Object ID", s.ObjectID}, {"Location", s.Location}, {"Contact", s.Contact},
+	}
+	if v := s.Values; v != nil {
+		rows = append(rows, [2]string{"Uptime", client.UptimeText(v.UptimeS)},
+			[2]string{"Values", client.SNMPValuesLine(*v) + " (read " + clock(v.At) + ")"})
+	} else {
+		rows = append(rows, [2]string{"Values", "not read yet"})
+	}
+	a.details(rows, true)
 }
 
 // servicesText is "ssh, vnc :1 (checked 2026-11-14 14:02:00)", "none

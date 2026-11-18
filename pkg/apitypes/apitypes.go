@@ -207,11 +207,14 @@ type Host struct {
 	ServicesCheckedAt *time.Time `json:"services_checked_at"`
 	// Watch lists the watched services with their status, in the order
 	// they were given; never null (v0.50, SPEC-310).
-	Watch     []WatchedService `json:"watch"`
-	X         float64          `json:"x"`
-	Y         float64          `json:"y"`
-	CreatedAt time.Time        `json:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at"`
+	Watch []WatchedService `json:"watch"`
+	// SNMP is the host's SNMP agent and its latest values; null while
+	// never checked (v0.60, SPEC-312).
+	SNMP      *SNMP     `json:"snmp"`
+	X         float64   `json:"x"`
+	Y         float64   `json:"y"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // WatchedService is a service watched on a host (SPEC-310): a known name

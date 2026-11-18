@@ -17,7 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/maarten-boot/go-ined/internal/inventory"
 	"github.com/maarten-boot/go-ined/internal/services"
+	"github.com/maarten-boot/go-ined/internal/snmp"
 	"github.com/maarten-boot/go-ined/internal/testserver"
 	"github.com/maarten-boot/go-ined/internal/version"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -598,6 +600,38 @@ func TestHostServices(t *testing.T) {
 	}
 	if r := ctl(t, u, "host", "services"); r.code != 2 {
 		t.Errorf("no id: %+v", r)
+	}
+}
+
+// TC-909: host snmp shows "not checked yet", --check finds the agent
+// and prints its system values and latest values; host show has an SNMP
+// line; without SNMP on the server --check is exit 1 with the reason; the
+// community is never printed.
+func TestHostSNMP(t *testing.T) {
+	isolate(t)
+	cpu := 13
+	s := testserver.Start(t, testserver.Options{SNMP: &snmp.Config{Communities: []string{"s3cret"}, Client: snmp.Static{
+		Community: "s3cret", Version: snmp.V2c,
+		Sys: inventory.SNMPSystem{Name: "web", Descr: "Linux web 6.8.0", Location: "rack 4"},
+		Vals: apitypes.SNMPValues{UptimeS: 1053224, CPUPct: &cpu, Storage: []apitypes.SNMPStorage{
+			{Name: "Physical memory", Kind: apitypes.StorageMemory, SizeBytes: 1 << 33, UsedPct: 63},
+			{Name: "/", Kind: apitypes.StorageDisk, SizeBytes: 1 << 35, UsedPct: 91}}},
+	}}})
+	u := "--url=" + s.URL()
+	ok(t, u, "host", "add", "192.0.2.1")
+	contains(t, ok(t, u, "host", "snmp", "1"), "SNMP: not checked yet\n")
+	out := ok(t, u, "host", "snmp", "1", "--check")
+	contains(t, out, "SNMP:", "v2c (checked ", "Name:", "web", "Location:", "rack 4", "Uptime:", "12 d 4 h",
+		"Values:", "CPU 13 %, memory 63 %, / 91 % (read ")
+	contains(t, ok(t, u, "host", "show", "1"), "SNMP:", "v2c · web · CPU 13 %, memory 63 %, / 91 %")
+	if j := ok(t, u, "--json", "host", "show", "1"); strings.Contains(j, "s3cret") || !strings.Contains(j, `"version": "v2c"`) {
+		t.Errorf("json: %s", j)
+	}
+	off := testserver.Start(t, testserver.Options{})
+	u2 := "--url=" + off.URL()
+	ok(t, u2, "host", "add", "192.0.2.1")
+	if r := ctl(t, u2, "host", "snmp", "1", "--check"); r.code != 1 || !strings.Contains(r.errOut, "snmp.enabled = false") {
+		t.Errorf("SNMP off: %+v", r)
 	}
 }
 

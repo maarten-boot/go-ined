@@ -113,7 +113,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "description": "Server-Sent Events (SPEC-502). Event types: host.created, host.updated, host.status (Host); host.deleted, group.deleted, view.deleted (DeletedEvent); group.created, group.updated (Group); group.status (GroupStatusEvent); group.moved (GroupMovedEvent); map.arranged (MapArrangedEvent); view.created, view.updated (View); placement.updated (Placement); placement.deleted (PlacementDeletedEvent); discovery.progress, discovery.finished (Discovery); service.status (ServiceStatusEvent); resync (ResyncEvent). Event ids are <run>-<seq>; send Last-Event-ID to resume (SPEC-503).",
+        "description": "Server-Sent Events (SPEC-502). Event types: host.created, host.updated, host.status (Host); host.deleted, group.deleted, view.deleted (DeletedEvent); group.created, group.updated (Group); group.status (GroupStatusEvent); group.moved (GroupMovedEvent); map.arranged (MapArrangedEvent); view.created, view.updated (View); placement.updated (Placement); placement.deleted (PlacementDeletedEvent); discovery.progress, discovery.finished (Discovery); service.status (ServiceStatusEvent); snmp.values (SNMPValuesEvent); resync (ResyncEvent). Event ids are <run>-<seq>; send Last-Event-ID to resume (SPEC-503).",
         "parameters": [
           {
             "name": "Last-Event-ID",
@@ -1042,6 +1042,37 @@
           }
         }
       }
+    },
+    "/hosts/{id}/check-snmp": {
+      "post": {
+        "summary": "Find the host's SNMP agent now (every community of snmp.communities with v2c, then v1), read its values, save and return the host (SPEC-312, SPEC-514). Without an agent it takes every community and version times snmp.timeout. 400 outside snmp.networks; 503 when snmp.enabled = false.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Host"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1179,6 +1210,17 @@
             },
             "description": "watched services with their status, in the order given; [] when none (SPEC-310)"
           },
+          "snmp": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SNMP"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The host's SNMP agent and its latest values; null while never checked (SPEC-312)"
+          },
           "x": {
             "type": "number",
             "format": "double"
@@ -1221,7 +1263,8 @@
           "updated_at",
           "services",
           "services_checked_at",
-          "watch"
+          "watch",
+          "snmp"
         ]
       },
       "Group": {
@@ -2644,6 +2687,157 @@
         "required": [
           "error",
           "report"
+        ]
+      },
+      "SNMP": {
+        "type": "object",
+        "description": "What the server found out about a host's SNMP agent (SPEC-312). The community that answered is never part of it.",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string",
+            "enum": [
+              "v2c",
+              "v1",
+              ""
+            ],
+            "description": "\"\" = no community answered"
+          },
+          "name": {
+            "type": "string",
+            "description": "sysName"
+          },
+          "descr": {
+            "type": "string",
+            "description": "sysDescr"
+          },
+          "object_id": {
+            "type": "string",
+            "description": "sysObjectID"
+          },
+          "contact": {
+            "type": "string",
+            "description": "sysContact"
+          },
+          "location": {
+            "type": "string",
+            "description": "sysLocation"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when the agent was last looked for"
+          },
+          "values": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SNMPValues"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the latest values (SPEC-313); null until read, also after a restart until the next round"
+          }
+        },
+        "required": [
+          "version",
+          "name",
+          "descr",
+          "object_id",
+          "contact",
+          "location",
+          "checked_at",
+          "values"
+        ]
+      },
+      "SNMPValues": {
+        "type": "object",
+        "description": "Values read from HOST-RESOURCES-MIB (SPEC-313)",
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uptime_s": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cpu_pct": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "average hrProcessorLoad; null without a processor table"
+          },
+          "storage": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SNMPStorage"
+            }
+          }
+        },
+        "required": [
+          "at",
+          "uptime_s",
+          "cpu_pct",
+          "storage"
+        ]
+      },
+      "SNMPStorage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "disk",
+              "memory"
+            ]
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "used_pct": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "size_bytes",
+          "used_pct"
+        ]
+      },
+      "SNMPValuesEvent": {
+        "type": "object",
+        "description": "Payload of snmp.values: a host's latest SNMP values, sent only when a value rounded to a whole percent changes (SPEC-313)",
+        "additionalProperties": false,
+        "properties": {
+          "host_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "values": {
+            "$ref": "#/components/schemas/SNMPValues"
+          }
+        },
+        "required": [
+          "host_id",
+          "display_name",
+          "ip",
+          "values"
         ]
       }
     }

@@ -211,3 +211,35 @@ func TestDiscoveryScheduled(t *testing.T) {
 		t.Fatalf("%+v %v", c.Discovery, err)
 	}
 }
+
+// TC-326 (config): [snmp] is off by default with "public"; bad values are
+// rejected; networks are read as prefixes.
+func TestSNMPConfig(t *testing.T) {
+	d := DefaultServer().SNMP
+	if d.Enabled || len(d.Communities) != 1 || d.Communities[0] != "public" || d.Port != 161 {
+		t.Errorf("defaults: %+v", d)
+	}
+	p := filepath.Join(t.TempDir(), "s.toml")
+	write := func(s string) error {
+		if err := os.WriteFile(p, []byte(s), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := LoadServer(p)
+		return err
+	}
+	if err := write("[snmp]\nenabled = true\ncommunities = [\"a\", \"b\"]\nnetworks = [\"10.0.0.0/8\", \" 192.168.1.7/24 \"]\n"); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := LoadServer(p)
+	if n := c.SNMP.SNMPNetworks(); len(n) != 2 || n[1].String() != "192.168.1.0/24" {
+		t.Errorf("networks: %v", n)
+	}
+	for _, bad := range []string{
+		"[snmp]\nenabled = true\ncommunities = []\n", "[snmp]\ncommunities = [\"\"]\n", "[snmp]\nnetworks = [\"10.0.0.0\"]\n",
+		"[snmp]\nport = 0\n", "[snmp]\nretries = 6\n", "[snmp]\ninterval = \"5s\"\n", "[snmp]\nrescan = \"30s\"\n", "[snmp]\nconcurrency = 0\n",
+	} {
+		if err := write(bad); err == nil || !strings.Contains(err.Error(), "snmp.") {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+}

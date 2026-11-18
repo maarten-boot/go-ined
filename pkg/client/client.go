@@ -265,6 +265,13 @@ func (c *Client) CheckServices(ctx context.Context, hostID int64) (apitypes.Host
 	return h, c.Do(ctx, http.MethodPost, "/hosts/"+id(hostID)+"/check-services", nil, &h)
 }
 
+// CheckSNMP finds a host's SNMP agent now and reads its values
+// (SPEC-312, SPEC-514); 503 when SNMP is off on the server.
+func (c *Client) CheckSNMP(ctx context.Context, hostID int64) (apitypes.Host, error) {
+	var h apitypes.Host
+	return h, c.Do(ctx, http.MethodPost, "/hosts/"+id(hostID)+"/check-snmp", nil, &h)
+}
+
 // CreateHost adds a host.
 func (c *Client) CreateHost(ctx context.Context, in apitypes.HostCreate) (apitypes.Host, error) {
 	var h apitypes.Host

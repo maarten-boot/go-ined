@@ -74,10 +74,14 @@ type Host struct {
 	// Watch are the watched services with their status (SPEC-310). The
 	// slice is replaced, never changed in place, so copies of a Host can
 	// share it.
-	Watch     []Watched
-	X, Y      float64
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Watch []Watched
+	// SNMP is the host's agent (SPEC-312): saved; SNMPValues are the latest
+	// values (SPEC-313), in memory only.
+	SNMP       SNMPAgent
+	SNMPValues *apitypes.SNMPValues
+	X, Y       float64
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // Watched is a service watched on a host (SPEC-310).

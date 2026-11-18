@@ -39,6 +39,17 @@ watch_interval = "5m"        # SPEC-310: time between checks of a watched servic
 watch_down_after = 2         # Failed checks in a row before a watched service is down.
 watch_concurrency = 50       # Connects to watched services at the same time.
 
+[snmp]                       # SPEC-312-314: find SNMP agents and read CPU, disks, memory and uptime.
+enabled     = false          # Off by default: community strings go out in clear text to every host tried.
+communities = ["public"]     # Tried in this order, each with v2c and then v1. Keep this file private (mode 0600).
+networks    = []             # Where they may be tried, e.g. ["10.0.0.0/8", "192.168.1.0/24"]; empty = everywhere.
+port        = 161            # UDP port of the agents.
+timeout     = "1s"           # Per request.
+retries     = 1              # Extra tries of a request without an answer (0-5).
+concurrency = 20             # Hosts checked at the same time.
+interval    = "5m"           # Time between value reads of a host with an agent (at least 10s).
+rescan      = "24h"          # Time before a host where nothing answered is tried again (at least 1m).
+
 [events]                     # SPEC-503
 buffer = 1000                # Events kept for Last-Event-ID replay.
 

@@ -2769,7 +2769,18 @@
               "integer",
               "null"
             ],
-            "description": "average hrProcessorLoad; null without a processor table"
+            "description": "average hrProcessorLoad over the processors (logical CPUs), 0–100; null without a processor table"
+          },
+          "cpu_max_pct": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "the busiest processor's hrProcessorLoad (v0.62); null without a processor table"
+          },
+          "cpus": {
+            "type": "integer",
+            "description": "the number of processors (logical CPUs) read; 0 without a processor table (v0.62)"
           },
           "storage": {
             "type": "array",
@@ -2782,6 +2793,8 @@
           "at",
           "uptime_s",
           "cpu_pct",
+          "cpu_max_pct",
+          "cpus",
           "storage"
         ]
       },

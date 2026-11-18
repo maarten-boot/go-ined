@@ -21,13 +21,17 @@ type SNMP struct {
 }
 
 // SNMPValues are the values read from HOST-RESOURCES-MIB (SPEC-313).
-// CPUPct is null when the agent has no processor table (most switches and
+// CPUPct is the average load over the processors (logical CPUs), CPUMaxPct
+// the busiest one's and CPUs how many there are (v0.62); the CPU fields
+// are null (0) when the agent has no processor table (most switches and
 // printers); Storage is empty then too.
 type SNMPValues struct {
-	At      time.Time     `json:"at"`
-	UptimeS int64         `json:"uptime_s"`
-	CPUPct  *int          `json:"cpu_pct"`
-	Storage []SNMPStorage `json:"storage"`
+	At        time.Time     `json:"at"`
+	UptimeS   int64         `json:"uptime_s"`
+	CPUPct    *int          `json:"cpu_pct"`
+	CPUMaxPct *int          `json:"cpu_max_pct"`
+	CPUs      int           `json:"cpus"`
+	Storage   []SNMPStorage `json:"storage"`
 }
 
 // SNMPStorage is one fixed disk or the RAM.
@@ -55,7 +59,7 @@ type SNMPValuesEvent struct {
 // Same reports whether two value sets differ only in time and uptime:
 // the same CPU and the same storage, in whole percents.
 func (v SNMPValues) Same(o SNMPValues) bool {
-	if (v.CPUPct == nil) != (o.CPUPct == nil) || (v.CPUPct != nil && *v.CPUPct != *o.CPUPct) || len(v.Storage) != len(o.Storage) {
+	if !sameInt(v.CPUPct, o.CPUPct) || !sameInt(v.CPUMaxPct, o.CPUMaxPct) || v.CPUs != o.CPUs || len(v.Storage) != len(o.Storage) {
 		return false
 	}
 	for i := range v.Storage {
@@ -64,4 +68,8 @@ func (v SNMPValues) Same(o SNMPValues) bool {
 		}
 	}
 	return true
+}
+
+func sameInt(a, b *int) bool {
+	return (a == nil) == (b == nil) && (a == nil || *a == *b)
 }

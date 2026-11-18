@@ -35,7 +35,7 @@ func snmpRows(h apitypes.Host) [][2]string {
 		return rows
 	}
 	if v.CPUPct != nil {
-		rows = append(rows, [2]string{"CPU", fmt.Sprintf("%d %%", *v.CPUPct)})
+		rows = append(rows, [2]string{"CPU", client.CPUText(*v)})
 	}
 	var mem, disks []string
 	for _, st := range v.Storage {

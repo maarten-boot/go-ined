@@ -137,3 +137,8 @@
      - An empty `pkg/apitypes/rescan_test.go` was made (a shell append with nothing to append). It was seen at once and deleted before any build; it had never been tracked.
      - The docs script stopped at a sentence whose first letter was lower case in the Spec. The shell went on and committed only the version line as `d32a158`; this commit completes it.
    - Next: release 0.8.0 (D3).
+24. **User**: pushed; prepare release 0.8.0.
+   **Claude** checked the push (`main` and `docs/architecture` at `a06116a`, `fix/crosscheck-18-04` at `cbe24a6`) and prepared the release commit:
+   - `Changes.md`: `[Unreleased]` becomes `[0.8.0] - 2026-11-18`. The upgrade note says to update the server first: schemas 8 and 9 can't be opened by 0.7.0, so keep a copy of the database; `ined-alert`'s state file becomes version 3; SNMP is off until enabled.
+   - README status; OpenAPI version 0.8.0.
+   - The tag `v0.8.0` follows once CI on `main` is green with this commit.

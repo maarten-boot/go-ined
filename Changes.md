@@ -4,7 +4,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
-Update `ined-server` first: the database gets schemas 8 and 9 (three columns on groups, four on hosts), so an older server can't open it any more; keep a copy of the database if you may go back. Against an older server, the new `ined-gui`'s "Rescan ▸" and `inedctl group rescan` / `discover list` get the server's error ("unknown field", "method not allowed"), as do "Check SNMP now" and `inedctl host snmp --check`; everything else works.
+## [0.8.0] - 2026-11-18
+
+Update `ined-server` first: the database gets schemas 8 and 9 (three columns on groups, four on hosts), so a 0.7.0 server can't open it any more; keep a copy of the database if you may go back. Against an older server, the new `ined-gui`'s "Rescan ▸" and `inedctl group rescan` / `discover list` get the server's error ("unknown field", "method not allowed"), as do "Check SNMP now" and `inedctl host snmp --check`; everything else works. `ined-alert`'s state file becomes version 3 at its first save, which an older `ined-alert` can't read; keep a copy of it too if you may go back. SNMP is off until you set `[snmp] enabled = true`; see `examples/server.toml`.
 
 ### Added
 - Networks can be scanned again on a schedule. A network group's context menu in `ined-gui` has "Rescan ▸" (off, every hour, 6 hours, day or week), and `inedctl group rescan <id> 24h|off` sets any interval from 15 minutes. The server scans one network at a time, the one waiting longest first, and remembers when each was last scanned, also over a restart. A scan you start by hand that covers the whole network counts as its scan, and one you start over a running scheduled scan stops that scan first. New hosts are added as with a scan by hand; nothing is moved or removed. The group's details show "Rescan: every day, last 03:15, 2 new". `discovery.scheduled = false` in `server.toml` turns all scheduled scans off.

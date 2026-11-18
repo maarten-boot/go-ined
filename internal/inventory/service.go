@@ -666,8 +666,16 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	if g.CIDR != cur.CIDR {
 		g.RescanLast, g.RescanFound = time.Time{}, 0 // another range: not scanned yet
 	}
-	if err := s.checkRescan(&g); err != nil {
-		return apitypes.Group{}, err
+	if g.CIDR != cur.CIDR || g.Rescan != cur.Rescan {
+		g.RescanGen = rescanGen.Add(1)
+	}
+	// Only a PATCH of rescan or cidr is checked: a rescan that a lower
+	// discovery.max_prefix made too large mustn't block other edits
+	// (crosscheck 2026-11-18-02 C2); the scheduler passes it over.
+	if p.Rescan.Set || p.CIDR.Set {
+		if err := s.checkRescan(&g); err != nil {
+			return apitypes.Group{}, err
+		}
 	}
 	if p.ParentID.Set {
 		parent := Root

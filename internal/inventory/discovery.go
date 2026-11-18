@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/netip"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -90,6 +91,9 @@ func (s *Service) AddDiscovered(ctx context.Context, group int64, found []Found)
 	return ips, nil
 }
 
+// rescanGen numbers the rescan settings (Group.RescanGen).
+var rescanGen atomic.Uint64
+
 // RescanTarget is a network group whose scan on a schedule is due
 // (SPEC-206).
 type RescanTarget struct {
@@ -97,6 +101,7 @@ type RescanTarget struct {
 	CIDR     netip.Prefix
 	Interval time.Duration
 	Due      time.Time
+	Gen      uint64 // Group.RescanGen: changes with the setting
 }
 
 // RescanDue returns the network groups with a rescan interval whose scan
@@ -111,11 +116,11 @@ func (s *Service) RescanDue(now time.Time) []RescanTarget {
 			continue
 		}
 		due := time.Time{}
-		if !g.RescanLast.IsZero() {
+		if !g.RescanLast.IsZero() && !g.RescanLast.After(now) { // one in the future: due (L2)
 			due = g.RescanLast.Add(g.Rescan)
 		}
 		if !due.After(now) {
-			out = append(out, RescanTarget{ID: g.ID, CIDR: g.CIDR, Interval: g.Rescan, Due: due})
+			out = append(out, RescanTarget{ID: g.ID, CIDR: g.CIDR, Interval: g.Rescan, Due: due, Gen: g.RescanGen})
 		}
 	}
 	slices.SortFunc(out, func(a, b RescanTarget) int { return cmp.Or(a.Due.Compare(b.Due), cmp.Compare(a.ID, b.ID)) })
@@ -130,7 +135,7 @@ func (s *Service) RescanIsDue(id int64, now time.Time) bool {
 	if g == nil || g.Rescan <= 0 || !g.IsNetwork() || !g.CIDR.Addr().Is4() {
 		return false
 	}
-	return g.RescanLast.IsZero() || !g.RescanLast.Add(g.Rescan).After(now)
+	return g.RescanLast.IsZero() || g.RescanLast.After(now) || !g.RescanLast.Add(g.Rescan).After(now)
 }
 
 // RescanDone records a discovery job over p that finished done at at

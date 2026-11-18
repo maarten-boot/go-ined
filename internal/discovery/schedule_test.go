@@ -2,12 +2,13 @@ package discovery
 
 import (
 	"context"
+	"log/slog"
+	"strings"
 	"net/netip"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/maarten-boot/go-ined/internal/inventory"
 	"github.com/maarten-boot/go-ined/internal/monitor"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
@@ -263,4 +264,69 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 	t.Fatalf("no %s", what)
 }
 
-var _ = inventory.RescanTarget{}
+
+// TC-216 (crosscheck 2026-11-18-02 C1): a group whose range became larger
+// than max_prefix is passed over with one warning, and the others are
+// scanned.
+func TestScheduleSkipsTooLarge(t *testing.T) {
+	r, _ := scheduledRig(t, &prober{answer: all})
+	var buf safeBuf
+	r.m.mu.Lock()
+	r.m.log = slog.New(slog.NewTextHandler(&buf, nil))
+	r.m.cfg.MaxPrefix = 28
+	r.m.mu.Unlock()
+	big := r.rescan(t, "10.20.0.0/24", "1h") // allowed by the inventory's limit (16)
+	small := r.rescan(t, "10.20.1.0/30", "1h")
+	if d := r.finished(t); d.GroupID != small.ID {
+		t.Fatalf("scanned: %+v", d)
+	}
+	r.quiet(t, "the large group")
+	if g, _ := r.svc.Group(big.ID); g.RescanLast != nil {
+		t.Errorf("large group scanned: %+v", g)
+	}
+	if n := strings.Count(buf.String(), "larger than /28"); n != 1 {
+		t.Errorf("%d warnings:\n%s", n, buf.String())
+	}
+}
+
+// TC-216 (crosscheck 2026-11-18-02 L1, L3): a round skipped by a user's
+// cancel ends when the setting changes; a scan whose every probe failed
+// doesn't count, and is tried again after Retry.
+func TestScheduleWaits(t *testing.T) {
+	p := &heldProber{}
+	r, c := scheduledRig(t, p)
+	ctx := context.Background()
+	p.hold()
+	g := r.rescan(t, "10.21.0.0/30", "24h")
+	waitFor(t, "a scheduled job", func() bool { return r.running(true) == 1 })
+	for _, d := range r.m.List() {
+		r.m.Cancel(d.ID)
+	}
+	if d := r.finished(t); d.State != apitypes.DiscoveryCancelled {
+		t.Fatalf("cancelled: %+v", d)
+	}
+	p.release()
+	r.quiet(t, "skipped round")
+	if _, err := r.svc.UpdateGroup(ctx, g.ID, apitypes.GroupPatch{Rescan: apitypes.Some("6h")}); err != nil {
+		t.Fatal(err)
+	}
+	if d := r.finished(t); d.State != apitypes.DiscoveryDone || d.GroupID != g.ID {
+		t.Fatalf("after a new interval: %+v", d)
+	}
+
+	// Every probe fails: done, but not counted.
+	r2, c2 := scheduledRig(t, errProber{})
+	g2 := r2.rescan(t, "10.22.0.1/32", "1h")
+	if d := r2.finished(t); d.State != apitypes.DiscoveryDone || d.Errors != 1 {
+		t.Fatalf("blind scan: %+v", d)
+	}
+	if got, _ := r2.svc.Group(g2.ID); got.RescanLast != nil {
+		t.Errorf("a blind scan counted: %+v", got)
+	}
+	r2.quiet(t, "retry too early")
+	c2.add(10 * time.Minute)
+	if d := r2.finished(t); d.GroupID != g2.ID {
+		t.Fatalf("retry: %+v", d)
+	}
+	_ = c
+}

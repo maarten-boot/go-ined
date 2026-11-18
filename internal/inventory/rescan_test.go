@@ -116,3 +116,42 @@ func TestRescanText(t *testing.T) {
 		}
 	}
 }
+
+// TC-218 (crosscheck 2026-11-18-02 C2, L1, L2): a rescan that a lower
+// discovery.max_prefix made too large doesn't block other edits, only a
+// PATCH of rescan or cidr; the setting's generation changes with rescan
+// and cidr only; a last scan in the future is due.
+func TestRescanLimitLowered(t *testing.T) {
+	s, _ := newSvc(t)
+	g := mustGroup(t, s, apitypes.GroupCreate{CIDR: "10.8.0.0/16"})
+	if _, err := s.UpdateGroup(ctx, g.ID, apitypes.GroupPatch{Rescan: apitypes.Some("1h")}); err != nil {
+		t.Fatal(err)
+	}
+	gen := s.RescanDue(time.Now())[0].Gen
+	s.SetScanLimit(24)
+	if _, err := s.UpdateGroup(ctx, g.ID, apitypes.GroupPatch{Name: apitypes.Some("site"), Note: apitypes.Some("n")}); err != nil {
+		t.Errorf("rename blocked: %v", err)
+	}
+	if due := s.RescanDue(time.Now()); due[0].Gen != gen {
+		t.Errorf("generation changed by a rename")
+	}
+	if _, err := s.UpdateGroup(ctx, g.ID, apitypes.GroupPatch{Rescan: apitypes.Some("2h")}); KindOf(err) != Invalid {
+		t.Errorf("new interval on a too large range: %v", err)
+	}
+	if _, err := s.UpdateGroup(ctx, g.ID, apitypes.GroupPatch{Rescan: apitypes.Some("off")}); err != nil {
+		t.Errorf("off: %v", err)
+	}
+	lan := mustGroup(t, s, apitypes.GroupCreate{CIDR: "10.0.1.0/24"})
+	g2, _ := s.UpdateGroup(ctx, lan.ID, apitypes.GroupPatch{Rescan: apitypes.Some("1h")})
+	g1 := s.RescanDue(time.Now())[0].Gen
+	s.UpdateGroup(ctx, lan.ID, apitypes.GroupPatch{Rescan: apitypes.Some("2h")})
+	if s.RescanDue(time.Now())[0].Gen == g1 {
+		t.Error("generation kept by a new interval")
+	}
+	// A last scan in the future (the clock set back): due.
+	now := time.Date(2026, 11, 18, 3, 0, 0, 0, time.UTC)
+	s.RescanDone(ctx, netip.MustParsePrefix(g2.CIDR), now.Add(48*time.Hour), nil)
+	if due := s.RescanDue(now); len(due) != 1 || !s.RescanIsDue(lan.ID, now) {
+		t.Errorf("a future last scan holds the group: %+v", due)
+	}
+}

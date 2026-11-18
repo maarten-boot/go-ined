@@ -57,3 +57,9 @@
    - L1–L3: the waits end when the setting changes; a future last scan is due; a scan where every probe failed doesn't count.
    - P1–P3: Changes, README and SPEC-957, tests. Spec v0.58.
    - The first merge had `schedule_test.go` not gofmt-ed (seen right after with `gofmt -l`); fixed with a follow-up commit and a second merge before any push.
+14. **User**: pushed (then, after the release's third attempt failed: "OK, add the macOS concurrency limit").
+   **Claude** checked the push (`main` and `docs/architecture` at `372a8dc`, `fix/crosscheck-18-02` at `b586fab`; CI green on all three).
+   - Release attempt 3 failed like the first two: its macOS job (queued 18:32:01) got no runner, while CI's macOS job for `0076431` (queued 18:31:42) got one at 18:41:47.
+   - On `fix/ci-concurrency` (merged), CI's gui job got the concurrency group `ci-gui-${{ matrix.runner }}` without cancel-in-progress: one GUI build per runner type, and a newer push replaces one still waiting. TC-010 checks it; SPEC-007 v0.59.
+   - The release's own GUI jobs aren't in the group. Otherwise a push to `main` would replace a release job still waiting.
+   - actionlint couldn't be run: the session wasn't allowed to download it. The YAML parses and TC-010 passes.

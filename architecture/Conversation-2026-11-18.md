@@ -95,3 +95,14 @@
    - Tests run against a fake UDP agent built from gosnmp's own packet code, and a static client for the CLI and GUI tests.
    - All Go tests with `-race` pass except the known flaky TestDiscoveryDialog, which passed when run alone. The GUI SNMP tests passed 3 runs in a row; `make nogui-check` passes.
    - Docs: Spec v0.60 (SPEC-312, 313, 314, 514, 736, and the additions to SPEC-502, 804, 901, the config table and §13); TC-324–327, 757, 909; Changes; README; API examples (only `snmp: null` and the SNMP row); the design status, which corrects N3's load estimate (5,000 hosts without an agent take about 50 min the first time).
+19. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `d3f33a8`, `feature/snmp` at `b950671`) and wrote `Crosscheck-2026-11-18-03.md`:
+   - Two reviewers with read-only access: (1) the SNMP server side with gosnmp's source, (2) the GUI, `inedctl` and the docs. Claude did the trace and CI, and repeated the H and M findings with overlay probes.
+   - Findings: 1 H, 4 M, 13 L, 2 P. No way for a community to leak was found; the database file holds them (L13).
+     - C1 (H): a `\r` in sysDescr (Cisco) crashes the GUI through the status bar.
+     - C2: a failing value read loops every 10 s.
+     - C3: one short outage wipes the agent for 24 h.
+     - C4: out-of-range values (CPU 125 %, a negative size).
+     - C5: `inedctl` prints the agent's text as it comes.
+   - CI on `main` @ `d3f33a8` green.
+   - Decisions asked: D1 C1–C5; D2 L1–L8, L10, L11, L13, P1–P2; D3 part 2 after them.

@@ -102,10 +102,15 @@ func (s *Service) SetSNMP(ctx context.Context, id int64, ip netip.Addr, a SNMPAg
 	if a.Version != cur.SNMP.Version || a.Community != cur.SNMP.Community {
 		n.SNMPValues = nil
 	}
-	if err := s.repo.Apply(ctx, Changes{Hosts: []Host{n}}); err != nil {
-		return apitypes.Host{}, false, err
+	same := !cur.SNMP.CheckedAt.IsZero() && cur.SNMP.Version == a.Version && cur.SNMP.Community == a.Community && cur.SNMP.System == a.System
+	if !same { // the same agent again: only the time changes, kept in memory (crosscheck 2026-11-18-03 C2)
+		if err := s.repo.Apply(ctx, Changes{Hosts: []Host{n}}); err != nil {
+			return apitypes.Host{}, false, err
+		}
 	}
-	changed := cur.SNMP.CheckedAt.IsZero() || cur.SNMP.Version != a.Version || cur.SNMP.System != a.System
+	// host.updated also when values were dropped (L2).
+	changed := !same && (cur.SNMP.CheckedAt.IsZero() || cur.SNMP.Version != a.Version || cur.SNMP.System != a.System ||
+		(cur.SNMPValues != nil && n.SNMPValues == nil))
 	*cur = n
 	v := s.hostView(cur)
 	if changed {
@@ -115,15 +120,16 @@ func (s *Service) SetSNMP(ctx context.Context, id int64, ip netip.Addr, a SNMPAg
 }
 
 // SetSNMPValues records values read from ip with the host's agent
-// (SPEC-313), in memory. Values for a host that is gone, has another IP
-// or agent by now, or isn't monitored any more are dropped. snmp.values is
-// emitted when they differ from the last in whole percents (or are the
+// (SPEC-313), in memory. Values for a host that is gone or has another IP
+// or agent by now are dropped, and those of an unmonitored host unless
+// anyHost (a check on request, crosscheck 2026-11-18-03 L8). snmp.values
+// is emitted when they differ from the last in whole percents (or are the
 // first); it reports whether it was.
-func (s *Service) SetSNMPValues(id int64, ip netip.Addr, a SNMPAgent, v apitypes.SNMPValues) bool {
+func (s *Service) SetSNMPValues(id int64, ip netip.Addr, a SNMPAgent, v apitypes.SNMPValues, anyHost bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cur := s.m.Hosts[id]
-	if cur == nil || cur.IP != ip || !cur.Monitored || cur.SNMP.Version == "" ||
+	if cur == nil || cur.IP != ip || (!cur.Monitored && !anyHost) || cur.SNMP.Version == "" ||
 		cur.SNMP.Version != a.Version || cur.SNMP.Community != a.Community {
 		return false
 	}

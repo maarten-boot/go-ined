@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -153,5 +154,44 @@ func TestRescanLimitLowered(t *testing.T) {
 	s.RescanDone(ctx, netip.MustParsePrefix(g2.CIDR), now.Add(48*time.Hour), nil)
 	if due := s.RescanDue(now); len(due) != 1 || !s.RescanIsDue(lan.ID, now) {
 		t.Errorf("a future last scan holds the group: %+v", due)
+	}
+}
+
+// TC-326 (inventory; crosscheck 2026-11-18-03 L1, L2): an import with
+// --update that turns monitoring off drops the SNMP values, as a PATCH
+// does; a new agent drops the values with host.updated; the same agent
+// again sends nothing.
+func TestSNMPValuesDropped(t *testing.T) {
+	s, lan, web := lanRig(t)
+	r := &recorder{}
+	s.SetNotifier(r)
+	ip := netip.MustParseAddr(web.IP)
+	a := SNMPAgent{Version: "v2c", Community: "c", CheckedAt: time.Unix(100, 0)}
+	if _, ok, err := s.SetSNMP(ctx, web.ID, ip, a); !ok || err != nil {
+		t.Fatal(err)
+	}
+	s.SetSNMPValues(web.ID, ip, a, apitypes.SNMPValues{At: time.Unix(110, 0)}, false)
+	if _, ok, _ := s.SetSNMP(ctx, web.ID, ip, SNMPAgent{Version: "v2c", Community: "c", CheckedAt: time.Unix(200, 0)}); !ok {
+		t.Fatal("same agent")
+	}
+	r.take()
+	if h, _ := s.Host(web.ID); h.SNMP.Values == nil {
+		t.Fatal("same agent dropped the values")
+	}
+	s.SetSNMP(ctx, web.ID, ip, SNMPAgent{Version: "v1", Community: "c", CheckedAt: time.Unix(300, 0)})
+	if ev := r.take(); !strings.Contains(ev, "host.updated") {
+		t.Errorf("a new agent sent %q", ev)
+	}
+	b := SNMPAgent{Version: "v1", Community: "c"}
+	s.SetSNMPValues(web.ID, ip, b, apitypes.SNMPValues{At: time.Unix(310, 0)}, false)
+	f, _ := s.ExportGroup(lan.ID)
+	for i := range f.Group.Hosts {
+		f.Group.Hosts[i].Monitored = false
+	}
+	if _, err := s.Import(ctx, &f, ImportOptions{Update: true, ParentID: Root}); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := s.Host(web.ID); h.Monitored || h.SNMP.Values != nil {
+		t.Errorf("after an import turning monitoring off: %+v", h.SNMP)
 	}
 }

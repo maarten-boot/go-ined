@@ -236,7 +236,7 @@ func TestSNMPConfig(t *testing.T) {
 	}
 	for _, bad := range []string{
 		"[snmp]\nenabled = true\ncommunities = []\n", "[snmp]\ncommunities = [\"\"]\n", "[snmp]\nnetworks = [\"10.0.0.0\"]\n",
-		"[snmp]\nport = 0\n", "[snmp]\nretries = 6\n", "[snmp]\ninterval = \"5s\"\n", "[snmp]\nrescan = \"30s\"\n", "[snmp]\nconcurrency = 0\n",
+		"[snmp]\nport = 0\n", "[snmp]\ncommunities = [\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"]\n", "[snmp]\nretries = 6\n", "[snmp]\ninterval = \"5s\"\n", "[snmp]\nrescan = \"30s\"\n", "[snmp]\nconcurrency = 0\n",
 	} {
 		if err := write(bad); err == nil || !strings.Contains(err.Error(), "snmp.") {
 			t.Errorf("%q: %v", bad, err)

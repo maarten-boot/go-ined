@@ -157,7 +157,23 @@ func IsCode(err error, code string) bool {
 // discarded) or a *json.RawMessage (the body is kept unchanged). A
 // response other than 2xx is returned as *APIError.
 func (c *Client) Do(ctx context.Context, method, path string, body, out any) error {
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	return c.do(ctx, c.timeout, method, path, body, out)
+}
+
+// SNMPCheckTimeout limits CheckSNMP: a host without an agent costs every
+// community and version times the server's timeout and retries
+// (crosscheck 2026-11-18-03 L11).
+const SNMPCheckTimeout = 5 * time.Minute
+
+// DoTimeout is Do with a longer limit than the client's own, for a call
+// that can take long, such as check-snmp; the client's limit stays the
+// least.
+func (c *Client) DoTimeout(ctx context.Context, timeout time.Duration, method, path string, body, out any) error {
+	return c.do(ctx, max(c.timeout, timeout), method, path, body, out)
+}
+
+func (c *Client) do(ctx context.Context, timeout time.Duration, method, path string, body, out any) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var rd io.Reader
 	if body != nil {
@@ -269,7 +285,7 @@ func (c *Client) CheckServices(ctx context.Context, hostID int64) (apitypes.Host
 // (SPEC-312, SPEC-514); 503 when SNMP is off on the server.
 func (c *Client) CheckSNMP(ctx context.Context, hostID int64) (apitypes.Host, error) {
 	var h apitypes.Host
-	return h, c.Do(ctx, http.MethodPost, "/hosts/"+id(hostID)+"/check-snmp", nil, &h)
+	return h, c.do(ctx, max(c.timeout, SNMPCheckTimeout), http.MethodPost, "/hosts/"+id(hostID)+"/check-snmp", nil, &h)
 }
 
 // CreateHost adds a host.

@@ -53,7 +53,7 @@ func TestSNMPDetails(t *testing.T) {
 	// New values from the server: shown.
 	cpu2 := 88
 	e.srv.Svc.SetSNMPValues(h.ID, netip.MustParseAddr("192.0.2.1"), inventory.SNMPAgent{Version: snmp.V2c, Community: "public"},
-		apitypes.SNMPValues{At: time.Now(), UptimeS: 60, CPUPct: &cpu2})
+		apitypes.SNMPValues{At: time.Now(), UptimeS: 60, CPUPct: &cpu2}, false)
 	eventually(t, e.ui, "updated values", func() bool {
 		f := formText(g.details)
 		return strings.Contains(f, "CPU\n88 %") && !strings.Contains(f, "Disks") && strings.Contains(f, "Uptime\n1 min")
@@ -73,4 +73,35 @@ func TestSNMPOff(t *testing.T) {
 		menuItem(g.menuItems(1, find(e.nodes(1), "host", h.ID), 0, 0, &host), "Check SNMP now").Action()
 	})
 	eventually(t, e.ui, "reason", func() bool { return strings.Contains(g.status.Text(), "snmp.enabled = false") })
+}
+
+// TC-757 (crosscheck 2026-11-18-03 C1, L7): an agent text with "\r\n"
+// (Cisco) goes to the status bar as one line without a crash; with two
+// hosts selected there is no "Check SNMP now".
+func TestSNMPOddTextAndSelection(t *testing.T) {
+	e := startWith(t, testserver.Options{SNMP: &snmp.Config{Communities: []string{"public"}, Client: snmp.Static{
+		Community: "public", Version: snmp.V2c, Sys: inventory.SNMPSystem{Name: "core-1", Descr: "Cisco IOS\r\nTAC support"},
+	}}})
+	c, ctx := e.c, e.ctx
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Name: "core"}))
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", Name: "edge"}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return len(e.nodes(1)) == 2 })
+	e.ui.Wait(func() {
+		host := must(c.Host(ctx, h.ID))
+		menuItem(g.menuItems(1, find(e.nodes(1), "host", h.ID), 0, 0, &host), "Check SNMP now").Action()
+	})
+	// Static doesn't clean its text as the UDP client does: the status bar
+	// gets the "\r\n" and makes one line of it.
+	eventually(t, e.ui, "status", func() bool {
+		return strings.Contains(g.status.Text(), "SNMP on core: v2c · core-1 · Cisco IOS TAC support |")
+	})
+	e.ui.Wait(func() {
+		g.maps[1].SetSelection([]mapmodel.Key{mapmodel.HostKey(h.ID), mapmodel.HostKey(h2.ID)})
+		host := must(c.Host(ctx, h.ID))
+		if menuItem(g.menuItems(1, find(e.nodes(1), "host", h.ID), 0, 0, &host), "Check SNMP now") != nil {
+			t.Error("Check SNMP now on two selected hosts")
+		}
+	})
 }

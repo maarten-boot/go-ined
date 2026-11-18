@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -529,5 +530,28 @@ func TestMigration9(t *testing.T) {
 	}
 	if st, err = s.Load(ctx); err != nil || st.Hosts[0].SNMP != h.SNMP {
 		t.Fatalf("saved: %+v %v", st.Hosts[0].SNMP, err)
+	}
+}
+
+// TC-326 (store; crosscheck 2026-11-18-03 L13): the database is readable
+// only by its owner, also one made earlier with a wider mode.
+func TestDatabaseMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix modes")
+	}
+	p := filepath.Join(t.TempDir(), "ined.db")
+	if err := os.WriteFile(p, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for _, f := range []string{p, p + "-wal"} {
+		st, err := os.Stat(f)
+		if err == nil && st.Mode().Perm() != 0o600 {
+			t.Errorf("%s: mode %v", filepath.Base(f), st.Mode().Perm())
+		}
 	}
 }

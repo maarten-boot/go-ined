@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gosnmp/gosnmp"
 
@@ -97,6 +98,9 @@ func (c UDP) System(ctx context.Context, ip netip.Addr, community, version strin
 		if r, err = g.Get([]string{oidSysDescr}); err != nil {
 			return inventory.SNMPSystem{}, err
 		}
+		if r.Error != gosnmp.NoError {
+			return inventory.SNMPSystem{}, fmt.Errorf("the agent answered %v", r.Error) // L4
+		}
 	}
 	for _, v := range r.Variables {
 		if p := dst[normOID(v.Name)]; p != nil {
@@ -134,8 +138,9 @@ func (c UDP) Values(ctx context.Context, ip netip.Addr, community, version strin
 	}
 	sum, n := int64(0), int64(0)
 	for _, v := range load {
-		if isNumber(v) {
-			sum += gosnmp.ToBigInt(v.Value).Int64()
+		// A load outside 0–100 is a broken agent: left out (C4).
+		if l := number(v); isNumber(v) && l >= 0 && l <= 100 {
+			sum += l
 			n++
 		}
 	}
@@ -196,12 +201,14 @@ func storage(rows []gosnmp.SnmpPDU) []apitypes.SNMPStorage {
 	out := []apitypes.SNMPStorage{}
 	for _, idx := range order {
 		e := byIndex[idx]
-		if e.kind == "" || e.size <= 0 || e.units <= 0 {
+		// Rows a broken agent fills with nonsense are left out: a negative
+		// size or used value, or a size in bytes beyond int64 (C4).
+		if e.kind == "" || e.size <= 0 || e.units <= 0 || e.used < 0 || e.size > math.MaxInt64/e.units {
 			continue
 		}
 		out = append(out, apitypes.SNMPStorage{
 			Name: e.name, Kind: e.kind, SizeBytes: e.size * e.units,
-			UsedPct: int(math.Round(float64(e.used) * 100 / float64(e.size))),
+			UsedPct: min(100, int(math.Round(float64(e.used)*100/float64(e.size)))),
 		})
 	}
 	return out
@@ -229,18 +236,33 @@ func number(v gosnmp.SnmpPDU) int64 {
 	return gosnmp.ToBigInt(v.Value).Int64()
 }
 
-// text is an OctetString as text (invalid UTF-8 replaced) or an OID; ""
-// for anything else, such as noSuchObject.
+// maxText is the most runes kept of an agent's text (C1).
+const maxText = 255
+
+// text is an OctetString as one line of text, or an OID; "" for anything
+// else, such as noSuchObject. Invalid UTF-8 is replaced, control
+// characters (CR, LF, tab, ESC, …) become spaces, runs of spaces one, and
+// the text is cut at maxText runes: a Cisco "\r\n" in sysDescr crashed
+// the GUI's status bar, and an escape sequence would reach a terminal
+// (crosscheck 2026-11-18-03 C1, C5).
 func text(v gosnmp.SnmpPDU) string {
 	switch v.Type {
 	case gosnmp.OctetString:
 		b, _ := v.Value.([]byte)
-		return strings.ToValidUTF8(strings.TrimRight(string(b), "\x00"), "�")
+		return oneLine(strings.ToValidUTF8(string(b), "\uFFFD"))
 	case gosnmp.ObjectIdentifier:
 		s, _ := v.Value.(string)
-		return s
+		return oneLine(s)
 	}
 	return ""
+}
+
+func oneLine(s string) string {
+	s = strings.Join(strings.FieldsFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }), " ")
+	if r := []rune(s); len(r) > maxText {
+		s = strings.TrimSpace(string(r[:maxText]))
+	}
+	return s
 }
 
 func describe(ip netip.Addr, version string, i, n int) string {

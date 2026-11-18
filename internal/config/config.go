@@ -380,8 +380,11 @@ func (s SNMPSection) check() []error {
 		errs = append(errs, errors.New("snmp.communities must list at least one community when snmp.enabled = true"))
 	}
 	for i, c := range s.Communities {
-		if c == "" {
+		switch {
+		case c == "":
 			errs = append(errs, fmt.Errorf("snmp.communities: entry %d is empty", i+1))
+		case len(c) > 255: // gosnmp can't encode a longer one (crosscheck 2026-11-18-03 L6)
+			errs = append(errs, fmt.Errorf("snmp.communities: entry %d is longer than 255 bytes", i+1))
 		}
 	}
 	for _, n := range s.Networks {

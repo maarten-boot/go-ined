@@ -355,15 +355,21 @@ func set(fs *flag.FlagSet) map[string]bool {
 // call sends one request. With --json it prints the response body
 // unchanged (SPEC-902); otherwise it decodes into out and calls show.
 func (a *app) call(method, path string, body, out any, show func()) error {
+	do := a.c.Do
+	if strings.HasSuffix(path, "/check-snmp") { // can take minutes (crosscheck 2026-11-18-03 L11)
+		do = func(ctx context.Context, method, path string, body, out any) error {
+			return a.c.DoTimeout(ctx, client.SNMPCheckTimeout, method, path, body, out)
+		}
+	}
 	if a.g.json {
 		var raw json.RawMessage
-		err := a.c.Do(a.ctx, method, path, body, &raw)
+		err := do(a.ctx, method, path, body, &raw)
 		if err == nil && len(raw) > 0 {
 			fmt.Fprintf(a.out, "%s\n", raw)
 		}
 		return err
 	}
-	if err := a.c.Do(a.ctx, method, path, body, out); err != nil {
+	if err := do(a.ctx, method, path, body, out); err != nil {
 		return err
 	}
 	if show != nil {

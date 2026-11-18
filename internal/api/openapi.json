@@ -1045,7 +1045,7 @@
     },
     "/hosts/{id}/check-snmp": {
       "post": {
-        "summary": "Find the host's SNMP agent now (every community of snmp.communities with v2c, then v1), read its values, save and return the host (SPEC-312, SPEC-514). Without an agent it takes every community and version times snmp.timeout. 400 outside snmp.networks; 503 when snmp.enabled = false.",
+        "summary": "Find the host's SNMP agent now (every community of snmp.communities with v2c, then v1), read its values, save and return the host (SPEC-312, SPEC-514). Without an agent it takes every community and version times snmp.timeout. 404 unknown host; 400 outside snmp.networks; 409 when the host changed during the check; 503 when snmp.enabled = false.",
         "parameters": [
           {
             "name": "id",

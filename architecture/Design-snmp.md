@@ -1,6 +1,8 @@
 # Design: SNMP (finding agents, reading values, thresholds)
 
-Status: **part 1 implemented** (2026-11-18): N1–N6 as recommended ("OK, all as recommended"), on `feature/snmp` (SPEC-312–314, 514, 736; Spec v0.60). Part 2 (N7, N8, thresholds in `ined-alert`) is next. Settled in the build:
+Status: **implemented** (2026-11-18). Part 1, N1–N6 as recommended ("OK, all as recommended"), on `feature/snmp` (SPEC-312–314, 514, 736; Spec v0.60). Part 2, N7 and N8, on `feature/snmp-thresholds` (SPEC-958; Spec v0.63). Part 2 also has the metric `cpu_max`, the busiest CPU, added after the user's question on CPU % with several CPUs (v0.62). A HIGH mail is sent only after the value is read from the server once more; OK is at or below the line; two rules for one metric use the lower line; the state file goes to version 3.
+
+Settled in the build of part 1:
 - gosnmp v1.47.0 (2026-10-23). `go mod tidy` also raised `testify` to 1.12.1, used only in tests (Fyne's and gosnmp's).
 - `snmp.port` was added (161), for agents on another port and for the tests.
 - An SNMPv1 agent answers a request with one unknown name with an error for the whole request, so `sysDescr` is then asked alone.

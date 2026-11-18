@@ -113,3 +113,9 @@
    **Claude**: the push hadn't arrived (GitHub still at `26a87ec`); work went on locally.
    - The busiest CPU on `feature/cpu-busiest` (merged): `cpu_max_pct` and `cpus` next to `cpu_pct`, shown as "6 % (16 CPUs, busiest 100 %)" in the GUI, `inedctl` and the event line. One CPU stays "13 %". `snmp.values` counts a change in them. Spec v0.62.
    - Then SNMP part 2.
+   - SNMP part 2 on `feature/snmp-thresholds` (merged): `[[threshold]]` rules in `ined-alert` (`cpu`, `cpu_max`, `memory`, `disk`; `above`; `for`, default 5 min).
+     - HIGH after `for`, after the value is read from the server once more; OK at or below the line; STILL HIGH with `repeat`.
+     - Values that go away, or a deleted host, close an alert without mail.
+     - State file version 3. The four tests that had version 3 as "too new", or expected version 2, were updated.
+     - 61 Python tests pass.
+   - Docs: Spec v0.63 (SPEC-958, SPEC-956, §13); TC-959; Changes; the `ined-alert` README and `alert.toml`; the design status (implemented); the Plan.

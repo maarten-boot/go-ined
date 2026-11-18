@@ -66,6 +66,7 @@ Commands:
   group expand <id>
   group labels <id> name|ip|both|inherit      (what the GUI shows under the hosts in it)
   group color <id> '#rrggbb'|none              (the colour of its top bar in the GUI)
+  group rescan <id> INTERVAL|off              (scan the network again every INTERVAL, e.g. 24h; 15m to 8760h)
   group copy <id> --view V                     (copy it with its subgroups and hosts into custom view V)
   group export <id> [-o FILE]                  (the group with everything below it, as JSON; default stdout)
   note get|set|clear host|group <id> [text...]   (set reads stdin when no text is given)
@@ -82,6 +83,7 @@ Commands:
                                                (lay out members on a grid; default 100 x 80)
   discover start <cidr> | --group ID [--parent ID] [--wait]
   discover status <job-id>
+  discover list                                (every job the server keeps, scheduled ones too)
   discover cancel <job-id>
   import FILE|- [--parent ID] [--x X --y Y] [--dry-run] [--update]
                                                (a group export, below group ID or at the top level;

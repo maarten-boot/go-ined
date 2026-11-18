@@ -240,6 +240,7 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 	}
 	labels := g.labelsItem(view, groups)
 	colour := g.colorItem(groups)
+	rescan := g.rescanItem(groups)
 	g.mu.Unlock()
 	var copyTo *fyne.MenuItem
 	if onSelection {
@@ -280,6 +281,9 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		scan := fyne.NewMenuItem("Scan this network", func() { g.openDiscovery(cidr) })
 		scan.Disabled = strings.Contains(cidr, ":") // IPv6 (SPEC-707)
 		items = append(items, scan)
+		if rescan != nil {
+			items = append(items, rescan)
+		}
 	}
 	if remove != nil {
 		items = append(items, remove)

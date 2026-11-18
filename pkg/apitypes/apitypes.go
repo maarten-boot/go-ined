@@ -228,21 +228,27 @@ type WatchedService struct {
 // Group is a group as returned by the API (SPEC-102). CIDR is empty for an
 // ordinary group and set for a network group.
 type Group struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Note        string    `json:"note"`
-	CIDR        string    `json:"cidr"`
-	ViewID      int64     `json:"view_id"`
-	ParentID    *int64    `json:"parent_id"`
-	Collapsed   bool      `json:"collapsed"`
-	Labels      string    `json:"labels"` // SPEC-725: "" (as the parent), "name", "ip" or "both"
-	Color       string    `json:"color"`  // SPEC-727: the top bar's colour, "#RRGGBB" or "" (none)
-	Status      string    `json:"status"`
-	X           float64   `json:"x"`
-	Y           float64   `json:"y"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Note        string `json:"note"`
+	CIDR        string `json:"cidr"`
+	ViewID      int64  `json:"view_id"`
+	ParentID    *int64 `json:"parent_id"`
+	Collapsed   bool   `json:"collapsed"`
+	Labels      string `json:"labels"` // SPEC-725: "" (as the parent), "name", "ip" or "both"
+	Color       string `json:"color"`  // SPEC-727: the top bar's colour, "#RRGGBB" or "" (none)
+	// SPEC-206: scanning the network again on a schedule. Rescan is the
+	// interval ("24h", "" = off); RescanLast is when the last finished scan
+	// of the whole range ended, RescanFound the hosts it added there.
+	Rescan      string     `json:"rescan"`
+	RescanLast  *time.Time `json:"rescan_last"`
+	RescanFound int        `json:"rescan_found"`
+	Status      string     `json:"status"`
+	X           float64    `json:"x"`
+	Y           float64    `json:"y"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // MapItem is one entry of GET /map (SPEC-501).
@@ -263,6 +269,7 @@ type MapItem struct {
 	CIDR        string  `json:"cidr,omitempty"`   // network groups only
 	Labels      string  `json:"labels,omitempty"` // groups only (SPEC-725)
 	Color       string  `json:"color,omitempty"`  // groups only (SPEC-727)
+	Rescan      string  `json:"rescan,omitempty"` // network groups only (SPEC-206)
 	// ServicesDown is the number of watched services that are down;
 	// hosts only, 0 for groups (v0.50, SPEC-310).
 	ServicesDown int `json:"services_down"`
@@ -411,6 +418,7 @@ type GroupPatch struct {
 	Collapsed   Opt[bool]    `json:"collapsed,omitzero"`
 	Labels      Opt[string]  `json:"labels,omitzero"` // SPEC-725; "" = as the parent
 	Color       Opt[string]  `json:"color,omitzero"`  // SPEC-727; "" = none
+	Rescan      Opt[string]  `json:"rescan,omitzero"` // SPEC-206; "" or "off" = off
 	X           Opt[float64] `json:"x,omitzero"`
 	Y           Opt[float64] `json:"y,omitzero"`
 }
@@ -446,6 +454,7 @@ type Discovery struct {
 	Added      int        `json:"added"`  // of those, new hosts
 	Errors     int        `json:"errors"` // probes that failed with an error
 	Error      string     `json:"error,omitempty"`
+	Scheduled  bool       `json:"scheduled"` // started by the schedule of its group (SPEC-206)
 	StartedAt  time.Time  `json:"started_at"`
 	FinishedAt *time.Time `json:"finished_at"`
 }

@@ -1,8 +1,10 @@
 package inventory
 
 import (
+	"cmp"
 	"context"
 	"net/netip"
+	"slices"
 	"time"
 
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -32,8 +34,9 @@ type Found struct {
 // in one transaction (SPEC-204). Each goes into the most specific network
 // group inside group's subtree that contains it; if group no longer exists,
 // into the most specific network group anywhere, or the root. Existing IPs
-// are neither duplicated nor moved. It returns the number of hosts added.
-func (s *Service) AddDiscovered(ctx context.Context, group int64, found []Found) (int, error) {
+// are neither duplicated nor moved. It returns the addresses of the hosts
+// added.
+func (s *Service) AddDiscovered(ctx context.Context, group int64, found []Found) ([]netip.Addr, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var (
@@ -68,19 +71,105 @@ func (s *Service) AddDiscovered(ctx context.Context, group int64, found []Found)
 		ch.Hosts = append(ch.Hosts, h)
 	}
 	if len(added) == 0 {
-		return 0, nil
+		return nil, nil
 	}
 	ch.NextHostID = next
 	if err := s.repo.Apply(ctx, ch); err != nil {
 		undo()
-		return 0, err
+		return nil, err
 	}
 	s.nextHost = next
 	for _, id := range added {
 		s.notify.Publish(apitypes.EventHostCreated, s.hostView(s.m.Hosts[id]))
 	}
 	s.emitGroupStatus(before)
-	return len(added), nil
+	ips := make([]netip.Addr, len(ch.Hosts))
+	for i, h := range ch.Hosts {
+		ips[i] = h.IP
+	}
+	return ips, nil
+}
+
+// RescanTarget is a network group whose scan on a schedule is due
+// (SPEC-206).
+type RescanTarget struct {
+	ID       int64
+	CIDR     netip.Prefix
+	Interval time.Duration
+	Due      time.Time
+}
+
+// RescanDue returns the network groups with a rescan interval whose scan
+// is due at now, the longest due first (then by id). A group never scanned
+// since its interval was set is due at once.
+func (s *Service) RescanDue(now time.Time) []RescanTarget {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []RescanTarget
+	for _, g := range s.m.Groups {
+		if g.Rescan <= 0 || !g.IsNetwork() || !g.CIDR.Addr().Is4() {
+			continue
+		}
+		due := time.Time{}
+		if !g.RescanLast.IsZero() {
+			due = g.RescanLast.Add(g.Rescan)
+		}
+		if !due.After(now) {
+			out = append(out, RescanTarget{ID: g.ID, CIDR: g.CIDR, Interval: g.Rescan, Due: due})
+		}
+	}
+	slices.SortFunc(out, func(a, b RescanTarget) int { return cmp.Or(a.Due.Compare(b.Due), cmp.Compare(a.ID, b.ID)) })
+	return out
+}
+
+// RescanIsDue reports whether group id's scheduled scan is due at now.
+func (s *Service) RescanIsDue(id int64, now time.Time) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	g := s.m.Groups[id]
+	if g == nil || g.Rescan <= 0 || !g.IsNetwork() || !g.CIDR.Addr().Is4() {
+		return false
+	}
+	return g.RescanLast.IsZero() || !g.RescanLast.Add(g.Rescan).After(now)
+}
+
+// RescanDone records a discovery job over p that finished done at at
+// (SPEC-206): every network group with a rescan interval whose whole range
+// lies in p gets rescan_last = at and rescan_found = the hosts of added in
+// its range, with group.updated. A scan started by hand counts too.
+func (s *Service) RescanDone(ctx context.Context, p netip.Prefix, at time.Time, added []netip.Addr) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	at = at.UTC().Truncate(time.Millisecond)
+	var ch Changes
+	for _, id := range sortedKeys(s.m.Groups) {
+		g := s.m.Groups[id]
+		if g.Rescan <= 0 || !g.IsNetwork() || g.CIDR.Bits() < p.Bits() || !p.Contains(g.CIDR.Addr()) {
+			continue
+		}
+		n := 0
+		for _, ip := range added {
+			if g.CIDR.Contains(ip) {
+				n++
+			}
+		}
+		u := *g
+		u.RescanLast, u.RescanFound, u.UpdatedAt = at, n, s.stamp()
+		ch.Groups = append(ch.Groups, u)
+	}
+	if len(ch.Groups) == 0 {
+		return nil
+	}
+	if err := s.repo.Apply(ctx, ch); err != nil {
+		return err
+	}
+	agg := s.m.In(NetworkView).Aggregate()
+	for _, u := range ch.Groups {
+		g := s.m.Groups[u.ID]
+		*g = u
+		s.notify.Publish(apitypes.EventGroupUpdated, groupView(g, agg[g.ID]))
+	}
+	return nil
 }
 
 // discoveryParent picks the group for a discovered host (caller holds the

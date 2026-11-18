@@ -4,6 +4,7 @@
 package discovery
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -31,7 +32,10 @@ type Inventory interface {
 	Group(id int64) (apitypes.Group, error)
 	NetworkGroupByCIDR(p netip.Prefix) (apitypes.Group, bool)
 	CreateGroup(ctx context.Context, in apitypes.GroupCreate) (apitypes.Group, error)
-	AddDiscovered(ctx context.Context, group int64, found []inventory.Found) (int, error)
+	AddDiscovered(ctx context.Context, group int64, found []inventory.Found) ([]netip.Addr, error)
+	RescanDue(now time.Time) []inventory.RescanTarget
+	RescanIsDue(id int64, now time.Time) bool
+	RescanDone(ctx context.Context, p netip.Prefix, at time.Time, added []netip.Addr) error
 }
 
 // Notifier receives discovery.progress and discovery.finished.
@@ -54,6 +58,12 @@ type Config struct {
 	// sysctl without a restart (SPEC-304, v0.27). Without it, a nil prober
 	// means discovery is unavailable.
 	Ready func() string
+	// Scheduled runs the scans on a schedule of network groups
+	// (discovery.scheduled, SPEC-206, SPEC-207).
+	Scheduled bool
+	Tick      time.Duration    // how often the schedule is checked (default 10 s)
+	Retry     time.Duration    // wait after a scheduled scan failed (default 5 min)
+	Now       func() time.Time // default time.Now
 }
 
 func (c *Config) defaults() {
@@ -81,6 +91,15 @@ func (c *Config) defaults() {
 	if c.SecondTry <= 0 {
 		c.SecondTry = SecondTry
 	}
+	if c.Tick <= 0 {
+		c.Tick = 10 * time.Second
+	}
+	if c.Retry <= 0 {
+		c.Retry = 5 * time.Minute
+	}
+	if c.Now == nil {
+		c.Now = time.Now
+	}
 }
 
 // Manager starts, tracks and cancels discovery jobs.
@@ -100,12 +119,23 @@ type Manager struct {
 	jobs     map[string]*job
 	finished []string // ids of finished jobs, oldest first
 	closed   bool
+	// The schedule (SPEC-206, 207): a group isn't started again before
+	// later[id] (a failed scan, or one cancelled by a user); waiting counts
+	// manual starts waiting for a scheduled job to stop; schedErr is the
+	// last reason a scheduled scan couldn't start, logged once.
+	later    map[int64]time.Time
+	waiting  int
+	schedErr string
 }
 
 type job struct {
-	view   apitypes.Discovery
-	prefix netip.Prefix
-	cancel context.CancelFunc
+	view     apitypes.Discovery
+	prefix   netip.Prefix
+	cancel   context.CancelFunc
+	done     chan struct{} // closed when the job has ended
+	added    []netip.Addr
+	interval time.Duration // of a scheduled job's group
+	byUser   bool          // cancelled through Cancel
 }
 
 // New returns a manager. prober nil means ICMP is unavailable; whyNot is
@@ -117,15 +147,27 @@ func New(inv Inventory, prober monitor.Prober, whyNot string, notify Notifier, r
 		log = slog.Default()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Manager{
+	m := &Manager{
 		inv: inv, prober: prober, whyNot: whyNot, notify: notify, cfg: cfg, log: log, run: run,
-		baseCtx: ctx, stopAll: cancel, jobs: map[string]*job{},
+		baseCtx: ctx, stopAll: cancel, jobs: map[string]*job{}, later: map[int64]time.Time{},
 	}
+	if cfg.Scheduled {
+		m.wg.Add(1)
+		go m.schedule()
+	}
+	return m
 }
 
 // Start validates the request, finds or creates the network group and
-// starts the job (SPEC-201, SPEC-203).
+// starts the job (SPEC-201, SPEC-203). A scheduled job over an overlapping
+// range is cancelled first, keeping what it found (SPEC-207).
 func (m *Manager) Start(ctx context.Context, in apitypes.DiscoveryCreate) (apitypes.Discovery, error) {
+	return m.start(ctx, in, 0)
+}
+
+// start starts a job; interval > 0 marks it scheduled (its group's rescan
+// interval). A scheduled job never cancels another.
+func (m *Manager) start(ctx context.Context, in apitypes.DiscoveryCreate, interval time.Duration) (apitypes.Discovery, error) {
 	if m.cfg.Ready != nil {
 		if why := m.cfg.Ready(); why != "" {
 			return apitypes.Discovery{}, inventory.Errorf(inventory.Unavailable, "discovery is unavailable: %s", why)
@@ -145,23 +187,62 @@ func (m *Manager) Start(ctx context.Context, in apitypes.DiscoveryCreate) (apity
 	// Reserve the range before creating anything, so that a conflict
 	// creates no group (SPEC-201, SPEC-205).
 	m.mu.Lock()
-	if m.closed {
-		m.mu.Unlock()
-		return apitypes.Discovery{}, inventory.Errorf(inventory.Unavailable, "the server is shutting down")
-	}
-	for _, j := range m.jobs {
-		if j.view.State == apitypes.DiscoveryRunning && j.prefix.Overlaps(prefix) {
+	for {
+		if m.closed {
 			m.mu.Unlock()
-			return apitypes.Discovery{}, inventory.Errorf(inventory.Conflict,
-				"range %s overlaps running discovery %s (%s)", prefix, j.view.ID, j.prefix)
+			return apitypes.Discovery{}, inventory.Errorf(inventory.Unavailable, "the server is shutting down")
 		}
+		var stop []*job
+		for _, j := range m.jobs {
+			if j.view.State != apitypes.DiscoveryRunning || !j.prefix.Overlaps(prefix) {
+				continue
+			}
+			if interval > 0 || !j.view.Scheduled {
+				m.mu.Unlock()
+				return apitypes.Discovery{}, inventory.Errorf(inventory.Conflict,
+					"range %s overlaps running discovery %s (%s)", prefix, j.view.ID, j.prefix)
+			}
+			stop = append(stop, j)
+		}
+		if len(stop) == 0 {
+			break
+		}
+		// A manual scan wins: stop the scheduled ones, which save what
+		// they found, and look again (SPEC-207).
+		m.waiting++
+		m.mu.Unlock()
+		for _, j := range stop {
+			m.log.Info("scheduled discovery cancelled for a manual one", "id", j.view.ID, "cidr", j.view.CIDR, "for", prefix.String())
+			j.cancel()
+		}
+		var err error
+		for _, j := range stop {
+			select {
+			case <-j.done:
+			case <-ctx.Done():
+				err = ctx.Err()
+			}
+		}
+		m.mu.Lock()
+		m.waiting--
+		if err != nil {
+			m.mu.Unlock()
+			return apitypes.Discovery{}, err
+		}
+	}
+	// A scheduled scan checks again, now that no overlapping job runs: a
+	// job that just ended has recorded its scan by now (SPEC-206).
+	if interval > 0 && (in.GroupID == nil || !m.inv.RescanIsDue(*in.GroupID, m.cfg.Now())) {
+		m.mu.Unlock()
+		return apitypes.Discovery{}, inventory.Errorf(inventory.Conflict, "not due any more")
 	}
 	m.seq++
 	id := m.run + "-" + strconv.Itoa(m.seq)
 	jctx, cancel := context.WithCancel(m.baseCtx)
 	first, n := Addresses(prefix)
-	j := &job{prefix: prefix, cancel: cancel, view: apitypes.Discovery{
+	j := &job{prefix: prefix, cancel: cancel, done: make(chan struct{}), interval: interval, view: apitypes.Discovery{
 		ID: id, CIDR: prefix.String(), State: apitypes.DiscoveryRunning, Total: n, StartedAt: time.Now().UTC().Truncate(time.Millisecond),
+		Scheduled: interval > 0,
 	}}
 	m.jobs[id] = j
 	m.wg.Add(1) // under the lock, so Close can't miss this job
@@ -177,6 +258,7 @@ func (m *Manager) Start(ctx context.Context, in apitypes.DiscoveryCreate) (apity
 		m.mu.Lock()
 		delete(m.jobs, id)
 		m.mu.Unlock()
+		close(j.done)
 		m.wg.Done()
 		return apitypes.Discovery{}, err
 	}
@@ -248,15 +330,33 @@ func (m *Manager) Get(id string) (apitypes.Discovery, error) {
 	return j.view, nil
 }
 
+// List returns the jobs kept (running and the last finished), oldest first.
+func (m *Manager) List() []apitypes.Discovery {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]apitypes.Discovery, 0, len(m.jobs))
+	for _, j := range m.jobs {
+		out = append(out, j.view)
+	}
+	slices.SortFunc(out, func(a, b apitypes.Discovery) int {
+		return cmp.Or(a.StartedAt.Compare(b.StartedAt), cmp.Compare(len(a.ID), len(b.ID)), cmp.Compare(a.ID, b.ID))
+	})
+	return out
+}
+
 // Cancel asks a running job to stop and returns its current state; the
 // job ends with state cancelled. Cancelling a finished job does nothing.
 func (m *Manager) Cancel(id string) (apitypes.Discovery, error) {
 	m.mu.Lock()
 	j := m.jobs[id]
-	m.mu.Unlock()
 	if j == nil {
+		m.mu.Unlock()
 		return apitypes.Discovery{}, inventory.Errorf(inventory.NotFound, "discovery %s not found", id)
 	}
+	if j.view.State == apitypes.DiscoveryRunning {
+		j.byUser = true
+	}
+	m.mu.Unlock()
 	j.cancel()
 	return m.Get(id)
 }
@@ -329,7 +429,8 @@ func (m *Manager) runJob(ctx context.Context, j *job, first netip.Addr, n int) {
 		added, err := m.inv.AddDiscovered(c, j.view.GroupID, pending)
 		pending = nil
 		m.mu.Lock()
-		j.view.Added += added
+		j.view.Added += len(added)
+		j.added = append(j.added, added...)
 		m.mu.Unlock()
 		if err != nil {
 			failure = err
@@ -381,15 +482,31 @@ func (m *Manager) runJob(ctx context.Context, j *job, first netip.Addr, n int) {
 	save(sctx)
 	cancel()
 
-	m.mu.Lock()
+	state := apitypes.DiscoveryDone
 	switch {
 	case failure != nil:
-		j.view.State = apitypes.DiscoveryFailed
-		j.view.Error = failure.Error()
+		state = apitypes.DiscoveryFailed
 	case ctx.Err() != nil:
-		j.view.State = apitypes.DiscoveryCancelled
-	default:
-		j.view.State = apitypes.DiscoveryDone
+		state = apitypes.DiscoveryCancelled
+	}
+	if state == apitypes.DiscoveryDone {
+		// Every group with a schedule in the range was scanned now, by
+		// hand or not (SPEC-206). Recorded while the job still runs, so
+		// the schedule can't start that group's scan in between.
+		m.mu.Lock()
+		added := slices.Clone(j.added)
+		m.mu.Unlock()
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		if err := m.inv.RescanDone(rctx, j.prefix, m.cfg.Now(), added); err != nil {
+			m.log.Error("discovery: recording the scan failed", "id", j.view.ID, "cidr", j.view.CIDR, "err", err)
+		}
+		cancel()
+	}
+
+	m.mu.Lock()
+	j.view.State = state
+	if failure != nil {
+		j.view.Error = failure.Error()
 	}
 	if failure == nil && probeErr != nil {
 		j.view.Error = fmt.Sprintf("%d probes failed; first error: %v", j.view.Errors, probeErr)
@@ -402,6 +519,14 @@ func (m *Manager) runJob(ctx context.Context, j *job, first netip.Addr, n int) {
 		delete(m.jobs, m.finished[0])
 		m.finished = slices.Delete(m.finished, 0, 1)
 	}
+	if j.view.Scheduled {
+		switch {
+		case state == apitypes.DiscoveryFailed:
+			m.later[j.view.GroupID] = m.cfg.Now().Add(m.cfg.Retry)
+		case state == apitypes.DiscoveryCancelled && j.byUser:
+			m.later[j.view.GroupID] = m.cfg.Now().Add(j.interval) // skip this round
+		}
+	}
 	m.mu.Unlock()
 	if failure != nil {
 		m.log.Error("discovery failed", "id", j.view.ID, "cidr", j.view.CIDR, "err", failure)
@@ -410,6 +535,67 @@ func (m *Manager) runJob(ctx context.Context, j *job, first netip.Addr, n int) {
 		m.log.Warn("discovery probes failed", "id", j.view.ID, "cidr", j.view.CIDR, "errors", nErr, "first", probeErr)
 	}
 	m.publish(apitypes.EventDiscoveryFinished, j)
+	close(j.done)
+}
+
+// schedule starts the scans that are due, one at a time (SPEC-206, 207),
+// until Close.
+func (m *Manager) schedule() {
+	defer m.wg.Done()
+	t := time.NewTicker(m.cfg.Tick)
+	defer t.Stop()
+	for {
+		select {
+		case <-m.baseCtx.Done():
+			return
+		case <-t.C:
+			m.scheduleOnce()
+		}
+	}
+}
+
+// scheduleOnce starts the scan due longest, unless a scheduled scan runs
+// or a manual one waits for one to stop. A group whose range overlaps a
+// running job is tried at the next check.
+func (m *Manager) scheduleOnce() {
+	m.mu.Lock()
+	busy := m.closed || m.waiting > 0
+	for _, j := range m.jobs {
+		busy = busy || (j.view.Scheduled && j.view.State == apitypes.DiscoveryRunning)
+	}
+	m.mu.Unlock()
+	if busy {
+		return
+	}
+	now := m.cfg.Now()
+	for _, t := range m.inv.RescanDue(now) {
+		m.mu.Lock()
+		wait := now.Before(m.later[t.ID])
+		m.mu.Unlock()
+		if wait {
+			continue
+		}
+		id := t.ID
+		v, err := m.start(m.baseCtx, apitypes.DiscoveryCreate{GroupID: &id}, t.Interval)
+		if inventory.KindOf(err) == inventory.Conflict {
+			continue
+		}
+		m.mu.Lock()
+		delete(m.later, t.ID)
+		last := m.schedErr
+		m.schedErr = ""
+		if err != nil {
+			m.schedErr = err.Error()
+		}
+		m.mu.Unlock()
+		switch {
+		case err == nil:
+			m.log.Info("scheduled discovery started", "id", v.ID, "cidr", v.CIDR, "group", t.ID)
+		case err.Error() != last:
+			m.log.Warn("scheduled discovery can't start", "cidr", t.CIDR.String(), "group", t.ID, "err", err)
+		}
+		return
+	}
 }
 
 func (m *Manager) publish(typ string, j *job) {

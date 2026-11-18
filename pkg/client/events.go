@@ -356,6 +356,9 @@ func DiscoveryLine(d apitypes.Discovery) string {
 	if d.Errors > 0 {
 		s += fmt.Sprintf(" errors %d", d.Errors)
 	}
+	if d.Scheduled {
+		s += " (scheduled)"
+	}
 	if d.Error != "" {
 		s += ": " + d.Error
 	}

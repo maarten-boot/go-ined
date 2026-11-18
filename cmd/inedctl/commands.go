@@ -29,7 +29,7 @@ var commands = map[string]map[string]command{
 		"list": groupList, "add": groupAdd, "show": groupShow, "edit": groupEdit,
 		"rm": groupRm, "move": groupMove, "shift": groupShift,
 		"collapse": groupCollapse(true), "expand": groupCollapse(false),
-		"labels": groupLabels, "color": groupColor, "copy": groupCopy,
+		"labels": groupLabels, "color": groupColor, "rescan": groupRescan, "copy": groupCopy,
 		"export": groupExport,
 	},
 	"note": {"get": noteGet, "set": noteSet, "clear": noteClear},
@@ -38,7 +38,7 @@ var commands = map[string]map[string]command{
 		"rm": viewRm, "place": viewPlace, "unplace": viewUnplace, "arrange": viewArrange,
 	},
 	"discover": {
-		"start": discoverStart, "status": discoverStatus, "cancel": discoverCancel,
+		"start": discoverStart, "status": discoverStatus, "cancel": discoverCancel, "list": discoverList,
 	},
 }
 
@@ -446,6 +446,26 @@ func groupLabels(a *app, name string, args []string) error {
 		func() { a.groupDetails(g) })
 }
 
+// groupRescan sets how often a network group is scanned again
+// (SPEC-206): an interval such as 24h, or off.
+func groupRescan(a *app, name string, args []string) error {
+	pos, err := a.parse(a.flags(name), args, 2, 2)
+	if err != nil {
+		return err
+	}
+	gid, err := parseID(pos[0])
+	if err != nil {
+		return err
+	}
+	d, err := apitypes.ParseRescan(pos[1])
+	if err != nil {
+		return usagef("%v", err)
+	}
+	var g apitypes.Group
+	return a.call(http.MethodPatch, path("group", gid), apitypes.GroupPatch{Rescan: apitypes.Some(apitypes.FormatRescan(d))}, &g,
+		func() { a.groupDetails(g) })
+}
+
 // groupColor sets the colour of a group's top bar in the GUI (SPEC-727):
 // #rrggbb, or none.
 func groupColor(a *app, name string, args []string) error {
@@ -721,6 +741,20 @@ func discoverStatus(a *app, name string, args []string) error {
 	var d apitypes.Discovery
 	return a.call(http.MethodGet, "/discovery/"+url.PathEscape(pos[0]), nil, &d,
 		func() { fmt.Fprintln(a.out, client.DiscoveryLine(d)) })
+}
+
+// discoverList prints every job the server keeps, scheduled ones too
+// (SPEC-205, 206), oldest first.
+func discoverList(a *app, name string, args []string) error {
+	if _, err := a.parse(a.flags(name), args, 0, 0); err != nil {
+		return err
+	}
+	var ds []apitypes.Discovery
+	return a.call(http.MethodGet, "/discovery", nil, &ds, func() {
+		for _, d := range ds {
+			fmt.Fprintln(a.out, client.DiscoveryLine(d))
+		}
+	})
 }
 
 func discoverCancel(a *app, name string, args []string) error {

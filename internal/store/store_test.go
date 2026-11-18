@@ -459,3 +459,38 @@ func TestMigration6And7(t *testing.T) {
 		t.Fatalf("%d rows left after delete (%v)", n, err)
 	}
 }
+
+// TC-218: migration 8 adds a group's rescan interval, last scan and found
+// count; they are saved and loaded.
+func TestMigration8(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v7.db")
+	db, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(ctx, db, migrations[:7]); err != nil {
+		t.Fatal(err)
+	}
+	ts := "2026-11-01T10:00:00Z"
+	if _, err := db.Exec(`INSERT INTO groups (id, name, cidr, parent_id, x, y, created_at, updated_at) VALUES (3, 'lan', '10.0.1.0/24', 0, 5, 6, ?1, ?1)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s, err := Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	st, err := s.Load(ctx)
+	if err != nil || len(st.Groups) != 1 || st.Groups[0].Rescan != 0 || !st.Groups[0].RescanLast.IsZero() || st.Groups[0].RescanFound != 0 {
+		t.Fatalf("groups after migration: %+v %v", st.Groups, err)
+	}
+	g := st.Groups[0]
+	g.Rescan, g.RescanLast, g.RescanFound = 24*time.Hour, time.Date(2026, 11, 18, 3, 15, 0, 0, time.UTC), 2
+	if err := s.Apply(ctx, inventory.Changes{Groups: []inventory.Group{g}}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err = s.Load(ctx); err != nil || !reflect.DeepEqual(st.Groups[0], g) {
+		t.Fatalf("saved: %+v %v", st.Groups, err)
+	}
+}

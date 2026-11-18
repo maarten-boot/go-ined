@@ -544,6 +544,9 @@ func (d *details) fill() {
 			{"Parent (this view)", d.parentName()},
 			{"View", dash(view.Name)}, {"Description", dash(gr.Description)},
 		}
+		if gr.CIDR != "" && !strings.Contains(gr.CIDR, ":") {
+			rows = slices.Insert(rows, 3, [2]string{"Rescan", rescanText(gr)}) // after CIDR
+		}
 	}
 	objs := make([]fyne.CanvasObject, 0, 2*len(rows))
 	for _, r := range rows {

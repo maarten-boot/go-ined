@@ -125,6 +125,12 @@ var migrations = []string{
 		last_ok     TEXT,
 		PRIMARY KEY (host_id, ord)
 	);`,
+	// 7 → 8: scanning a network group again on a schedule (SPEC-206): the
+	// interval in seconds (0 = off), when the last scan covering it ended,
+	// and the hosts it added there.
+	`ALTER TABLE groups ADD COLUMN rescan INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE groups ADD COLUMN rescan_last TEXT;
+	ALTER TABLE groups ADD COLUMN rescan_found INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // Store is a SQLite-backed inventory.Repository.
@@ -325,7 +331,8 @@ func (s *Store) loadPlacements(ctx context.Context) ([]inventory.Placement, erro
 }
 
 func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, note, cidr, view_id, parent_id, collapsed, labels, color, x, y, created_at, updated_at FROM groups ORDER BY id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, note, cidr, view_id, parent_id, collapsed, labels, color,
+		rescan, rescan_last, rescan_found, x, y, created_at, updated_at FROM groups ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("store: load groups: %w", err)
 	}
@@ -333,14 +340,20 @@ func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
 	var out []inventory.Group
 	for rows.Next() {
 		var g inventory.Group
-		var cidr, created, updated sql.NullString
-		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.Note, &cidr, &g.ViewID, &g.ParentID, &g.Collapsed, &g.Labels, &g.Color, &g.X, &g.Y, &created, &updated); err != nil {
+		var cidr, rescanLast, created, updated sql.NullString
+		var rescan int64
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.Note, &cidr, &g.ViewID, &g.ParentID, &g.Collapsed, &g.Labels, &g.Color,
+			&rescan, &rescanLast, &g.RescanFound, &g.X, &g.Y, &created, &updated); err != nil {
 			return nil, fmt.Errorf("store: scan group: %w", err)
 		}
 		if cidr.Valid && cidr.String != "" {
 			if g.CIDR, err = netip.ParsePrefix(cidr.String); err != nil {
 				return nil, fmt.Errorf("store: group %d: bad cidr %q: %w", g.ID, cidr.String, err)
 			}
+		}
+		g.Rescan = time.Duration(rescan) * time.Second
+		if g.RescanLast, err = parseTime(rescanLast); err != nil {
+			return nil, fmt.Errorf("store: group %d: %w", g.ID, err)
 		}
 		if g.CreatedAt, err = parseTime(created); err != nil {
 			return nil, fmt.Errorf("store: group %d: %w", g.ID, err)
@@ -475,12 +488,15 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 		if g.IsNetwork() {
 			cidr = g.CIDR.String()
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO groups (id, name, description, note, cidr, view_id, parent_id, collapsed, labels, color, x, y, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		_, err = tx.ExecContext(ctx, `INSERT INTO groups (id, name, description, note, cidr, view_id, parent_id, collapsed, labels, color,
+				rescan, rescan_last, rescan_found, x, y, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description, note=excluded.note,
-				cidr=excluded.cidr, view_id=excluded.view_id, parent_id=excluded.parent_id, collapsed=excluded.collapsed, labels=excluded.labels, color=excluded.color, x=excluded.x, y=excluded.y,
+				cidr=excluded.cidr, view_id=excluded.view_id, parent_id=excluded.parent_id, collapsed=excluded.collapsed, labels=excluded.labels, color=excluded.color,
+				rescan=excluded.rescan, rescan_last=excluded.rescan_last, rescan_found=excluded.rescan_found, x=excluded.x, y=excluded.y,
 				updated_at=excluded.updated_at`,
-			g.ID, g.Name, g.Description, g.Note, cidr, max(g.ViewID, 1), g.ParentID, g.Collapsed, g.Labels, g.Color, g.X, g.Y, fmtTime(g.CreatedAt), fmtTime(g.UpdatedAt))
+			g.ID, g.Name, g.Description, g.Note, cidr, max(g.ViewID, 1), g.ParentID, g.Collapsed, g.Labels, g.Color,
+			int64(g.Rescan/time.Second), nullTime(g.RescanLast), g.RescanFound, g.X, g.Y, fmtTime(g.CreatedAt), fmtTime(g.UpdatedAt))
 		if err != nil {
 			return fmt.Errorf("store: upsert group %d: %w", g.ID, err)
 		}

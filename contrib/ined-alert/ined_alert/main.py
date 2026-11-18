@@ -161,7 +161,9 @@ class App:
         ev = item[1]
         if not self.loaded:
             return  # the snapshot that follows covers it
-        if ev.type in ("host.status", "host.updated", "host.created"):
+        if ev.type == "host.created":
+            self.notices(self.engine.created(ev.data, now), now)
+        elif ev.type in ("host.status", "host.updated"):
             self.notices(self.engine.update(ev.data, now), now)
         elif ev.type == "service.status":
             self.notices(self.engine.service(ev.data, now), now)
@@ -186,6 +188,8 @@ class App:
                     self.notices([self.engine.summary(now)], now)
             if self.routes_dirty and now - self.routes_dirty >= ROUTES_AFTER:
                 self.load_routes()
+            if self.engine.new and not self.routes_dirty:  # the routes know the new hosts by now
+                self.notices(self.engine.new_hosts(now), now)
             if now >= self.next_health:
                 self.next_health = now + HEALTH_EVERY
                 h = self.client.health()

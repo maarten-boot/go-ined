@@ -529,8 +529,12 @@ func (f fakeDiscovery) Get(id string) (apitypes.Discovery, error) {
 	return apitypes.Discovery{ID: id, State: apitypes.DiscoveryDone}, nil
 }
 func (f fakeDiscovery) Cancel(id string) (apitypes.Discovery, error) { return f.Get(id) }
+func (f fakeDiscovery) List() []apitypes.Discovery {
+	return []apitypes.Discovery{{ID: "r-1", State: apitypes.DiscoveryDone}, {ID: "r-2", State: apitypes.DiscoveryRunning, Scheduled: true}}
+}
 
-// TC-204, TC-212 (API part): discovery routes and status codes.
+// TC-204, TC-212 (API part): discovery routes and status codes; the list
+// (TC-217).
 func TestDiscoveryAPI(t *testing.T) {
 	for _, tc := range []struct {
 		err  error
@@ -553,7 +557,12 @@ func TestDiscoveryAPI(t *testing.T) {
 			e.want(200, "GET", "/discovery/r-1", nil, &d)
 			e.want(200, "DELETE", "/discovery/r-1", nil, &d)
 			e.wantErr(404, apitypes.CodeNotFound, "GET", "/discovery/r-9", nil)
-			e.wantErr(405, apitypes.CodeMethodNotAllowed, "GET", "/discovery", nil)
+			var all []apitypes.Discovery
+			e.want(200, "GET", "/discovery", nil, &all)
+			if len(all) != 2 || !all[1].Scheduled {
+				t.Errorf("list: %+v", all)
+			}
+			e.wantErr(405, apitypes.CodeMethodNotAllowed, "PUT", "/discovery", nil)
 			e.wantErr(400, apitypes.CodeInvalidArgument, "POST", "/discovery", `{"cidr":"x","bogus":1}`)
 		} else {
 			e.wantErr(tc.code, tc.ec, "POST", "/discovery", apitypes.DiscoveryCreate{CIDR: "10.0.0.0/24"})

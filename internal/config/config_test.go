@@ -196,3 +196,18 @@ func TestRelativeCACert(t *testing.T) {
 		}
 	}
 }
+
+// TC-216: discovery.scheduled is on by default and can be turned off.
+func TestDiscoveryScheduled(t *testing.T) {
+	if !DefaultServer().Discovery.Scheduled {
+		t.Error("off by default")
+	}
+	p := filepath.Join(t.TempDir(), "s.toml")
+	if err := os.WriteFile(p, []byte("[discovery]\nscheduled = false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := LoadServer(p)
+	if err != nil || c.Discovery.Scheduled || c.Discovery.Rate != 200 {
+		t.Fatalf("%+v %v", c.Discovery, err)
+	}
+}

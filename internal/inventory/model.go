@@ -118,6 +118,12 @@ type Group struct {
 	Collapsed   bool
 	Labels      string // host label mode, SPEC-725
 	Color       string // the top bar's colour, "#RRGGBB" or "", SPEC-727
+	// Scanning again on a schedule (SPEC-206): the interval (0 = off), when
+	// the last finished scan covering the whole range ended, and how many
+	// hosts that scan added in the range.
+	Rescan      time.Duration
+	RescanLast  time.Time
+	RescanFound int
 	X, Y        float64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time

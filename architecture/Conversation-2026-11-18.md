@@ -68,3 +68,8 @@
    - Checked as for 0.6.0: 11 archives and SHA256SUMS, every checksum OK.
    - The linux/amd64 binaries print `v0.7.0`, the darwin and linux/arm64 GUI binaries are of the right architecture, `ined-gui.exe` is in the Windows zip, and the release text equals the `[0.7.0]` section.
    - Plan: "Release 0.7.0" done; TC-011 names the runs.
+16. **User**: eye chack: mark all aos ok (confirmed "as": "mark all as ok").
+   **Claude** marked every visual check waiting for the user as OK (2026-11-18):
+   - Tests.md: TC-005, 702, 705, 708 (manual part), 747, 749, 751, 752 and 754.
+   - Plan: the three open items for the visual check and TC-702, and the notes on the dialogs, the marker help, the file dialogs and the rescan menu.
+   - Still open in the Plan: the SNMP items and the flaky TestDiscoveryDialog.

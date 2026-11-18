@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
@@ -101,6 +102,9 @@ type GUI struct {
 	lastForm   *formDialog   // the form opened last (for tests)
 	lastWatch  *watchForm    // the "Watch services" dialog opened last (for tests)
 	lastImport *importDialog // the import report opened last (for tests)
+	// lastFyneDialog is Fyne's file dialog shown last, when the desktop has
+	// none of its own (for tests).
+	lastFyneDialog dialog.Dialog
 	// colorPicked is the callback of the colour picker opened last (for
 	// tests).
 	colorPicked func(color.Color)

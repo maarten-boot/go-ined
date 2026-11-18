@@ -64,6 +64,21 @@ func (t *fyneTheme) Color(n fyne.ThemeColorName, _ fyne.ThemeVariant) color.Colo
 
 func (t *fyneTheme) Font(s fyne.TextStyle) fyne.Resource { return t.base.Font(s) }
 
-func (t *fyneTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return t.base.Icon(n) }
+func (t *fyneTheme) Icon(n fyne.ThemeIconName) fyne.Resource {
+	if n == fynetheme.IconNameFolder || n == fynetheme.IconNameFolderOpen {
+		return folderOutline // outlined, not a filled black shape (Design-file-dialogs.md F3)
+	}
+	return t.base.Icon(n)
+}
+
+// folderOutline is a folder drawn as an outline in the text colour (a
+// themed resource). The hole has the opposite winding, so it stays empty
+// whatever fill rule is used. There is no line below the tab: Fyne's file
+// dialog paints the symbols of special folders (Desktop, Downloads…) over
+// the middle in the background colour, which would cut such a line.
+var folderOutline fyne.Resource = fynetheme.NewThemedResource(fyne.NewStaticResource("folder-outline.svg", []byte(
+	`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">`+
+		`<path fill="#000000" d="M2 4H9.4L11.4 6H22V20H2Z M3.6 5.6V18.4H20.4V7.6H10.7L8.7 5.6Z"/>`+
+		`</svg>`)))
 
 func (t *fyneTheme) Size(n fyne.ThemeSizeName) float32 { return t.base.Size(n) }

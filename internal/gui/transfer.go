@@ -11,7 +11,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/maarten-boot/go-ined/internal/gui/mapmodel"
@@ -26,19 +25,13 @@ import (
 // exportItem is "Export…" on a group of the network view.
 func (g *GUI) exportItem(id int64, name string) *fyne.MenuItem {
 	return fyne.NewMenuItem("Export…", func() {
-		d := dialog.NewFileSave(func(w fyne.URIWriteCloser, err error) {
+		g.saveFile("Export "+name, fileName(name)+".json", []string{".json"}, func(w io.WriteCloser, file string, err error) {
 			if err != nil {
 				g.status.message("Export: " + err.Error())
 				return
 			}
-			if w == nil {
-				return // cancelled
-			}
-			g.exportTo(id, w, w.URI().Name())
-		}, g.win)
-		d.SetFileName(fileName(name) + ".json")
-		d.SetFilter(storage.NewExtensionFileFilter([]string{".json"}))
-		d.Show()
+			g.exportTo(id, w, file)
+		})
 	})
 }
 
@@ -104,24 +97,13 @@ func nCount(n int, noun string) string {
 // group…" on a group.
 func (g *GUI) importItem(label string, parent int64, x, y *float64) *fyne.MenuItem {
 	return fyne.NewMenuItem(label, func() {
-		d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
+		g.openFile("Import a network", []string{".json"}, 64<<20, func(data []byte, file string, err error) {
 			if err != nil {
 				g.status.message("Import: " + err.Error())
 				return
 			}
-			if r == nil {
-				return
-			}
-			data, err := io.ReadAll(io.LimitReader(r, 64<<20))
-			r.Close()
-			if err != nil {
-				g.status.message("Import: " + err.Error())
-				return
-			}
-			g.importFrom(data, r.URI().Name(), parent, x, y)
-		}, g.win)
-		d.SetFilter(storage.NewExtensionFileFilter([]string{".json"}))
-		d.Show()
+			g.importFrom(data, file, parent, x, y)
+		})
 	})
 }
 

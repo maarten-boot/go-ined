@@ -505,7 +505,7 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 	if err := checkHostText(&h); err != nil {
 		return apitypes.Host{}, err
 	}
-	if err := checkPos(h.X, h.Y); err != nil {
+	if err := fixPos(&h.X, &h.Y); err != nil {
 		return apitypes.Host{}, err
 	}
 	h.UpdatedAt = s.stamp()
@@ -672,7 +672,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	if err := checkGroupText(&g); err != nil {
 		return apitypes.Group{}, err
 	}
-	if err := checkPos(g.X, g.Y); err != nil {
+	if err := fixPos(&g.X, &g.Y); err != nil {
 		return apitypes.Group{}, err
 	}
 	before := s.m.AggregateAll()
@@ -687,7 +687,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	// change alone moves just the group (crosscheck 2026-11-11-03 D1).
 	var dx, dy float64
 	if cur.ParentID != old.ParentID {
-		dx, dy = cur.X-old.X, cur.Y-old.Y
+		dx, dy = roundPos(cur.X-old.X), roundPos(cur.Y-old.Y)
 	}
 	ch := s.subtreeShift(cur, dx, dy, cur.UpdatedAt)
 	ch.Groups = append([]Group{*cur}, ch.Groups...)
@@ -720,7 +720,7 @@ func (s *Service) MoveGroupContents(ctx context.Context, id int64, dx, dy float6
 }
 
 func (s *Service) moveGroup(ctx context.Context, id int64, dx, dy float64, contentsOnly bool) (apitypes.Group, error) {
-	if err := checkPos(dx, dy); err != nil {
+	if err := fixPos(&dx, &dy); err != nil {
 		return apitypes.Group{}, err
 	}
 	s.mu.Lock()
@@ -733,7 +733,7 @@ func (s *Service) moveGroup(ctx context.Context, id int64, dx, dy float64, conte
 	now := s.stamp()
 	if !contentsOnly {
 		g.X, g.Y, g.UpdatedAt = g.X+dx, g.Y+dy, now
-		if err := checkPos(g.X, g.Y); err != nil {
+		if err := fixPos(&g.X, &g.Y); err != nil {
 			return apitypes.Group{}, err
 		}
 	}
@@ -771,7 +771,7 @@ func (s *Service) subtreeShift(g *Group, dx, dy float64, now time.Time) Changes 
 	for _, id := range sortedKeys(vm.Groups) {
 		if id != g.ID && vm.IsInSubtree(id, g.ID) {
 			c := *s.m.Groups[id]
-			c.X, c.Y, c.UpdatedAt = c.X+dx, c.Y+dy, now
+			c.X, c.Y, c.UpdatedAt = roundPos(c.X+dx), roundPos(c.Y+dy), now
 			ch.Groups = append(ch.Groups, c)
 		}
 	}
@@ -781,11 +781,11 @@ func (s *Service) subtreeShift(g *Group, dx, dy float64, now time.Time) Changes 
 		}
 		if g.ViewID == NetworkView {
 			c := *s.m.Hosts[hid]
-			c.X, c.Y, c.UpdatedAt = c.X+dx, c.Y+dy, now
+			c.X, c.Y, c.UpdatedAt = roundPos(c.X+dx), roundPos(c.Y+dy), now
 			ch.Hosts = append(ch.Hosts, c)
 		} else {
 			p := *s.m.Placements[g.ViewID][hid]
-			p.X, p.Y = p.X+dx, p.Y+dy
+			p.X, p.Y = roundPos(p.X+dx), roundPos(p.Y+dy)
 			ch.Placements = append(ch.Placements, p)
 		}
 	}
@@ -987,7 +987,7 @@ func (s *Service) dropHost(id int64) {
 func (s *Service) placeNew(x, y *float64, inX, inY *float64, view, parent int64) error {
 	if inX != nil && inY != nil {
 		*x, *y = *inX, *inY
-		return checkPos(*x, *y)
+		return fixPos(x, y)
 	}
 	if (inX == nil) != (inY == nil) {
 		return invalidf("give both x and y, or neither")

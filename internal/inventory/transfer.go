@@ -52,7 +52,7 @@ func (s *Service) ExportGroup(id int64) (apitypes.NetworkExport, error) {
 	build = func(g *Group) apitypes.ExportGroup {
 		e := apitypes.ExportGroup{
 			Name: g.Name, Description: g.Description, Note: g.Note, Labels: g.Labels, Color: g.Color,
-			Collapsed: g.Collapsed, X: g.X - top.X, Y: g.Y - top.Y,
+			Collapsed: g.Collapsed, X: roundPos(g.X - top.X), Y: roundPos(g.Y - top.Y),
 			Groups: []apitypes.ExportGroup{}, Hosts: []apitypes.ExportHost{},
 		}
 		if g.IsNetwork() {
@@ -65,7 +65,7 @@ func (s *Service) ExportGroup(id int64) (apitypes.NetworkExport, error) {
 			h := s.m.Hosts[hid]
 			eh := apitypes.ExportHost{
 				IP: h.IP.String(), Name: h.Name, Description: h.Description, Note: h.Note, Monitored: h.Monitored,
-				Watch: []string{}, X: h.X - top.X, Y: h.Y - top.Y, Views: []apitypes.ExportPlacement{},
+				Watch: []string{}, X: roundPos(h.X - top.X), Y: roundPos(h.Y - top.Y), Views: []apitypes.ExportPlacement{},
 			}
 			for _, w := range h.Watch {
 				eh.Watch = append(eh.Watch, w.Name)
@@ -84,11 +84,11 @@ func (s *Service) ExportGroup(id int64) (apitypes.NetworkExport, error) {
 						vgSeen[key] = true
 						vgs = append(vgs, apitypes.ExportViewGroup{
 							View: v.Name, Path: slices.Clone(path[:i+1]), Description: cg.Description, Note: cg.Note,
-							Labels: cg.Labels, Color: cg.Color, Collapsed: cg.Collapsed, X: cg.X, Y: cg.Y,
+							Labels: cg.Labels, Color: cg.Color, Collapsed: cg.Collapsed, X: roundPos(cg.X), Y: roundPos(cg.Y),
 						})
 					}
 				}
-				eh.Views = append(eh.Views, apitypes.ExportPlacement{View: v.Name, Path: path, X: p.X, Y: p.Y})
+				eh.Views = append(eh.Views, apitypes.ExportPlacement{View: v.Name, Path: path, X: roundPos(p.X), Y: roundPos(p.Y)})
 			}
 			e.Hosts = append(e.Hosts, eh)
 		}
@@ -243,7 +243,7 @@ func checkFile(f *apitypes.NetworkExport) ([]impGroup, []impHost, map[string]api
 			return invalidf("%s: %v", loc, err)
 		}
 		g.Color = probe.Color
-		if err := checkPos(g.X, g.Y); err != nil {
+		if err := fixPos(&g.X, &g.Y); err != nil {
 			return invalidf("%s: %v", loc, err)
 		}
 		me := len(gs)
@@ -266,7 +266,7 @@ func checkFile(f *apitypes.NetworkExport) ([]impGroup, []impHost, map[string]api
 			if err := checkHostText(&probe); err != nil {
 				return invalidf("%s: %v", hloc, err)
 			}
-			if err := checkPos(h.X, h.Y); err != nil {
+			if err := fixPos(&h.X, &h.Y); err != nil {
 				return invalidf("%s: %v", hloc, err)
 			}
 			ws, err := apitypes.ParseWatchList(h.Watch)
@@ -289,7 +289,7 @@ func checkFile(f *apitypes.NetworkExport) ([]impGroup, []impHost, map[string]api
 				if err := checkPath(p.Path); err != nil {
 					return invalidf("%s: view %q: %v", hloc, p.View, err)
 				}
-				if err := checkPos(p.X, p.Y); err != nil {
+				if err := fixPos(&p.X, &p.Y); err != nil {
 					return invalidf("%s: view %q: %v", hloc, p.View, err)
 				}
 			}
@@ -319,7 +319,7 @@ func checkFile(f *apitypes.NetworkExport) ([]impGroup, []impHost, map[string]api
 			return nil, nil, nil, invalidf("%s: %v", loc, err)
 		}
 		vg.Color = probe.Color
-		if err := checkPos(vg.X, vg.Y); err != nil {
+		if err := fixPos(&vg.X, &vg.Y); err != nil {
 			return nil, nil, nil, invalidf("%s: %v", loc, err)
 		}
 		vgs[vgKey(vg.View, vg.Path)] = vg
@@ -355,7 +355,7 @@ func (s *Service) Import(ctx context.Context, f *apitypes.NetworkExport, o Impor
 		return rep, err
 	}
 	if o.X != nil && o.Y != nil {
-		if err := checkPos(*o.X, *o.Y); err != nil {
+		if err := fixPos(o.X, o.Y); err != nil {
 			return rep, err
 		}
 	} else if (o.X == nil) != (o.Y == nil) {
@@ -565,7 +565,7 @@ func (p *importPlan) groups(gs []impGroup) {
 			ID: p.nextGroup, ViewID: NetworkView, ParentID: parent, CIDR: ig.cidr,
 			Name: strings.TrimSpace(src.Name), Description: src.Description, Note: src.Note,
 			Labels: src.Labels, Color: src.Color, Collapsed: src.Collapsed,
-			X: src.X + p.dx, Y: src.Y + p.dy, CreatedAt: p.s.stamp(),
+			X: roundPos(src.X + p.dx), Y: roundPos(src.Y + p.dy), CreatedAt: p.s.stamp(),
 		}
 		if g.Name == "" {
 			g.Name = ig.cidr.String()
@@ -591,7 +591,7 @@ func (p *importPlan) hosts(hs []impHost) {
 	for i, ih := range hs {
 		src := ih.src
 		parent := p.ids[ih.parent]
-		x, y := src.X+p.dx, src.Y+p.dy
+		x, y := roundPos(src.X+p.dx), roundPos(src.Y+p.dy)
 		if match := byIP[ih.ip]; match != nil {
 			p.hostIDs[i] = match.ID
 			if !p.o.Update {
@@ -660,7 +660,7 @@ func (p *importPlan) placements(hs []impHost, vgs map[string]apitypes.ExportView
 			for j, name := range pl.Path {
 				parent = p.viewGroup(v, parent, pl.Path[:j+1], strings.TrimSpace(name), vgs)
 			}
-			np := Placement{ViewID: v.ID, HostID: hid, ParentID: parent, X: pl.X, Y: pl.Y}
+			np := Placement{ViewID: v.ID, HostID: hid, ParentID: parent, X: roundPos(pl.X), Y: roundPos(pl.Y)}
 			if p.m.Placements[v.ID][hid] != nil {
 				p.rep.Update.Placements++
 			} else {

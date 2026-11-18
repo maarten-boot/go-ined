@@ -56,7 +56,7 @@ func (s *Service) CopyGroup(ctx context.Context, view, group int64) (apitypes.Gr
 		c := Group{
 			ID: next, ViewID: view, Name: g.Name, Description: g.Description,
 			Collapsed: g.Collapsed, Labels: g.Labels, Color: g.Color,
-			X: g.X + dx, Y: g.Y + dy, CreatedAt: now, UpdatedAt: now,
+			X: roundPos(g.X + dx), Y: roundPos(g.Y + dy), CreatedAt: now, UpdatedAt: now,
 		}
 		if c.Name == "" && g.CIDR.IsValid() {
 			c.Name = g.CIDR.String()
@@ -77,7 +77,7 @@ func (s *Service) CopyGroup(ctx context.Context, view, group int64) (apitypes.Gr
 		if s.m.Placements[view][hid] != nil {
 			moved++
 		}
-		ch.Placements = append(ch.Placements, Placement{ViewID: view, HostID: hid, ParentID: newID[h.ParentID], X: h.X + dx, Y: h.Y + dy})
+		ch.Placements = append(ch.Placements, Placement{ViewID: view, HostID: hid, ParentID: newID[h.ParentID], X: roundPos(h.X + dx), Y: roundPos(h.Y + dy)})
 	}
 	ch.NextGroupID = next
 	if err := s.repo.Apply(ctx, ch); err != nil {

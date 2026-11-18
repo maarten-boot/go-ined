@@ -703,7 +703,7 @@ func TestCornerStays(t *testing.T) {
 	})
 	e.ui.Wait(func() {
 		x, y := mapmodel.IconCorner(find(e.nodes(1), "group", g.ID).Item)
-		if math.Abs(x-fx) > 0.01 || math.Abs(y-fy) > 0.01 {
+		if !near(x, fx) || !near(y, fy) {
 			t.Errorf("icon corner %g,%g, frame corner was %g,%g", x, y, fx, fy)
 		}
 		fx, fy = x, y
@@ -711,7 +711,7 @@ func TestCornerStays(t *testing.T) {
 	})
 	eventually(t, e.ui, "expanded at the icon's corner", func() bool {
 		f := frameOf()
-		return f != nil && math.Abs(f.Bounds.X-fx) < 0.01 && math.Abs(f.Bounds.Y-fy) < 0.01
+		return f != nil && near(f.Bounds.X, fx) && near(f.Bounds.Y, fy)
 	})
 	// The group's own position didn't move on expand; its contents did.
 	if gg := must(c.Group(ctx, g.ID)); gg.Collapsed {
@@ -1170,3 +1170,7 @@ func TestJoinKey(t *testing.T) {
 		})
 	}
 }
+
+// near: positions the server rounded to one decimal (Design-positions.md
+// P1) are at most 0.05 off the value the GUI sent.
+func near(a, b float64) bool { return math.Abs(a-b) <= 0.05+1e-9 }

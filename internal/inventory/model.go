@@ -472,7 +472,7 @@ func (m *Model) FreePosition(parentID int64) (float64, float64) {
 		// A sibling blocks at most 2 slots (vertical neighbours are 80 apart,
 		// all others >= 100), so a free slot exists within 2*len(sib)+1 tries.
 		if free || i >= 2*len(sib) {
-			return x, y
+			return roundPos(x), roundPos(y)
 		}
 	}
 }
@@ -487,9 +487,26 @@ func checkText(field, s string, max int) error {
 	return nil
 }
 
-func checkPos(x, y float64) error {
-	if math.IsNaN(x) || math.IsNaN(y) || math.IsInf(x, 0) || math.IsInf(y, 0) {
+// fixPos checks a position and rounds it to one decimal: 0.1 map unit is
+// under half a pixel at the largest zoom, and more digits only lengthen the
+// API and the export (Design-positions.md P1). Moves (dx, dy) are rounded
+// the same way.
+func fixPos(x, y *float64) error {
+	if math.IsNaN(*x) || math.IsNaN(*y) || math.IsInf(*x, 0) || math.IsInf(*y, 0) {
 		return invalidf("position must be finite")
 	}
+	*x, *y = roundPos(*x), roundPos(*y)
 	return nil
+}
+
+// roundPos rounds a coordinate to one decimal, half away from zero; -0 is 0.
+func roundPos(v float64) float64 {
+	if math.Abs(v) >= 1e15 || math.IsNaN(v) {
+		return v // no decimals left to round (and v*10 could overflow)
+	}
+	r := math.Round(v*10) / 10
+	if r == 0 {
+		return 0
+	}
+	return r
 }

@@ -109,3 +109,7 @@
 20. **User**: pushed; OK, all. During the work: "the cpu% > 100 should be investigated how that works for multi cpu servers".
    **Claude** checked the push (`main` and `docs/architecture` at `26a87ec`) and fixed the crosscheck on `fix/crosscheck-18-03` (merged as `92c4999`). The fixes are in the crosscheck's section 7: one-line agent texts and status bar; failure counting with waits of 1, 5 and 30 min; clamped values; L1–L8, L10, L11, L13; Spec v0.61.
    - On the CPU question: `hrProcessorLoad` is 0–100 per logical CPU (RFC 2790), and the server shows the average, so 0–100 however many CPUs. Above 100 only comes from a broken agent, and is left out now. The average hides one busy CPU; showing the CPU count and the busiest one is offered.
+21. **User**: pushed; add the busiest CPU, then part 2.
+   **Claude**: the push hadn't arrived (GitHub still at `26a87ec`); work went on locally.
+   - The busiest CPU on `feature/cpu-busiest` (merged): `cpu_max_pct` and `cpus` next to `cpu_pct`, shown as "6 % (16 CPUs, busiest 100 %)" in the GUI, `inedctl` and the event line. One CPU stays "13 %". `snmp.values` counts a change in them. Spec v0.62.
+   - Then SNMP part 2.

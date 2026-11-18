@@ -1,6 +1,6 @@
 # Design: explaining the service marker (details pane and hover)
 
-Status: **proposed** (2026-11-18), waiting for the user's OK.
+Status: **accepted** (2026-11-18): E1, E2a, E3 and E4 as recommended ("OK, all three designs").
 
 User question: "the little red triangle on the bottom right of a host means what? it would be nice to have a explanation in the right details pane when we select the host or a hover ?"
 

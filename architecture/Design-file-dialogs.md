@@ -1,6 +1,6 @@
 # Design: file dialogs that can be moved and resized, and outlined folders
 
-Status: **proposed** (2026-11-18), waiting for the user's OK.
+Status: **accepted** (2026-11-18): F1a, F2 and F3 as recommended ("OK, all three designs").
 
 User request: "when doing a export the file dialog is not movable or resizable, can we fix that? and the folders as black is a bit massive, the outline is ok as the symbol is now 40 years part of our culture."
 

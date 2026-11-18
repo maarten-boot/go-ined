@@ -12,6 +12,9 @@ Update `ined-server` first: the database gets schemas 8 and 9 (three columns on 
 - `ined-alert` can mail new hosts: with `[new_hosts] enabled = true` every host added is mailed to the admins and the routes of its groups as "[ined] NEW printer-3 (10.0.1.7) in Networks/lan".
 - SNMP, off until you turn it on (`[snmp] enabled = true` in `server.toml`): the server tries your community strings (`communities`, default "public") with SNMP v2c and v1 on the monitored hosts in `networks`, and for each host that answers shows its name, description and location, and every 5 minutes its CPU, memory and disk use and uptime. The GUI's host details have SNMP, CPU, Memory, Disks and Uptime rows and the host menu "Check SNMP now"; `inedctl host snmp <id> [--check]` prints them, and the API has them in the host's `snmp`. The community that answered is never shown. A host where nothing answers is tried again daily.
 
+### Changed
+- `ined-server` makes its database file (and its `-wal` file) readable only by its own user at every start, since it now holds SNMP community strings.
+
 ## [0.7.0] - 2026-11-18
 
 Update `ined-server` together with `ined-gui`: the GUI warns about an older server ("ined-server v0.6.0 is older than this GUI"), and only the new server rounds positions and refuses them beyond ±1,000,000,000. The database doesn't change, so going back to 0.6.0 is possible. Update `ined-alert` too, for the fix of service alerts that become `unknown`.

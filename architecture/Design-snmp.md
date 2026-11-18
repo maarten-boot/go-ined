@@ -56,7 +56,7 @@ This note covers both, in two parts that are built one after the other: **part 1
     ```
     `null` while never checked; `{"version": "", "checked_at": …}` when nothing answered.
   - **New calls:** `POST /hosts/{id}/check-snmp` checks at once. `inedctl host snmp <id> [--check]` prints the system values and the latest values.
-  - **GUI details:** rows "SNMP" ("v2c · web · Linux web 6.8.0 …", or "no answer · checked 14:02"), "Location", "CPU" ("12 %"), "Disks" ("/ 91 %, /data 40 %"), "Memory" ("63 %") and "Uptime" ("12 d 3 h"). The host menu gets "Check SNMP now".
+  - **GUI details:** rows "SNMP" ("v2c · web · Linux web 6.8.0 …", or "no answer · checked 14:02"), "Location", "CPU" ("12 %"), "Memory" ("63 %"), "Disks" ("/ 91 %, /data 40 %") and "Uptime" ("12 d 3 h"). The host menu gets "Check SNMP now".
   - **Map:** no new sign in part 1. A host over a threshold is part 2's mail, not a map sign.
 - **N6 Tests.**
   - A small fake SNMP agent in the tests: UDP on 127.0.0.1, built from gosnmp's own packet code, answering only for a set community.

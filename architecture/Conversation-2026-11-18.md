@@ -106,3 +106,6 @@
      - C5: `inedctl` prints the agent's text as it comes.
    - CI on `main` @ `d3f33a8` green.
    - Decisions asked: D1 C1–C5; D2 L1–L8, L10, L11, L13, P1–P2; D3 part 2 after them.
+20. **User**: pushed; OK, all. During the work: "the cpu% > 100 should be investigated how that works for multi cpu servers".
+   **Claude** checked the push (`main` and `docs/architecture` at `26a87ec`) and fixed the crosscheck on `fix/crosscheck-18-03` (merged as `92c4999`). The fixes are in the crosscheck's section 7: one-line agent texts and status bar; failure counting with waits of 1, 5 and 30 min; clamped values; L1–L8, L10, L11, L13; Spec v0.61.
+   - On the CPU question: `hrProcessorLoad` is 0–100 per logical CPU (RFC 2790), and the server shows the average, so 0–100 however many CPUs. Above 100 only comes from a broken agent, and is left out now. The average hides one busy CPU; showing the CPU count and the busiest one is offered.

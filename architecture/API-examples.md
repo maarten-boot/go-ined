@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "e5d538c5ad412652",
+  "run_id": "6da95aa0d7dc25bb",
   "access": "full"
 }
 ```
@@ -48,11 +48,14 @@ Response: `201`
   "collapsed": true,
   "labels": "",
   "color": "",
+  "rescan": "",
+  "rescan_last": null,
+  "rescan_found": 0,
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-18T11:00:18.127Z",
-  "updated_at": "2026-11-18T11:00:18.127Z"
+  "created_at": "2026-11-18T18:17:39.758Z",
+  "updated_at": "2026-11-18T18:17:39.758Z"
 }
 ```
 
@@ -76,11 +79,14 @@ Response: `201`
   "collapsed": false,
   "labels": "",
   "color": "",
+  "rescan": "",
+  "rescan_last": null,
+  "rescan_found": 0,
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-18T11:00:18.14Z",
-  "updated_at": "2026-11-18T11:00:18.14Z"
+  "created_at": "2026-11-18T18:17:39.769Z",
+  "updated_at": "2026-11-18T18:17:39.769Z"
 }
 ```
 
@@ -118,8 +124,8 @@ Response: `201`
   "watch": [],
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-18T11:00:18.152Z",
-  "updated_at": "2026-11-18T11:00:18.152Z"
+  "created_at": "2026-11-18T18:17:39.784Z",
+  "updated_at": "2026-11-18T18:17:39.784Z"
 }
 ```
 
@@ -157,8 +163,8 @@ Response: `200`
   "watch": [],
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-18T11:00:18.152Z",
-  "updated_at": "2026-11-18T11:00:18.168Z"
+  "created_at": "2026-11-18T18:17:39.784Z",
+  "updated_at": "2026-11-18T18:17:39.798Z"
 }
 ```
 
@@ -182,11 +188,14 @@ Response: `200`
   "collapsed": false,
   "labels": "",
   "color": "",
+  "rescan": "",
+  "rescan_last": null,
+  "rescan_found": 0,
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-18T11:00:18.127Z",
-  "updated_at": "2026-11-18T11:00:18.18Z"
+  "created_at": "2026-11-18T18:17:39.758Z",
+  "updated_at": "2026-11-18T18:17:39.809Z"
 }
 ```
 
@@ -350,11 +359,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: e5d538c5ad412652-10
+id: 6da95aa0d7dc25bb-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"services":null,"services_checked_at":null,"watch":[],"x":40,"y":40,"created_at":"2026-11-18T11:00:18.606Z","updated_at":"2026-11-18T11:00:18.606Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"services":null,"services_checked_at":null,"watch":[],"x":40,"y":40,"created_at":"2026-11-18T18:17:40.207Z","updated_at":"2026-11-18T18:17:40.207Z"}
 
-id: e5d538c5ad412652-11
+id: 6da95aa0d7dc25bb-11
 event: host.deleted
 data: {"id":2}
 
@@ -370,7 +379,7 @@ Response: `202`
 
 ```json
 {
-  "id": "e5d538c5ad412652-1",
+  "id": "6da95aa0d7dc25bb-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -379,7 +388,8 @@ Response: `202`
   "found": 0,
   "added": 0,
   "errors": 0,
-  "started_at": "2026-11-18T11:00:18.943Z",
+  "scheduled": false,
+  "started_at": "2026-11-18T18:17:40.538Z",
   "finished_at": null
 }
 ```
@@ -387,14 +397,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/e5d538c5ad412652-1
+curl -s $INED/api/v1/discovery/6da95aa0d7dc25bb-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "e5d538c5ad412652-1",
+  "id": "6da95aa0d7dc25bb-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -403,8 +413,9 @@ Response: `200`
   "found": 2,
   "added": 2,
   "errors": 0,
-  "started_at": "2026-11-18T11:00:18.943Z",
-  "finished_at": "2026-11-18T11:00:18.949Z"
+  "scheduled": false,
+  "started_at": "2026-11-18T18:17:40.538Z",
+  "finished_at": "2026-11-18T18:17:40.561Z"
 }
 ```
 
@@ -473,9 +484,10 @@ Status:      unknown
 Collapsed:   yes
 Labels:      inherit
 Bar colour:  none
+Rescan:      off
 Position:    40, 40
-Created:     2026-11-18 12:00:20
-Updated:     2026-11-18 12:00:20
+Created:     2026-11-18 19:17:42
+Updated:     2026-11-18 19:17:42
 Note:        -
 ```
 
@@ -505,8 +517,8 @@ Services:     not checked yet
 Watched:      none
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-18 12:00:21
-Updated:      2026-11-18 12:00:21
+Created:      2026-11-18 19:17:42
+Updated:      2026-11-18 19:17:42
 Note:         2nd floor
 ```
 
@@ -570,8 +582,8 @@ inedctl --json host show 5
   "watch": [],
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-18T11:00:21.002Z",
-  "updated_at": "2026-11-18T11:00:21.002Z"
+  "created_at": "2026-11-18T18:17:42.64Z",
+  "updated_at": "2026-11-18T18:17:42.64Z"
 }
 ```
 
@@ -606,8 +618,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job e5d538c5ad412652-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job e5d538c5ad412652-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job 6da95aa0d7dc25bb-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job 6da95aa0d7dc25bb-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -667,8 +679,8 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-18T11:00:21.07Z",
-  "updated_at": "2026-11-18T11:00:21.07Z"
+  "created_at": "2026-11-18T18:17:42.708Z",
+  "updated_at": "2026-11-18T18:17:42.708Z"
 }
 ```
 
@@ -692,11 +704,14 @@ Response: `201`
   "collapsed": false,
   "labels": "",
   "color": "",
+  "rescan": "",
+  "rescan_last": null,
+  "rescan_found": 0,
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-18T11:00:21.082Z",
-  "updated_at": "2026-11-18T11:00:21.082Z"
+  "created_at": "2026-11-18T18:17:42.718Z",
+  "updated_at": "2026-11-18T18:17:42.718Z"
 }
 ```
 
@@ -824,8 +839,8 @@ ID:      2
 Name:    Printers
 Kind:    custom
 Order:   1
-Created: 2026-11-18 12:00:21
-Updated: 2026-11-18 12:00:21
+Created: 2026-11-18 19:17:42
+Updated: 2026-11-18 19:17:42
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6
@@ -857,11 +872,14 @@ Response: `200`
   "collapsed": false,
   "labels": "",
   "color": "",
+  "rescan": "",
+  "rescan_last": null,
+  "rescan_found": 0,
   "status": "unknown",
   "x": 90,
   "y": 40,
-  "created_at": "2026-11-18T11:00:21.082Z",
-  "updated_at": "2026-11-18T11:00:21.157Z"
+  "created_at": "2026-11-18T18:17:42.718Z",
+  "updated_at": "2026-11-18T18:17:42.774Z"
 }
 ```
 
@@ -882,9 +900,10 @@ Status:      unknown
 Collapsed:   no
 Labels:      inherit
 Bar colour:  none
+Rescan:      off
 Position:    90, 80
-Created:     2026-11-18 12:00:21
-Updated:     2026-11-18 12:00:21
+Created:     2026-11-18 19:17:42
+Updated:     2026-11-18 19:17:42
 Note:        -
 ```
 
@@ -910,11 +929,14 @@ Response: `200`
   "collapsed": false,
   "labels": "",
   "color": "",
+  "rescan": "",
+  "rescan_last": null,
+  "rescan_found": 0,
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-18T11:00:21.082Z",
-  "updated_at": "2026-11-18T11:00:21.167Z"
+  "created_at": "2026-11-18T18:17:42.718Z",
+  "updated_at": "2026-11-18T18:17:42.783Z"
 }
 ```
 
@@ -942,8 +964,8 @@ Services:     not checked yet
 Watched:      none
 Outside CIDR: no
 Position:     240, 40
-Created:      2026-11-18 12:00:21
-Updated:      2026-11-18 12:00:21
+Created:      2026-11-18 19:17:42
+Updated:      2026-11-18 19:17:42
 Note:         Toner replaced 2026-11
 ```
 
@@ -973,11 +995,14 @@ Response: `200`
   "collapsed": false,
   "labels": "ip",
   "color": "",
+  "rescan": "",
+  "rescan_last": null,
+  "rescan_found": 0,
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-18T11:00:21.082Z",
-  "updated_at": "2026-11-18T11:00:21.194Z"
+  "created_at": "2026-11-18T18:17:42.718Z",
+  "updated_at": "2026-11-18T18:17:42.809Z"
 }
 ```
 
@@ -1015,9 +1040,10 @@ Status:      unknown
 Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
+Rescan:      off
 Position:    90, 80
-Created:     2026-11-18 12:00:21
-Updated:     2026-11-18 12:00:21
+Created:     2026-11-18 19:17:42
+Updated:     2026-11-18 19:17:42
 Note:        -
 ```
 
@@ -1047,11 +1073,14 @@ Response: `200`
   "collapsed": false,
   "labels": "both",
   "color": "#4363D8",
+  "rescan": "",
+  "rescan_last": null,
+  "rescan_found": 0,
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-18T11:00:21.082Z",
-  "updated_at": "2026-11-18T11:00:21.226Z"
+  "created_at": "2026-11-18T18:17:42.718Z",
+  "updated_at": "2026-11-18T18:17:42.833Z"
 }
 ```
 
@@ -1089,9 +1118,10 @@ Status:      unknown
 Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
+Rescan:      off
 Position:    90, 80
-Created:     2026-11-18 12:00:21
-Updated:     2026-11-18 12:00:21
+Created:     2026-11-18 19:17:42
+Updated:     2026-11-18 19:17:42
 Note:        -
 ```
 
@@ -1291,8 +1321,8 @@ Response: `200`
   ],
   "x": 40,
   "y": 120,
-  "created_at": "2026-11-18T11:00:21.002Z",
-  "updated_at": "2026-11-18T11:00:21.327Z"
+  "created_at": "2026-11-18T18:17:42.64Z",
+  "updated_at": "2026-11-18T18:17:42.927Z"
 }
 ```
 
@@ -1409,7 +1439,7 @@ Response: `200`
 {
   "format": "go-ined-network",
   "version": 1,
-  "exported_at": "2026-11-18T11:00:21.398Z",
+  "exported_at": "2026-11-18T18:17:42.989Z",
   "server_version": "dev",
   "from": "Networks › lab",
   "group": {

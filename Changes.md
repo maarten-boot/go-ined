@@ -4,6 +4,13 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+Update `ined-server` first: the database gets schema 8 (three columns on groups), so an older server can't open it any more; keep a copy of the database if you may go back. The new `ined-gui` and `inedctl` work with an older server, without the Rescan setting.
+
+### Added
+- Networks can be scanned again on a schedule. A network group's context menu in `ined-gui` has "Rescan ▸" (off, every hour, 6 hours, day or week), and `inedctl group rescan <id> 24h|off` sets any interval from 15 minutes. The server scans one network at a time, the one waiting longest first, and remembers when each was last scanned, also over a restart. A scan you start by hand that covers the whole network counts as its scan, and one you start over a running scheduled scan stops that scan first. New hosts are added as with a scan by hand; nothing is moved or removed. The group's details show "Rescan: every day, last 03:15, 2 new". `discovery.scheduled = false` in `server.toml` turns all scheduled scans off.
+- `inedctl discover list` (and `GET /api/v1/discovery`) lists the scans the server keeps; scheduled ones are marked "(scheduled)".
+- `ined-alert` can mail new hosts: with `[new_hosts] enabled = true` every host added is mailed to the admins and the routes of its groups as "[ined] NEW printer-3 (10.0.1.7) in Networks/lan".
+
 ## [0.7.0] - 2026-11-18
 
 Update `ined-server` together with `ined-gui`: the GUI warns about an older server ("ined-server v0.6.0 is older than this GUI"), and only the new server rounds positions and refuses them beyond ±1,000,000,000. The database doesn't change, so going back to 0.6.0 is possible. Update `ined-alert` too, for the fix of service alerts that become `unknown`.

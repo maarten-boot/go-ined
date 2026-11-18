@@ -1,6 +1,14 @@
 # Design: scanning networks again on a schedule
 
-Status: **proposed** (2026-11-18), waiting for the user's OK.
+Status: **implemented** (2026-11-18): R1a–R5a as recommended ("OK, all as recommended"), on `feature/rescan` (SPEC-206, 207, 735, 957; Spec v0.57). Settled in the build:
+- The schedule is checked every 10 s (not every minute), so a new setting starts within seconds.
+- The longest interval is 8760 h. A CIDR change that would leave a rescan on a group that can't have one is 400; another IPv4 range clears the last scan.
+- There was no list of jobs, so `GET /discovery` and `inedctl discover list` were added. Jobs carry `scheduled`, and map items of groups carry `rescan` for the menu's tick.
+- `inedctl group rescan <id> 24h|off`, like `group color`, instead of a flag on `group edit`.
+- A job records its scan before it is marked finished, and a scheduled start checks under the lock that its group is still due. Without that, a scheduled scan could start right after a manual one that covered it (found by the test).
+- A scheduled scan cancelled by a user skips the round. One that failed is tried again after 5 min. Both waits are kept in memory only.
+- The new-host mail waits until `ined-alert` has loaded its routes again after the event, so the group's route gets it. Pending new hosts aren't kept in the state file.
+- Schema 8: an older server can't open the database any more (`Changes.md` says so).
 
 User question: "do we automatically discover new hosts in a network at regular intervals?" Answer: no. A scan runs only when started (toolbar "Discover…", "Scan this network", `inedctl discover start`, `POST /discovery`; SPEC-201, 707). The user asked for this design.
 

@@ -66,7 +66,7 @@ This note covers both, in two parts that are built one after the other: **part 1
 
 ## Proposal, part 2: thresholds in `ined-alert`
 
-- **N7 Rules.** `[[threshold]]` in `alert.toml`, for example `metric = "disk"`, `above = 90`, `for = "10m"`. The metrics are `cpu`, `disk` (each fixed disk) and `memory`.
+- **N7 Rules.** `[[threshold]]` in `alert.toml`, for example `metric = "disk"`, `above = 90`, `for = "10m"`. The metrics are `cpu`, `cpu_max` (the busiest CPU, added in v0.62), `disk` (each fixed disk) and `memory`.
   - A host over a threshold for `for` gets a mail: "[ined] HIGH disk / 91 % on web (10.0.1.5)". When it is below again, "[ined] OK disk / 78 % on web" goes out.
   - The routes, batching, repeat, state file and syslog work as for down alerts.
   - `ined-alert` reads `snmp.values` events and, after a resync, the hosts' `snmp` values.

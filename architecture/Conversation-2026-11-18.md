@@ -130,3 +130,10 @@
      - C5: two memory entries read the same.
    - CI on `main` @ `6e46a56` green.
    - Decisions asked: D1 C1–C5; D2 L1–L8, P1–P3; D3 release 0.8.0 after them.
+23. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `6db93db`) and fixed the crosscheck on `fix/crosscheck-18-04` (merged as `4a88376`; see its section 7). Spec v0.64.
+   - Tests: the full Go suite with `-race` and 65 Python tests pass.
+   - Two slips on the way, neither pushed:
+     - An empty `pkg/apitypes/rescan_test.go` was made (a shell append with nothing to append). It was seen at once and deleted before any build; it had never been tracked.
+     - The docs script stopped at a sentence whose first letter was lower case in the Spec. The shell went on and committed only the version line as `d32a158`; this commit completes it.
+   - Next: release 0.8.0 (D3).

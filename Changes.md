@@ -14,7 +14,7 @@ Update `ined-server` first: the database gets schemas 8 and 9 (three columns on 
 - SNMP, off until you turn it on (`[snmp] enabled = true` in `server.toml`): the server tries your community strings (`communities`, default "public") with SNMP v2c and v1 on the monitored hosts in `networks`, and for each host that answers shows its name, description and location, and every 5 minutes its CPU (the average, and with several CPUs the busiest one: "6 % (16 CPUs, busiest 100 %)"), memory and disk use and uptime. The GUI's host details have SNMP, CPU, Memory, Disks and Uptime rows and the host menu "Check SNMP now"; `inedctl host snmp <id> [--check]` prints them, and the API has them in the host's `snmp`. The community that answered is never shown. A host where nothing answers is tried again daily.
 
 ### Changed
-- `ined-server` makes its database file (and its `-wal` file) readable only by its own user at every start, since it now holds SNMP community strings.
+- `ined-server` keeps its database from other users at every start, since it now holds SNMP community strings: a new database is readable only by its own user; an existing one loses the rights of other users (a group you set stays). When it can't change them, it logs a warning.
 
 ## [0.7.0] - 2026-11-18
 

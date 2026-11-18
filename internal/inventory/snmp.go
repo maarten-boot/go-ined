@@ -9,6 +9,9 @@ import (
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
 )
 
+// snmpSaveEvery is how often an unchanged agent's check time is written.
+const snmpSaveEvery = 24 * time.Hour
+
 // SNMPAgent is what was found out about a host's SNMP agent (SPEC-312).
 // Version "" with a CheckedAt means no community answered; a zero
 // CheckedAt means never checked. Community is saved but never shown.
@@ -103,7 +106,12 @@ func (s *Service) SetSNMP(ctx context.Context, id int64, ip netip.Addr, a SNMPAg
 		n.SNMPValues = nil
 	}
 	same := !cur.SNMP.CheckedAt.IsZero() && cur.SNMP.Version == a.Version && cur.SNMP.Community == a.Community && cur.SNMP.System == a.System
-	if !same { // the same agent again: only the time changes, kept in memory (crosscheck 2026-11-18-03 C2)
+	// The same agent again changes only the time, kept in memory and written
+	// at most once a day (crosscheck 2026-11-18-03 C2); "no answer" is always
+	// written, so its time is right after a restart and such hosts aren't all
+	// tried again at once (2026-11-18-04 C2).
+	if !same || a.Version == "" || a.CheckedAt.Sub(cur.SNMPSavedAt) >= snmpSaveEvery {
+		n.SNMPSavedAt = a.CheckedAt
 		if err := s.repo.Apply(ctx, Changes{Hosts: []Host{n}}); err != nil {
 			return apitypes.Host{}, false, err
 		}

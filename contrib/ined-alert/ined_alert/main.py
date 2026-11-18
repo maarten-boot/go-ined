@@ -185,6 +185,7 @@ class App:
                 self.loaded = True
                 self.log.info(kv(event="loaded", hosts=len(self.engine.hosts), open_alerts=len(self.engine.open),
                                  open_service_alerts=len(self.engine.svc_open),
+                                 open_threshold_alerts=len(self.engine.th_open),
                                  routes=len(self.cfg.routes)))
                 if self.cfg.startup_summary:
                     self.notices([self.engine.summary(now)], now)

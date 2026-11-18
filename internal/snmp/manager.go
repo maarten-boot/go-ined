@@ -72,10 +72,11 @@ type Manager struct {
 // hostState counts the failures of a host with an agent (crosscheck
 // 2026-11-18-03 C2, C3).
 type hostState struct {
-	fails int       // value reads in a row without an answer
-	tried time.Time // the last of them
-	lost  int       // searches since the agent stopped answering
-	next  time.Time // the next search while lost
+	ip    netip.Addr // the address counted for; another one starts again (L3)
+	fails int        // value reads in a row without an answer
+	tried time.Time  // the last of them
+	lost  int        // searches since the agent stopped answering
+	next  time.Time  // the next search while lost
 }
 
 // maxFails is how many reads in a row may fail before the agent is looked
@@ -177,10 +178,35 @@ search:
 		return true, nil
 	}
 	t.Agent = a
-	if !m.read(ctx, t, now) && !now {
-		m.away(t.ID) // found, but its values still can't be read: wait (C2)
+	if !m.read(ctx, t, now) && !now && m.lost(t.ID) {
+		// Found, but its values still can't be read: wait before the
+		// next search; once the waits are used up, snmp.rescan
+		// (crosscheck 2026-11-18-03 C2; 2026-11-18-04 C1, L1).
+		if !m.away(t.ID) {
+			m.holdOff(t.ID)
+		}
 	}
 	return true, nil
+}
+
+// lost reports whether a host's agent counts as lost: maxFails reads in a
+// row without an answer.
+func (m *Manager) lost(id int64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.state[id]
+	return st != nil && st.fails >= maxFails
+}
+
+// holdOff sets the next search of an agent that answers its system group
+// but not its values, once the waits are used up, to snmp.rescan later
+// (crosscheck 2026-11-18-04 C1).
+func (m *Manager) holdOff(id int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if st := m.state[id]; st != nil {
+		st.next = m.cfg.Now().Add(m.cfg.Rescan)
+	}
 }
 
 // away counts a search for a lost agent and sets when the next one is due;
@@ -194,6 +220,7 @@ func (m *Manager) away(id int64) bool {
 		m.state[id] = st
 	}
 	if st.lost >= len(lostWait) {
+		st.next = m.cfg.Now().Add(m.cfg.Rescan) // never in the past (C1)
 		return false
 	}
 	st.next = m.cfg.Now().Add(lostWait[st.lost])
@@ -220,8 +247,8 @@ func (m *Manager) read(ctx context.Context, t inventory.SNMPTarget, anyHost bool
 	if err != nil {
 		m.mu.Lock()
 		st := m.state[t.ID]
-		if st == nil {
-			st = &hostState{}
+		if st == nil || st.ip != t.IP {
+			st = &hostState{ip: t.IP}
 			m.state[t.ID] = st
 		}
 		st.fails++
@@ -240,12 +267,17 @@ func (m *Manager) read(ctx context.Context, t inventory.SNMPTarget, anyHost bool
 // nothing.
 func (m *Manager) work(t inventory.SNMPTarget, now time.Time) func(context.Context) {
 	if !t.Monitored || !m.allowed(t.IP) {
+		m.forget(t.ID) // counted again from nothing when it is back (L3)
 		return nil
 	}
 	var st hostState
 	m.mu.Lock()
 	if p := m.state[t.ID]; p != nil {
-		st = *p
+		if p.ip.IsValid() && p.ip != t.IP {
+			delete(m.state, t.ID) // a new address (L3)
+		} else {
+			st = *p
+		}
 	}
 	m.mu.Unlock()
 	a := t.Agent

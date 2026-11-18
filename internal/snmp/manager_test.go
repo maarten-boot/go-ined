@@ -383,3 +383,63 @@ func TestCheckUnmonitoredAndPrune(t *testing.T) {
 		t.Errorf("state kept: %v", r.m.state)
 	}
 }
+
+// TC-327 (crosscheck 2026-11-18-04 C1, L1, L3): an agent that answers its
+// system group but never its values: the first failed reads use no wait;
+// after the 1, 5 and 30 min waits the next search is a rescan later, not
+// at every tick; the counts go with a new IP address and with monitoring
+// turned off.
+func TestValuesNeverRead(t *testing.T) {
+	c := &scripted{noVals: true}
+	r := newRig(t, nil, Config{Client: c, Interval: 5 * time.Minute, Rescan: 24 * time.Hour})
+	h := r.host(t, "127.0.0.1", true)
+	r.run(t)
+	eventually(t, "found", func() bool { x, _ := r.svc.Host(h.ID); return x.SNMP != nil })
+	settle()
+	r.m.mu.Lock()
+	if st := r.m.state[h.ID]; st == nil || st.fails != 1 || st.lost != 0 {
+		t.Errorf("after the first failed read: %+v", st)
+	}
+	r.m.mu.Unlock()
+	for range 2 {
+		r.clk.add(5 * time.Minute)
+		settle()
+	}
+	r.clk.add(5 * time.Minute) // the third failure, then a search
+	settle()
+	for _, w := range []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute} {
+		r.clk.add(w)
+		settle()
+	}
+	s0, _ := c.counts()
+	time.Sleep(200 * time.Millisecond)
+	if s1, _ := c.counts(); s1 != s0 {
+		t.Fatalf("%d searches with the waits used up", s1-s0)
+	}
+	r.clk.add(24 * time.Hour)
+	settle()
+	if s1, _ := c.counts(); s1 != s0+1 {
+		t.Fatalf("%d searches after rescan", s1-s0)
+	}
+	if x, _ := r.svc.Host(h.ID); x.SNMP.Version != V2c {
+		t.Errorf("an agent that answers was dropped: %+v", x.SNMP)
+	}
+
+	// L3: a new address or monitoring off forgets the counts.
+	r.m.mu.Lock()
+	r.m.state[h.ID] = &hostState{ip: netip.MustParseAddr("127.0.0.9"), fails: 7}
+	r.m.mu.Unlock()
+	r.m.work(inventory.SNMPTarget{ID: h.ID, IP: netip.MustParseAddr("127.0.0.1"), Monitored: true, Agent: inventory.SNMPAgent{Version: V2c, CheckedAt: r.clk.now()}}, r.clk.now())
+	r.m.mu.Lock()
+	if st := r.m.state[h.ID]; st != nil {
+		t.Errorf("kept for another address: %+v", st)
+	}
+	r.m.state[h.ID] = &hostState{fails: 7}
+	r.m.mu.Unlock()
+	r.m.work(inventory.SNMPTarget{ID: h.ID, IP: netip.MustParseAddr("127.0.0.1")}, r.clk.now())
+	r.m.mu.Lock()
+	defer r.m.mu.Unlock()
+	if st := r.m.state[h.ID]; st != nil {
+		t.Errorf("kept with monitoring off: %+v", st)
+	}
+}

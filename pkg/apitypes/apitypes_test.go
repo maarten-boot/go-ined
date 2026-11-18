@@ -94,3 +94,24 @@ func TestParseWatchList(t *testing.T) {
 		}
 	}
 }
+
+// TC-326 (crosscheck 2026-11-18-04 L2): snmp.values: the busiest CPU
+// counts in steps of 5 %; the average, the count and storage exactly.
+func TestSNMPValuesSame(t *testing.T) {
+	v := func(cpu, top, n int) SNMPValues { return SNMPValues{CPUPct: &cpu, CPUMaxPct: &top, CPUs: n} }
+	for _, c := range []struct {
+		a, b SNMPValues
+		same bool
+	}{
+		{v(10, 41, 8), v(10, 44, 8), true},
+		{v(10, 44, 8), v(10, 45, 8), false},
+		{v(10, 41, 8), v(11, 41, 8), false},
+		{v(10, 41, 8), v(10, 41, 4), false},
+		{SNMPValues{}, SNMPValues{}, true},
+		{SNMPValues{}, v(0, 0, 1), false},
+	} {
+		if got := c.a.Same(c.b); got != c.same {
+			t.Errorf("%+v vs %+v: %v", c.a, c.b, got)
+		}
+	}
+}

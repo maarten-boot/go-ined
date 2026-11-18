@@ -195,3 +195,27 @@ func TestSNMPValuesDropped(t *testing.T) {
 		t.Errorf("after an import turning monitoring off: %+v", h.SNMP)
 	}
 }
+
+// TC-326 (inventory; crosscheck 2026-11-18-04 C2): "no answer" is written
+// every time; the same agent again only after a day.
+func TestSNMPSaved(t *testing.T) {
+	s, repo := newSvc(t)
+	h := mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.1"})
+	ip := netip.MustParseAddr("192.0.2.1")
+	t0 := time.Date(2026, 11, 18, 1, 0, 0, 0, time.UTC)
+	set := func(a SNMPAgent, at time.Time) int {
+		n := repo.applies
+		a.CheckedAt = at
+		if _, ok, err := s.SetSNMP(ctx, h.ID, ip, a); !ok || err != nil {
+			t.Fatal(err)
+		}
+		return repo.applies - n
+	}
+	if set(SNMPAgent{}, t0) != 1 || set(SNMPAgent{}, t0.Add(24*time.Hour)) != 1 {
+		t.Error("no answer not written")
+	}
+	a := SNMPAgent{Version: "v2c", Community: "c"}
+	if set(a, t0.Add(25*time.Hour)) != 1 || set(a, t0.Add(30*time.Hour)) != 0 || set(a, t0.Add(49*time.Hour)) != 1 {
+		t.Error("the same agent: written at once, then once a day")
+	}
+}

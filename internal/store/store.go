@@ -143,7 +143,8 @@ var migrations = []string{
 
 // Store is a SQLite-backed inventory.Repository.
 type Store struct {
-	db *sql.DB
+	db      *sql.DB
+	warning string
 }
 
 var _ inventory.Repository = (*Store)(nil)
@@ -159,6 +160,8 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
 		return nil, fmt.Errorf("store: %w", err)
 	}
+	_, statErr := os.Stat(abs)
+	isNew := errors.Is(statErr, fs.ErrNotExist)
 	db, err := sql.Open("sqlite", dsn(abs))
 	if err != nil {
 		return nil, fmt.Errorf("store: open %s: %w", abs, err)
@@ -185,18 +188,42 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	// The database holds SNMP communities (SPEC-312): readable only by the
-	// server's user, also a database made by an older version; SQLite
-	// gives its -wal and -shm files the database's mode (crosscheck
-	// 2026-11-18-03 L13). On Windows only the read-only bit exists.
+	return &Store{db: db, warning: private(abs, isNew)}, nil
+}
+
+// private keeps the database from other users, since it holds SNMP
+// communities (SPEC-312, 314): a new one is made 0600; an existing one
+// loses only the bits for others, so a group set on purpose (0640 for a
+// backup) stays; SQLite gives its -wal and -shm files the database's mode
+// (crosscheck 2026-11-18-03 L13). A failure (another owner, a file system
+// without modes) is a warning, not the end of the start (2026-11-18-04
+// L4). On Windows only the read-only bit exists.
+func private(abs string, isNew bool) string {
+	var failed []string
 	for _, f := range []string{abs, abs + "-wal", abs + "-shm"} {
-		if err := os.Chmod(f, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			db.Close()
-			return nil, fmt.Errorf("store: %w", err)
+		st, err := os.Stat(f)
+		if err != nil {
+			continue
+		}
+		mode := st.Mode().Perm() &^ 0o007
+		if isNew {
+			mode = 0o600
+		}
+		if mode == st.Mode().Perm() {
+			continue
+		}
+		if err := os.Chmod(f, mode); err != nil {
+			failed = append(failed, err.Error())
 		}
 	}
-	return &Store{db: db}, nil
+	if len(failed) > 0 {
+		return "the database may be readable by other users, and it holds SNMP communities: " + strings.Join(failed, "; ")
+	}
+	return ""
 }
+
+// Warning is what Open couldn't do but didn't stop for, or "".
+func (s *Store) Warning() string { return s.warning }
 
 // dsn builds the driver DSN. The path goes through url.URL so that '?',
 // '#' and '%' in file names are escaped (SQLite decodes the URI).

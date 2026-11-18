@@ -79,9 +79,12 @@ type Host struct {
 	// values (SPEC-313), in memory only.
 	SNMP       SNMPAgent
 	SNMPValues *apitypes.SNMPValues
-	X, Y       float64
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	// SNMPSavedAt is when SNMP was last written to the database, in memory
+	// only (crosscheck 2026-11-18-04 C2).
+	SNMPSavedAt time.Time
+	X, Y        float64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // Watched is a service watched on a host (SPEC-310).

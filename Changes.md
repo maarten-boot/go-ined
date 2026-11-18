@@ -4,6 +4,9 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Changed
+- Positions are saved with one decimal (`"x": 24.7` instead of `24.666666666666668`); exports are rounded the same way, also for positions saved before. Nothing visible moves: 0.1 is under half a pixel at the largest zoom.
+
 ## [0.6.0] - 2026-11-17
 
 Update `ined-server` together with `ined-gui`: a 0.5.0 server refuses watch lists, the read-only token and export and import, and the GUI now says so ("ined-server v0.5.0 is older than this GUI"). The database gets two new columns and a table on first start (schemas 6 and 7), so an older server can't open it afterwards. `ined-alert` is new; it needs this server for service alerts and the read-only token.

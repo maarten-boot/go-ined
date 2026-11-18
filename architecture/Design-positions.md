@@ -1,6 +1,6 @@
 # Design: positions rounded to one decimal
 
-Status: **accepted** (2026-11-18): P1–P3 as recommended ("yes, add it; OK, all three designs").
+Status: **implemented** (2026-11-18): P1–P3 as recommended ("yes, add it; OK, all three designs"), on `feature/round-positions`. Settled in the build: values of 1e15 and more are left as they are (no decimals left, and ×10 could overflow); -0 becomes 0; the offset when a group gets a new parent is rounded too, so `group.moved` carries the rounded move.
 
 User question: "i see that in the export the x, y coordinates are float, is more than one digit after the comma helpful at all as coordinate?"
 

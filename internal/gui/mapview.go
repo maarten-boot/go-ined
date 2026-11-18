@@ -95,8 +95,11 @@ type MapView struct {
 	// scroll (Design-marker-explained.md E2a). UI goroutine.
 	OnHover    func(n mapmodel.Node, at fyne.Position)
 	OnHoverEnd func()
-	hoverKey   *mapmodel.Key // the host under the pointer
-	hoverSeq   int           // cancels a pending OnHover
+	hoverKey   *mapmodel.Key    // the host under the pointer
+	hoverItem  apitypes.MapItem // a copy of the host as it was when the pointer came
+	hoverIcon  mapmodel.Rect
+	hoverSeq   int         // cancels a pending OnHover
+	hoverTimer *time.Timer // the pending OnHover, stopped when ended (L4)
 	hoverShown bool
 	// do runs f on the UI goroutine (fyne.Do; the GUI's own in tests).
 	do func(f func())
@@ -139,7 +142,25 @@ func measure(s string) (float64, float64) {
 // fitted to the content once the widget has a size.
 func (mv *MapView) SetNodes(nodes []mapmodel.Node) {
 	mv.nodes = nodes
+	if mv.hoverKey != nil && !mv.hoverSame() {
+		mv.endHover() // the box would show what is no longer so (L3)
+	}
 	mv.Refresh()
+}
+
+// hoverSame: the hovered host is still on the map, at the same place and
+// with the same name, address and statuses.
+func (mv *MapView) hoverSame() bool {
+	o := mv.hoverItem
+	for _, n := range mv.nodes {
+		it := n.Item
+		if it.Type != o.Type || it.ID != o.ID {
+			continue
+		}
+		return n.Icon == mv.hoverIcon && it.Name == o.Name && it.IP == o.IP && it.Status == o.Status &&
+			it.Stale == o.Stale && it.Monitored == o.Monitored && it.ServicesDown == o.ServicesDown
+	}
+	return false
 }
 
 // Nodes returns what the map shows.
@@ -237,14 +258,14 @@ func (mv *MapView) MouseMoved(ev *desktop.MouseEvent) {
 		return // the same host: the box stays, or is still to come
 	}
 	mv.endHover()
-	mv.hoverKey = &k
+	mv.hoverKey, mv.hoverItem, mv.hoverIcon = &k, *n.Item, n.Icon
 	mv.hoverSeq++
 	seq, node, at := mv.hoverSeq, *n, ev.AbsolutePosition
 	do := mv.do
 	if do == nil {
 		do = fyne.Do
 	}
-	time.AfterFunc(hoverDelay, func() {
+	mv.hoverTimer = time.AfterFunc(hoverDelay, func() {
 		do(func() {
 			if mv.hoverSeq != seq || mv.OnHover == nil {
 				return
@@ -261,6 +282,10 @@ func (mv *MapView) MouseOut() { mv.endHover() }
 func (mv *MapView) endHover() {
 	mv.hoverSeq++
 	mv.hoverKey = nil
+	if mv.hoverTimer != nil {
+		mv.hoverTimer.Stop()
+		mv.hoverTimer = nil
+	}
 	if mv.hoverShown {
 		mv.hoverShown = false
 		if mv.OnHoverEnd != nil {

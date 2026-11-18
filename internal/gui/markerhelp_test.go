@@ -8,6 +8,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
+	fynetest "fyne.io/fyne/v2/test"
 
 	"github.com/maarten-boot/go-ined/internal/gui/mapmodel"
 	"github.com/maarten-boot/go-ined/internal/inventory"
@@ -35,8 +36,11 @@ func TestDownLine(t *testing.T) {
 // TC-754: the details show the line with the marker while a watched
 // service is down, and drop it when it is up again; resting the pointer on
 // the host (or its marker) opens a box with name, address, status and the
-// line; moving away, a click or a drag closes it; empty space has none
-// (Design-marker-explained.md E1, E2a).
+// line; moving away, a click or a drag closes it; empty space has none;
+// the box takes no input and stays inside the window; it closes when the
+// host's status changes or another tab is chosen, and a pending box's
+// timer is stopped (Design-marker-explained.md E1, E2a; crosscheck
+// 2026-11-18-01 C7, C8, L3, L4).
 func TestMarkerExplained(t *testing.T) {
 	e := start(t)
 	c, ctx := e.c, e.ctx
@@ -103,9 +107,82 @@ func TestMarkerExplained(t *testing.T) {
 			t.Error("the box stays after a click")
 		}
 	})
-	// Up again: the line goes.
+	// The box takes no input (C7) and is placed inside the window (C8).
+	e.ui.Wait(func() { m := markerRect(icon); move(m.X+m.W-1.5, m.Y+m.H-1.5) })
+	eventually(t, e.ui, "hover box again", func() bool { return g.hover != nil })
+	e.ui.Wait(func() {
+		b := g.hover
+		if len(g.hoverLayer.Objects) != 1 || g.hoverLayer.Objects[0] != b.obj {
+			t.Fatalf("layer %v", g.hoverLayer.Objects)
+		}
+		if o := inputTaker(b.obj); o != nil {
+			t.Errorf("the box takes input: %T", o)
+		}
+		room := g.hoverLayer.Size()
+		b.at = fyne.NewPos(room.Width-2, room.Height-2) // the corner
+		g.placeHover()
+		p, sz := b.obj.Position(), b.obj.Size()
+		if p.X < 0 || p.Y < 0 || p.X+sz.Width > room.Width || p.Y+sz.Height > room.Height {
+			t.Errorf("box at %v size %v in %v", p, sz, room)
+		}
+	})
+	// A status change closes it (L3).
 	watch(apitypes.StatusUp)
+	eventually(t, e.ui, "closed on a change", func() bool { return g.hover == nil })
 	eventually(t, e.ui, "no problem line", func() bool { return !g.details.problem.Visible() })
+	// So does another tab; a pending box is stopped (L4).
+	e.ui.Wait(func() { move(icon.X+icon.W/2, icon.Y+icon.H/2) })
+	eventually(t, e.ui, "hover box, last", func() bool { return g.hover != nil })
+	e.ui.Wait(func() {
+		g.selectTab(g.tabs.Items[len(g.tabs.Items)-1])
+		if g.hover != nil || len(g.hoverLayer.Objects) != 0 {
+			t.Error("the box stays on another tab")
+		}
+		move(icon.X+icon.W/2, icon.Y+icon.H/2)
+		if mv.hoverTimer == nil {
+			t.Fatal("no timer")
+		}
+		mv.endHover()
+		if mv.hoverTimer != nil {
+			t.Error("timer kept")
+		}
+	})
+}
+
+// inputTaker is an object in o that takes clicks or the pointer, or nil.
+func inputTaker(o fyne.CanvasObject) fyne.CanvasObject {
+	switch o.(type) {
+	case fyne.Tappable, fyne.SecondaryTappable, fyne.DoubleTappable, desktop.Mouseable, desktop.Hoverable, fyne.Draggable:
+		return o
+	}
+	var kids []fyne.CanvasObject
+	switch c := o.(type) {
+	case *fyne.Container:
+		kids = c.Objects
+	case fyne.Widget:
+		kids = fynetest.WidgetRenderer(c).Objects()
+	}
+	for _, k := range kids {
+		if f := inputTaker(k); f != nil {
+			return f
+		}
+	}
+	return nil
+}
+
+// TC-754: next to the pointer, or before it when there is no room after
+// it, else as far as fits (C8).
+func TestFitAt(t *testing.T) {
+	for _, c := range []struct{ p, n, room, want float32 }{
+		{100, 50, 400, 116},
+		{380, 50, 400, 314},
+		{30, 50, 60, 10},
+		{30, 80, 60, 0},
+	} {
+		if got := fitAt(c.p, c.n, c.room); got != c.want {
+			t.Errorf("fitAt(%v, %v, %v) = %v, want %v", c.p, c.n, c.room, got, c.want)
+		}
+	}
 }
 
 // TC-755: Help › "Map symbols…" opens the legend: the map's own drawing of

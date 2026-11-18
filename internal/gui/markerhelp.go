@@ -69,14 +69,20 @@ func (g *GUI) markerImage() *canvas.Image {
 // hoverDelay is how long the pointer rests on a host before its box shows.
 const hoverDelay = 500 * time.Millisecond
 
-// hoverBox is the box shown for a host the pointer rests on.
+// hoverBox is the box shown for a host the pointer rests on. It is drawn
+// in the window's hover layer (g.hoverLayer), which takes no input, so a
+// click next to it still reaches the map (crosscheck 2026-11-18-01 C7).
 type hoverBox struct {
-	pop  *widget.PopUp
+	obj  *fyne.Container // background, border and content
+	at   fyne.Position   // the pointer, absolute in the window
 	key  mapmodel.Key
 	text *widget.Label // name, address, status
 	down *fyne.Container
 	line *widget.Label
 }
+
+// hoverGap is the distance between the pointer and the box.
+const hoverGap = 16
 
 // showHover opens the box for host node n near the pointer (at, absolute
 // in the window). It shows what the map knows at once, then asks the
@@ -84,7 +90,7 @@ type hoverBox struct {
 func (g *GUI) showHover(view int64, n mapmodel.Node, at fyne.Position) {
 	g.hideHover()
 	it := n.Item
-	b := &hoverBox{key: mapmodel.Key{Type: it.Type, ID: it.ID}, text: widget.NewLabel(""), line: widget.NewLabel("")}
+	b := &hoverBox{at: at, key: mapmodel.Key{Type: it.Type, ID: it.ID}, text: widget.NewLabel(""), line: widget.NewLabel("")}
 	b.text.Wrapping, b.line.Wrapping = fyne.TextWrapOff, fyne.TextWrapOff
 	b.text.SetText(hoverText(it.Name, it.IP, mapmodel.StatusWord(it.Status, it.Stale), it.Monitored, nil))
 	b.down = container.NewBorder(nil, nil, container.NewCenter(g.markerImage()), nil, b.line)
@@ -93,12 +99,12 @@ func (g *GUI) showHover(view int64, n mapmodel.Node, at fyne.Position) {
 	} else {
 		b.down.Hide()
 	}
-	border := canvas.NewRectangle(color.Transparent)
-	border.StrokeColor, border.StrokeWidth = nrgba(g.palette.Border), 1
-	content := container.NewStack(border, container.NewPadded(container.NewVBox(b.text, b.down)))
-	b.pop = widget.NewPopUp(content, g.win.Canvas())
-	b.pop.ShowAtPosition(at.AddXY(16, 16))
+	bg := canvas.NewRectangle(nrgba(g.palette.Background))
+	bg.StrokeColor, bg.StrokeWidth = nrgba(g.palette.Border), 1
+	b.obj = container.NewStack(bg, container.NewPadded(container.NewVBox(b.text, b.down)))
 	g.hover = b
+	g.hoverLayer.Objects = []fyne.CanvasObject{b.obj}
+	g.placeHover()
 	id := it.ID
 	go func() {
 		h, err := g.c.Host(g.ctx, id)
@@ -116,9 +122,41 @@ func (g *GUI) showHover(view int64, n mapmodel.Node, at fyne.Position) {
 			} else {
 				b.down.Hide()
 			}
-			b.pop.Resize(b.pop.Content.MinSize())
+			g.placeHover() // it may have grown
 		})
 	}()
+}
+
+// placeHover sizes the box and puts it below right of the pointer, or
+// left of or above it where there is no room, always inside the window
+// (C8).
+func (g *GUI) placeHover() {
+	b := g.hover
+	if b == nil {
+		return
+	}
+	size := b.obj.MinSize()
+	b.obj.Resize(size)
+	origin := fyne.NewPos(0, 0)
+	if d := fyne.CurrentApp().Driver(); d != nil {
+		origin = d.AbsolutePositionForObject(g.hoverLayer)
+	}
+	room := g.hoverLayer.Size()
+	p := b.at.Subtract(origin)
+	b.obj.Move(fyne.NewPos(fitAt(p.X, size.Width, room.Width), fitAt(p.Y, size.Height, room.Height)))
+	g.hoverLayer.Refresh()
+}
+
+// fitAt is where a box of length n goes next to the pointer at p in a
+// room of length room: after it, else before it, else as far as fits.
+func fitAt(p, n, room float32) float32 {
+	if p+hoverGap+n <= room {
+		return p + hoverGap
+	}
+	if p-hoverGap-n >= 0 {
+		return p - hoverGap - n
+	}
+	return max(0, room-n)
 }
 
 // hoverText: "web\n192.0.2.10\ndown since 14:07".
@@ -137,8 +175,9 @@ func hoverText(name, ip, status string, monitored bool, since *time.Time) string
 
 func (g *GUI) hideHover() {
 	if g.hover != nil {
-		g.hover.pop.Hide()
 		g.hover = nil
+		g.hoverLayer.Objects = nil
+		g.hoverLayer.Refresh()
 	}
 }
 

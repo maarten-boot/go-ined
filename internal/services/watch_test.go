@@ -329,8 +329,9 @@ func TestWatchConcurrency(t *testing.T) {
 
 // TC-319: a list given again keeps a service's status by port, also under
 // another name ("ssh" to "tcp:22"); a check in flight for a service removed
-// meanwhile leaves no failure count for the service added again (L4, L7 of
-// crosscheck 2026-11-17-01).
+// meanwhile leaves no failure count for the service added again, also
+// when it is added again before the next round (L4, L7 of crosscheck
+// 2026-11-17-01; L8 of 2026-11-18-01).
 func TestWatchRenameAndRace(t *testing.T) {
 	r, _ := newWatchRig(t, WatchConfig{DownAfter: 2})
 	h := r.host("192.0.2.1", "ssh")
@@ -361,6 +362,28 @@ func TestWatchRenameAndRace(t *testing.T) {
 	r.net.hold = 0
 	r.want(r.watch(h.ID), "tcp:22 unknown")
 	r.round(time.Second) // one failure of the new entry: not down yet
+	r.want(r.watch(h.ID), "tcp:22 unknown")
+	r.round(time.Hour)
+	r.want(r.watch(h.ID), "tcp:22 down")
+
+	// The same, removed and added again with no round in between: the
+	// check in flight is for the earlier watching and counts for nothing
+	// (L8 of crosscheck 2026-11-18-01).
+	r.net.set("192.0.2.1:22", true)
+	r.round(time.Hour)
+	r.want(r.watch(h.ID), "tcp:22 up")
+	r.net.set("192.0.2.1:22", false)
+	r.round(time.Hour)
+	r.net.hold = 200 * time.Millisecond
+	r.at = r.at.Add(time.Hour)
+	var wg3 sync.WaitGroup
+	r.w.round(ctx, &wg3) // second failure in flight
+	r.patch(h.ID, apitypes.HostPatch{Watch: apitypes.Some([]string{})})
+	r.patch(h.ID, apitypes.HostPatch{Watch: apitypes.Some([]string{"tcp:22"})})
+	wg3.Wait()
+	r.net.hold = 0
+	r.want(r.watch(h.ID), "tcp:22 unknown")
+	r.round(time.Second)
 	r.want(r.watch(h.ID), "tcp:22 unknown")
 	r.round(time.Hour)
 	r.want(r.watch(h.ID), "tcp:22 down")

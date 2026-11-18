@@ -187,17 +187,23 @@ func hostWatch(a *app, name string, args []string) error {
 		if err := a.c.Do(a.ctx, http.MethodGet, path("host", id), nil, &cur); err != nil {
 			return err
 		}
+		ports := map[int]bool{}
 		for _, w := range cur.Watch {
 			list = append(list, w.Name)
+			ports[w.Port] = true
 		}
 		if given["add"] {
 			for _, n := range splitList(*add) {
-				c, _, err := apitypes.ParseWatched(n)
+				c, port, err := apitypes.ParseWatched(n)
 				if err != nil {
 					return usagef("%s: %v", name, err)
 				}
-				if !slices.Contains(list, c) { // watched already: nothing to do
+				// Watched already, also under another name for the same
+				// port ("ssh" and "tcp:22"): nothing to do (crosscheck
+				// 2026-11-18-01 L6).
+				if !slices.Contains(list, c) && !ports[port] {
 					list = append(list, c)
+					ports[port] = true
 				}
 			}
 		} else {

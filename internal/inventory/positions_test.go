@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -49,5 +50,50 @@ func TestRoundPositions(t *testing.T) {
 	f, err := s.ExportGroup(g.ID)
 	if err != nil || f.Group.Hosts[0].X != -75.2 {
 		t.Fatalf("export: %v %+v", err, f.Group.Hosts)
+	}
+}
+
+// TC-135: reflow rounds groups too, and the shift of their contents
+// (crosscheck 2026-11-18-01 C9).
+func TestArrangeRounds(t *testing.T) {
+	s, _ := newSvc(t)
+	g := mustGroup(t, s, apitypes.GroupCreate{Name: "g", X: ptr(40.0), Y: ptr(0.0)})
+	a := mustGroup(t, s, apitypes.GroupCreate{Name: "a", ParentID: &g.ID, X: ptr(500.0), Y: ptr(500.0)})
+	b := mustGroup(t, s, apitypes.GroupCreate{Name: "b", ParentID: &g.ID, X: ptr(900.0), Y: ptr(500.0)})
+	in := mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &b.ID, X: ptr(910.0), Y: ptr(530.0)})
+	if _, err := s.Arrange(ctx, NetworkView, &g.ID, 123.456, 80); err != nil {
+		t.Fatal(err)
+	}
+	ga, _ := s.Group(a.ID)
+	gb, _ := s.Group(b.ID)
+	h, _ := s.Host(in.ID)
+	if ga.X != 40 || gb.X != 163.5 || h.X != 173.5 || h.Y-gb.Y != 30 {
+		t.Fatalf("a %g, b %g,%g, host in b %g,%g", ga.X, gb.X, gb.Y, h.X, h.Y)
+	}
+}
+
+// TC-135: a position beyond ±1e9 is refused, also as the result of a
+// move, and nothing is saved (crosscheck 2026-11-18-01 C10).
+func TestPositionRange(t *testing.T) {
+	s, _ := newSvc(t)
+	if _, err := s.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", X: ptr(1.7e308), Y: ptr(0.0)}); KindOf(err) != Invalid || !strings.Contains(err.Error(), "out of range") {
+		t.Fatalf("create: %v", err)
+	}
+	g := mustGroup(t, s, apitypes.GroupCreate{Name: "g", X: ptr(9e8), Y: ptr(0.0)})
+	h := mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.2", ParentID: &g.ID, X: ptr(1e9), Y: ptr(0.0)})
+	if _, err := s.MoveGroup(ctx, g.ID, 5e8, 0); KindOf(err) != Invalid {
+		t.Fatalf("move: %v", err)
+	}
+	if _, err := s.MoveGroupContents(ctx, g.ID, 1, 0); KindOf(err) != Invalid {
+		t.Fatalf("move contents: %v", err)
+	}
+	if gg, _ := s.Group(g.ID); gg.X != 9e8 {
+		t.Errorf("group moved to %g", gg.X)
+	}
+	if hh, _ := s.Host(h.ID); hh.X != 1e9 {
+		t.Errorf("host moved to %g", hh.X)
+	}
+	if _, err := s.MoveGroup(ctx, g.ID, -1, 0); err != nil {
+		t.Fatalf("a move back: %v", err)
 	}
 }

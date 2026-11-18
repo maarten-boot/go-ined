@@ -80,6 +80,9 @@ func (s *Service) CopyGroup(ctx context.Context, view, group int64) (apitypes.Gr
 		ch.Placements = append(ch.Placements, Placement{ViewID: view, HostID: hid, ParentID: newID[h.ParentID], X: roundPos(h.X + dx), Y: roundPos(h.Y + dy)})
 	}
 	ch.NextGroupID = next
+	if err := checkRange(ch); err != nil {
+		return apitypes.GroupCopyResult{}, err
+	}
 	if err := s.repo.Apply(ctx, ch); err != nil {
 		return apitypes.GroupCopyResult{}, err
 	}

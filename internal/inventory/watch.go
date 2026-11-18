@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/netip"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
@@ -11,6 +12,9 @@ import (
 
 // parseWatch turns a PATCH watch list into Watched entries (SPEC-310).
 // Services already watched keep their status; new ones start unknown.
+// watchGen numbers the watchings of services (Watched.Gen).
+var watchGen atomic.Uint64
+
 func parseWatch(names []string, cur []Watched) ([]Watched, error) {
 	ps, err := apitypes.ParseWatchList(names)
 	if err != nil {
@@ -18,7 +22,7 @@ func parseWatch(names []string, cur []Watched) ([]Watched, error) {
 	}
 	out := make([]Watched, 0, len(ps))
 	for _, p := range ps {
-		w := Watched{Name: p.Name, Port: uint16(p.Port), Status: apitypes.StatusUnknown}
+		w := Watched{Name: p.Name, Port: uint16(p.Port), Status: apitypes.StatusUnknown, Gen: watchGen.Add(1)}
 		// A service given again keeps its status, also under another name
 		// for the same port ("ssh" and "tcp:22"); a list has one entry per port.
 		if i := slices.IndexFunc(cur, func(c Watched) bool { return c.Port == w.Port }); i >= 0 {
@@ -125,8 +129,14 @@ func (s *Service) ResetAllWatch(ctx context.Context) (int, error) {
 type WatchTarget struct {
 	ID       int64
 	IP       netip.Addr
-	Services []apitypes.ServicePort
+	Services []WatchService
 	UpSince  time.Time // when the host's ping status became up; zero when it isn't up
+}
+
+// WatchService is a watched service of a WatchTarget, with its Watched.Gen.
+type WatchService struct {
+	apitypes.ServicePort
+	Gen uint64
 }
 
 // WatchTargets returns every monitored host that watches services, ordered
@@ -140,12 +150,12 @@ func (s *Service) WatchTargets() []WatchTarget {
 		if !h.Monitored || len(h.Watch) == 0 {
 			continue
 		}
-		t := WatchTarget{ID: h.ID, IP: h.IP, Services: make([]apitypes.ServicePort, len(h.Watch))}
+		t := WatchTarget{ID: h.ID, IP: h.IP, Services: make([]WatchService, len(h.Watch))}
 		if h.Status == apitypes.StatusUp {
 			t.UpSince = h.LastChange
 		}
 		for i, w := range h.Watch {
-			t.Services[i] = apitypes.ServicePort{Name: w.Name, Port: int(w.Port)}
+			t.Services[i] = WatchService{apitypes.ServicePort{Name: w.Name, Port: int(w.Port)}, w.Gen}
 		}
 		out = append(out, t)
 	}
@@ -158,6 +168,7 @@ type WatchResult struct {
 	IP     netip.Addr // the address that was checked
 	Name   string
 	Port   int
+	Gen    uint64 // the WatchService's; a result for another watching is dropped (0: any, for tests)
 	OK     bool   // the port accepted a connection
 	Status string // the new status; "" keeps the current one
 	At     time.Time
@@ -189,7 +200,9 @@ func (s *Service) ApplyWatch(ctx context.Context, rs []WatchResult) error {
 			ups[r.HostID] = u
 			order = append(order, r.HostID)
 		}
-		i := slices.IndexFunc(u.h.Watch, func(w Watched) bool { return w.Name == r.Name && int(w.Port) == r.Port })
+		i := slices.IndexFunc(u.h.Watch, func(w Watched) bool {
+			return w.Name == r.Name && int(w.Port) == r.Port && (r.Gen == 0 || w.Gen == r.Gen)
+		})
 		if i < 0 {
 			continue
 		}

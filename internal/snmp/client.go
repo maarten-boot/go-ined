@@ -136,17 +136,20 @@ func (c UDP) Values(ctx context.Context, ip netip.Addr, community, version strin
 	if err != nil {
 		return apitypes.SNMPValues{}, err
 	}
-	sum, n := int64(0), int64(0)
+	sum, n, busiest := int64(0), int64(0), int64(0)
 	for _, v := range load {
 		// A load outside 0–100 is a broken agent: left out (C4).
 		if l := number(v); isNumber(v) && l >= 0 && l <= 100 {
 			sum += l
 			n++
+			busiest = max(busiest, l)
 		}
 	}
 	if n > 0 {
-		cpu := int(math.Round(float64(sum) / float64(n)))
-		out.CPUPct = &cpu
+		// The average hides one busy CPU of many: the busiest one and the
+		// count go along (v0.62, the user's question on CPU %).
+		cpu, top := int(math.Round(float64(sum)/float64(n))), int(busiest)
+		out.CPUPct, out.CPUMaxPct, out.CPUs = &cpu, &top, int(n)
 	}
 	rows, err := walk(oidStorageEntry)
 	if err != nil {

@@ -376,7 +376,7 @@ func DiscoveryLine(d apitypes.Discovery) string {
 func SNMPValuesLine(v apitypes.SNMPValues) string {
 	var parts []string
 	if v.CPUPct != nil {
-		parts = append(parts, fmt.Sprintf("CPU %d %%", *v.CPUPct))
+		parts = append(parts, "CPU "+CPUText(v))
 	}
 	for _, kind := range []string{apitypes.StorageMemory, apitypes.StorageDisk} {
 		for _, s := range v.Storage {
@@ -413,4 +413,16 @@ func UptimeText(sec int64) string {
 		return fmt.Sprintf("%d d %d h", sec/86400, h)
 	}
 	return fmt.Sprintf("%d d", sec/86400)
+}
+
+// CPUText is "13 %" for one CPU, "6 % (16 CPUs, busiest 100 %)" for
+// several; "" without a processor table.
+func CPUText(v apitypes.SNMPValues) string {
+	if v.CPUPct == nil {
+		return ""
+	}
+	if v.CPUs <= 1 || v.CPUMaxPct == nil {
+		return fmt.Sprintf("%d %%", *v.CPUPct)
+	}
+	return fmt.Sprintf("%d %% (%d CPUs, busiest %d %%)", *v.CPUPct, v.CPUs, *v.CPUMaxPct)
 }

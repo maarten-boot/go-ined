@@ -18,11 +18,11 @@ import (
 // Disks and Uptime, with the status bar; an snmp.values event updates
 // them; with SNMP off the server's reason is in the status bar.
 func TestSNMPDetails(t *testing.T) {
-	cpu := 13
+	cpu, busiest := 6, 100
 	e := startWith(t, testserver.Options{SNMP: &snmp.Config{Communities: []string{"public"}, Client: snmp.Static{
 		Community: "public", Version: snmp.V2c,
 		Sys: inventory.SNMPSystem{Name: "web", Descr: "Linux web 6.8.0", Location: "rack 4"},
-		Vals: apitypes.SNMPValues{UptimeS: 1053224, CPUPct: &cpu, Storage: []apitypes.SNMPStorage{
+		Vals: apitypes.SNMPValues{UptimeS: 1053224, CPUPct: &cpu, CPUMaxPct: &busiest, CPUs: 16, Storage: []apitypes.SNMPStorage{
 			{Name: "Physical memory", Kind: apitypes.StorageMemory, SizeBytes: 1 << 33, UsedPct: 63},
 			{Name: "/", Kind: apitypes.StorageDisk, SizeBytes: 1 << 35, UsedPct: 91},
 			{Name: "/data", Kind: apitypes.StorageDisk, SizeBytes: 1 << 36, UsedPct: 40}}},
@@ -47,7 +47,7 @@ func TestSNMPDetails(t *testing.T) {
 		f := formText(g.details)
 		return strings.Contains(g.status.Text(), "SNMP on web: v2c · web · Linux web 6.8.0") &&
 			strings.Contains(f, "SNMP\nv2c · web · Linux web 6.8.0") && strings.Contains(f, "Location\nrack 4") &&
-			strings.Contains(f, "CPU\n13 %") && strings.Contains(f, "Memory\n63 %") &&
+			strings.Contains(f, "CPU\n6 % (16 CPUs, busiest 100 %)") && strings.Contains(f, "Memory\n63 %") &&
 			strings.Contains(f, "Disks\n/ 91 %, /data 40 %") && strings.Contains(f, "Uptime\n12 d 4 h · read ")
 	})
 	// New values from the server: shown.

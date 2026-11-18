@@ -65,12 +65,12 @@ func TestClientValues(t *testing.T) {
 			{Name: "Physical memory", Kind: apitypes.StorageMemory, SizeBytes: 1024000, UsedPct: 63},
 			{Name: "/", Kind: apitypes.StorageDisk, SizeBytes: 4096000, UsedPct: 91},
 		}
-		if got.UptimeS != 1234 || got.CPUPct == nil || *got.CPUPct != 13 || len(got.Storage) != 2 || got.Storage[0] != want[0] || got.Storage[1] != want[1] {
+		if got.UptimeS != 1234 || got.CPUPct == nil || *got.CPUPct != 13 || *got.CPUMaxPct != 15 || got.CPUs != 2 || len(got.Storage) != 2 || got.Storage[0] != want[0] || got.Storage[1] != want[1] {
 			t.Errorf("%s: %+v (cpu %v)", ver, got, got.CPUPct)
 		}
 		a.del(".1.3.6.1.2.1.25")
 		got, err = udp(a).Values(ctx, lo, "public", ver)
-		if err != nil || got.CPUPct != nil || len(got.Storage) != 0 || got.UptimeS != 1234 {
+		if err != nil || got.CPUPct != nil || got.CPUMaxPct != nil || got.CPUs != 0 || len(got.Storage) != 0 || got.UptimeS != 1234 {
 			t.Errorf("%s without HOST-RESOURCES: %+v %v", ver, got, err)
 		}
 	}

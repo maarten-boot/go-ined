@@ -1,6 +1,12 @@
 # Design: SNMP (finding agents, reading values, thresholds)
 
-Status: **proposed** (2026-11-18), waiting for the user's OK.
+Status: **part 1 implemented** (2026-11-18): N1–N6 as recommended ("OK, all as recommended"), on `feature/snmp` (SPEC-312–314, 514, 736; Spec v0.60). Part 2 (N7, N8, thresholds in `ined-alert`) is next. Settled in the build:
+- gosnmp v1.47.0 (2026-10-23). `go mod tidy` also raised `testify` to 1.12.1, used only in tests (Fyne's and gosnmp's).
+- `snmp.port` was added (161), for agents on another port and for the tests.
+- An SNMPv1 agent answers a request with one unknown name with an error for the whole request, so `sysDescr` is then asked alone.
+- `snmp.values` also counts a changed disk size as a change.
+- The GUI's SNMP row shows version, sysName and sysDescr. The status bar repeats it after "Check SNMP now".
+- Correction to N3's load estimate: a host without an agent costs every community and version times the timeout and retries (3 × 2 × 2 s = 12 s). With 20 hosts at once, 5,000 such hosts take about 50 minutes the first time, not "a few minutes". `networks` keeps that to your own ranges.
 
 User request (2026-11-18): "start with snmp". It picks up the two open SNMP items of the Plan:
 - `Design-connect.md` C7, Spec §13: "Later we can add an SNMP scan for all hosts and a set of default community strings to try."

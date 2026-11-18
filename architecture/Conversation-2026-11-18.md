@@ -85,3 +85,13 @@
    - Part 2, `ined-alert`: N7 `[[threshold]]` rules (HIGH and OK mails), N8 no rules by default.
    - Not now: v3, traps, history, interfaces.
    - Waiting for the user's OK.
+18. **User**: pushed; OK, all as recommended.
+   **Claude** checked the push (`main` and `docs/architecture` at `2d9b246`) and built SNMP part 1 on `feature/snmp` (merged as `f1f3d7b`; `bin/` at v0.7.0-18-gf1f3d7b):
+   - gosnmp v1.47.0 as a direct dependency. `go mod tidy` also took testify 1.12.1; the GUI tests needed its go.sum entry.
+   - `internal/snmp`: a UDP client (system group; uptime, `hrProcessorLoad`, `hrStorageTable`; v2c bulk, v1 get-next) and a manager (find with every community × v2c/v1, read every interval, lost → find again, rescan, on request).
+   - Inventory and store: the agent per host (schema 9); values in memory; `snmp.values` on a whole-percent change; cleared by a new IP; values dropped when monitoring is off.
+   - The community is in no API answer, event, export or log line (tested).
+   - API `POST /hosts/{id}/check-snmp` and host `snmp`; `[snmp]` config (off by default); `inedctl host snmp`; GUI details rows and "Check SNMP now".
+   - Tests run against a fake UDP agent built from gosnmp's own packet code, and a static client for the CLI and GUI tests.
+   - All Go tests with `-race` pass except the known flaky TestDiscoveryDialog, which passed when run alone. The GUI SNMP tests passed 3 runs in a row; `make nogui-check` passes.
+   - Docs: Spec v0.60 (SPEC-312, 313, 314, 514, 736, and the additions to SPEC-502, 804, 901, the config table and §13); TC-324–327, 757, 909; Changes; README; API examples (only `snmp: null` and the SNMP row); the design status, which corrects N3's load estimate (5,000 hosts without an agent take about 50 min the first time).

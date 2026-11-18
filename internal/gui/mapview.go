@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -87,6 +88,20 @@ type MapView struct {
 	// "group "lan" is empty" for an empty focus (crosscheck 2026-11-13-03
 	// L1); "" writes nothing.
 	empty string
+
+	// OnHover is called when the pointer has rested on a host (its icon,
+	// labels or service marker) for hoverDelay, with the pointer's position
+	// in the window; OnHoverEnd when it leaves, or on a click, drag or
+	// scroll (Design-marker-explained.md E2a). UI goroutine.
+	OnHover    func(n mapmodel.Node, at fyne.Position)
+	OnHoverEnd func()
+	hoverKey   *mapmodel.Key // the host under the pointer
+	hoverSeq   int           // cancels a pending OnHover
+	hoverShown bool
+	// do runs f on the UI goroutine (fyne.Do; the GUI's own in tests).
+	do func(f func())
+	// legend: the map of Help › "Map symbols…", which only shows.
+	legend bool
 }
 
 type dragMode int
@@ -203,7 +218,74 @@ func (mv *MapView) Selection() []mapmodel.Key {
 
 // MouseDown records the modifier keys of a press, for the tap or drag that
 // follows (Ctrl+click, Shift+drag; SPEC-724).
-func (mv *MapView) MouseDown(ev *desktop.MouseEvent) { mv.mods = ev.Modifier }
+func (mv *MapView) MouseDown(ev *desktop.MouseEvent) { mv.mods = ev.Modifier; mv.endHover() }
+
+// MouseIn and MouseMoved follow the pointer for the hover box.
+func (mv *MapView) MouseIn(ev *desktop.MouseEvent) { mv.MouseMoved(ev) }
+
+func (mv *MapView) MouseMoved(ev *desktop.MouseEvent) {
+	if mv.legend || mv.drag != dragNone {
+		return
+	}
+	n := mv.hostAt(ev.Position)
+	if n == nil {
+		mv.endHover()
+		return
+	}
+	k := mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}
+	if mv.hoverKey != nil && *mv.hoverKey == k {
+		return // the same host: the box stays, or is still to come
+	}
+	mv.endHover()
+	mv.hoverKey = &k
+	mv.hoverSeq++
+	seq, node, at := mv.hoverSeq, *n, ev.AbsolutePosition
+	do := mv.do
+	if do == nil {
+		do = fyne.Do
+	}
+	time.AfterFunc(hoverDelay, func() {
+		do(func() {
+			if mv.hoverSeq != seq || mv.OnHover == nil {
+				return
+			}
+			mv.hoverShown = true
+			mv.OnHover(node, at)
+		})
+	})
+}
+
+// MouseOut ends the hover.
+func (mv *MapView) MouseOut() { mv.endHover() }
+
+func (mv *MapView) endHover() {
+	mv.hoverSeq++
+	mv.hoverKey = nil
+	if mv.hoverShown {
+		mv.hoverShown = false
+		if mv.OnHoverEnd != nil {
+			mv.OnHoverEnd()
+		}
+	}
+}
+
+// hostAt is the host under p: its icon or labels, or its service marker.
+func (mv *MapView) hostAt(p fyne.Position) *mapmodel.Node {
+	if n := mv.hit(p); n != nil {
+		if n.Item.Type == apitypes.TypeHost {
+			return n
+		}
+		return nil
+	}
+	x, y := mv.toMap(p)
+	for i := range mv.nodes {
+		n := &mv.nodes[i]
+		if n.Item.Type == apitypes.TypeHost && n.Item.ServicesDown > 0 && markerRect(n.Icon).Contains(x, y) {
+			return n
+		}
+	}
+	return nil
+}
 
 // MouseUp implements desktop.Mouseable.
 func (mv *MapView) MouseUp(*desktop.MouseEvent) {}
@@ -247,6 +329,10 @@ func (mv *MapView) hit(p fyne.Position) *mapmodel.Node {
 // Tapped selects the item under the pointer, or clears the selection.
 // With Ctrl held it adds the item to the selection or removes it.
 func (mv *MapView) Tapped(ev *fyne.PointEvent) {
+	mv.endHover()
+	if mv.legend {
+		return // the legend only shows
+	}
 	var k *mapmodel.Key
 	if n := mv.hit(ev.Position); n != nil {
 		k = &mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}
@@ -267,6 +353,10 @@ func (mv *MapView) Tapped(ev *fyne.PointEvent) {
 // DoubleTapped expands a collapsed group icon or collapses an expanded
 // group by its frame label (SPEC-703).
 func (mv *MapView) DoubleTapped(ev *fyne.PointEvent) {
+	mv.endHover()
+	if mv.legend {
+		return // the legend only shows
+	}
 	n := mv.hit(ev.Position)
 	if n == nil || mv.OnToggle == nil {
 		return
@@ -282,6 +372,10 @@ func (mv *MapView) DoubleTapped(ev *fyne.PointEvent) {
 
 // TappedSecondary opens the context menu of the item under the pointer.
 func (mv *MapView) TappedSecondary(ev *fyne.PointEvent) {
+	mv.endHover()
+	if mv.legend {
+		return // the legend only shows
+	}
 	n := mv.hit(ev.Position)
 	if n != nil {
 		k := mapmodel.Key{Type: n.Item.Type, ID: n.Item.ID}
@@ -303,6 +397,10 @@ func (mv *MapView) TappedSecondary(ev *fyne.PointEvent) {
 
 // Scrolled zooms around the pointer (SPEC-713).
 func (mv *MapView) Scrolled(ev *fyne.ScrollEvent) {
+	mv.endHover()
+	if mv.legend {
+		return // the legend only shows
+	}
 	f := zoomStep
 	switch {
 	case ev.Scrolled.DY < 0:
@@ -317,6 +415,10 @@ func (mv *MapView) Scrolled(ev *fyne.ScrollEvent) {
 // scroll bar (SPEC-713), or drags an item: a host, a collapsed group, or a
 // frame by its label (SPEC-704).
 func (mv *MapView) Dragged(ev *fyne.DragEvent) {
+	mv.endHover()
+	if mv.legend {
+		return // the legend only shows
+	}
 	if mv.drag == dragNone {
 		start := fyne.NewPos(ev.Position.X-ev.Dragged.DX, ev.Position.Y-ev.Dragged.DY)
 		mv.drag = mv.barAt(start)
@@ -838,8 +940,18 @@ func (d *drawer) icon(n *mapmodel.Node, selected bool) {
 // (SPEC-732, S6): a warning triangle with a bar, just off the icon's
 // bottom-right corner, in the "down" colour. It is a shape, so it doesn't
 // depend on colour, and none of the status glyphs is a triangle.
+// markerSize is the side of the service marker, in map units.
+const markerSize = 11.0
+
+// markerRect is where the service marker of an icon is drawn.
+func markerRect(ic mapmodel.Rect) mapmodel.Rect {
+	k := markerSize
+	x0, y1 := ic.X+ic.W-k/2, ic.Y+ic.H+k/3
+	return mapmodel.Rect{X: x0 - 1, Y: y1 - k - 1, W: k + 2, H: k + 2}
+}
+
 func (d *drawer) serviceMarker(ic mapmodel.Rect) {
-	const k = 11.0
+	const k = markerSize
 	col := nrgba(d.p.Status(apitypes.StatusDown))
 	x0, y1 := ic.X+ic.W-k/2, ic.Y+ic.H+k/3 // bottom left of the triangle
 	x1, xm, y0 := x0+k, x0+k/2, y1-k

@@ -105,6 +105,8 @@ type GUI struct {
 	// lastFyneDialog is Fyne's file dialog shown last, when the desktop has
 	// none of its own (for tests).
 	lastFyneDialog dialog.Dialog
+	hover          *hoverBox // the hover box shown (Design-marker-explained.md E2a)
+	lastLegend     *MapView  // the legend's map shown last (for tests)
 	// colorPicked is the callback of the colour picker opened last (for
 	// tests).
 	colorPicked func(color.Color)
@@ -491,6 +493,9 @@ func (g *GUI) mapView(view int64) *MapView {
 	mv.saved = map[int64]mapmodel.Viewport{}
 	mv.OnSelect = func(k *mapmodel.Key) { g.details.show(view, k) }
 	mv.OnToggle = func(group int64, expand bool) { g.setCollapsed(group, !expand) }
+	mv.OnHover = func(n mapmodel.Node, at fyne.Position) { g.showHover(view, n, at) }
+	mv.OnHoverEnd = g.hideHover
+	mv.do = g.do
 	g.wireEditing(mv)
 	mv.OnViewport = func(mapmodel.Viewport) {
 		if view == g.current {
@@ -631,6 +636,7 @@ func (g *GUI) toolbar() fyne.CanvasObject {
 		btn("Find host…", g.showFind),
 		btn("Discover…", func() { g.openDiscovery("") }),
 		g.viewMenuButton(),
+		g.helpMenuButton(),
 		widget.NewSeparator(),
 		widget.NewSeparator(),
 		g.wrapToggle(),
@@ -695,6 +701,22 @@ func (g *GUI) setWrap(on bool) {
 			g.fail("wrap names not saved", err)
 		}
 	}()
+}
+
+// helpMenuButton opens the Help menu below itself: "Map symbols…"
+// (Design-marker-explained.md E3).
+func (g *GUI) helpMenuButton() fyne.CanvasObject {
+	var b *widget.Button
+	b = widget.NewButton("Help ▾", func() {
+		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(b)
+		pos.Y += b.Size().Height
+		widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", g.helpMenuItems()...), g.win.Canvas(), pos)
+	})
+	return g.bordered(b)
+}
+
+func (g *GUI) helpMenuItems() []*fyne.MenuItem {
+	return []*fyne.MenuItem{fyne.NewMenuItem("Map symbols…", g.showLegend)}
 }
 
 // viewMenuButton opens the View menu below itself (SPEC-720).

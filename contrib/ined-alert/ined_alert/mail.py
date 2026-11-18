@@ -17,6 +17,17 @@ from .logs import kv
 RETRIES = (10.0, 60.0, 300.0)  # waits before the 2nd, 3rd and 4th attempt
 
 _WORD = {E.DOWN: "DOWN", E.UP: "UP", E.STILL_DOWN: "STILL DOWN"}
+_TH = (E.HIGH, E.NORMAL, E.STILL_HIGH)
+
+
+def _pct(x: float) -> str:
+    """91 %, 90.5 %"""
+    return f"{x:g} %"
+
+
+def _metric(n: E.Notice) -> str:
+    """ "disk / 91 %", "busiest CPU 100 %" """
+    return f"{n.metric['label']} {_pct(n.metric['value'])}"
 
 
 def when(t: float, now: float | None = None) -> str:
@@ -84,6 +95,12 @@ def subject(items: list[tuple[E.Notice, list[str]]]) -> str:
                 return "[ined] ined-server is OK again"
             case E.NEW:
                 return f"[ined] NEW {_host(n)}" + (f" in {n.groups[0]}" if n.groups else "")
+            case E.HIGH:
+                return f"[ined] HIGH {_metric(n)} on {_host(n)}"
+            case E.NORMAL:
+                return f"[ined] OK {_metric(n)} on {_host(n)} after {span(n.at - n.since)}"
+            case E.STILL_HIGH:
+                return f"[ined] STILL HIGH {_metric(n)} on {_host(n)} for {span(n.at - n.since)}"
             case E.SUMMARY:
                 s = f"[ined] ined-alert started: {_count(len(n.hosts), 'host')} down"
                 return s + (f", {_count(len(n.services), 'service')} down" if n.services else "")
@@ -108,11 +125,14 @@ def subject(items: list[tuple[E.Notice, list[str]]]) -> str:
         for one, is_svc in (("host", False), ("service", True)):
             if c := sum(1 for n, _ in items if n.kind == k and bool(n.service) == is_svc):
                 parts.append(f"{_count(c, one)} {word}")
+    for k, word in ((E.HIGH, "high"), (E.NORMAL, "OK again"), (E.STILL_HIGH, "still high")):
+        if c := kinds.count(k):
+            parts.append(f"{_count(c, 'value')} {word}")
     if c := kinds.count(E.NEW):
         parts.append(_count(c, "new host"))
     if kinds.count(E.SUMMARY):
         parts.append("ined-alert started")
-    if other := len(kinds) - sum(kinds.count(k) for k in _WORD) - kinds.count(E.SUMMARY) - kinds.count(E.NEW):
+    if other := len(kinds) - sum(kinds.count(k) for k in _WORD) - sum(kinds.count(k) for k in _TH) - kinds.count(E.SUMMARY) - kinds.count(E.NEW):
         parts.append(f"{other} server message{'s' if other > 1 else ''}")
     return "[ined] " + ", ".join(parts)
 
@@ -132,6 +152,15 @@ def body(items: list[tuple[E.Notice, list[str]]], server_url: str, now: float) -
                     out.append(f"{'':<10} last seen: {when(n.host['last_seen'], now)}")
             case E.UP:
                 out.append(f"{'UP':<10} {_what_long(n)} at {when(n.at, now)}, down for {span(n.at - n.since)}")
+                if n.groups:
+                    out.append(f"{'':<10} groups: {', '.join(n.groups)}")
+            case E.HIGH | E.STILL_HIGH:
+                word = "HIGH" if n.kind == E.HIGH else "STILL HIGH"
+                out.append(f"{word:<10} {_metric(n)} (above {_pct(n.metric['above'])}) on {_host(n)} since {when(n.since, now)}, {span(n.at - n.since)}")
+                if n.groups:
+                    out.append(f"{'':<10} groups: {', '.join(n.groups)}")
+            case E.NORMAL:
+                out.append(f"{'OK':<10} {_metric(n)} (at or below {_pct(n.metric['above'])}) on {_host(n)} at {when(n.at, now)}, high for {span(n.at - n.since)}")
                 if n.groups:
                     out.append(f"{'':<10} groups: {', '.join(n.groups)}")
             case E.NEW:

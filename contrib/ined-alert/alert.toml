@@ -36,6 +36,21 @@ to    = ["ops@example.com"]
 group = "Payroll/app servers"
 to    = ["payroll-it@example.com"]
 
+# SNMP thresholds (SPEC-958): a value above the line for `for` (default "5m")
+# is mailed as "[ined] HIGH disk / 91 % on web (10.0.1.5)", and "[ined] OK ..."
+# when it is at or below the line again. Metrics: cpu (the average over the
+# CPUs), cpu_max (the busiest CPU), memory, disk (each fixed disk). Needs
+# SNMP on the server ([snmp] enabled = true in server.toml). No rules: none.
+# [[threshold]]
+# metric = "disk"
+# above  = 90
+# for    = "10m"
+#
+# [[threshold]]
+# metric = "cpu"
+# above  = 80
+# for    = "10m"
+
 [syslog]
 address  = ""                    # "" = stderr only; "udp://collector:514", "tcp://collector:514" or "/dev/log".
 facility = "local0"

@@ -44,7 +44,7 @@ class TestServiceAlerts(unittest.TestCase):
         self.assertEqual(sorted(n.to), ["admin@example.com", "ops@example.com", "pay@example.com"])
         self.assertEqual(n.groups, ["Networks/dc/lan", "Payroll/app servers"])
         st = r.e.state()
-        self.assertEqual((st["version"], list(st["services"]), st["open"]), (2, ["1/https"], {}))
+        self.assertEqual((st["version"], list(st["services"]), st["open"]), (3, ["1/https"], {}))
         (u,) = r.e.service(event(r, "https", "up", T0 + 720), r.clock.add(600))
         self.assertEqual((u.kind, u.service["name"], u.since), (E.UP, "https", T0))
         self.assertEqual(r.e.svc_open, {})

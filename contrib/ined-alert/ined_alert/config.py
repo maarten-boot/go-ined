@@ -8,6 +8,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .thresholds import METRICS, Threshold
+
 
 class ConfigError(Exception):
     pass
@@ -35,6 +37,7 @@ class Config:
     state_file: str = ""
     server_down_after: float = 300.0
     routes: list[Route] = field(default_factory=list)
+    thresholds: list[Threshold] = field(default_factory=list)  # [[threshold]] (SPEC-958)
     syslog_address: str = ""  # "" = stderr only
     syslog_facility: str = "local0"
     log_level: str = "info"
@@ -105,7 +108,7 @@ def load(path: str | os.PathLike, env: dict[str, str] | None = None) -> Config:
         raise ConfigError(f"{path}: {e}") from None
     c = Config(state_file=default_state_file())
     for name, value in doc.items():
-        if name == "route":
+        if name in ("route", "threshold"):
             continue
         if name not in _SECTIONS or not isinstance(value, dict):
             raise ConfigError(f"unknown section [{name}]")
@@ -150,6 +153,21 @@ def load(path: str | os.PathLike, env: dict[str, str] | None = None) -> Config:
         if not isinstance(group, str) or not group.strip("/ "):
             raise ConfigError(f"route {i}: group must be a path such as \"Networks/lan\"")
         c.routes.append(Route(group=normalize_path(group), to=_addresses(r.get("to", []), f"route {i} ({group}).to")))
+    rules = doc.get("threshold", [])
+    if not isinstance(rules, list):
+        raise ConfigError("threshold: use [[threshold]] tables")
+    for i, r in enumerate(rules, 1):
+        if not isinstance(r, dict) or set(r) - {"metric", "above", "for"}:
+            raise ConfigError(f"threshold {i}: only metric, above and for")
+        metric, above = r.get("metric"), r.get("above")
+        if metric not in METRICS:
+            raise ConfigError(f"threshold {i}: metric must be one of {', '.join(METRICS)}")
+        if not isinstance(above, (int, float)) or isinstance(above, bool) or not 0 <= above < 100:
+            raise ConfigError(f"threshold {i}: above must be a percentage from 0 to below 100")
+        dur = r.get("for", "5m")
+        if not isinstance(dur, str):
+            raise ConfigError(f"threshold {i}: for must be a duration such as \"10m\"")
+        c.thresholds.append(Threshold(metric, float(above), parse_duration(dur, f"threshold {i}.for")))
     if not c.admins and not c.routes:
         raise ConfigError("nobody gets alerts: set alert.admins or a [[route]]")
     c.syslog_address = get("syslog", "address", str, "")

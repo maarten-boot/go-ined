@@ -4,7 +4,7 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
-Update `ined-server` first: the database gets schema 8 (three columns on groups), so an older server can't open it any more; keep a copy of the database if you may go back. The new `ined-gui` and `inedctl` work with an older server, without the Rescan setting.
+Update `ined-server` first: the database gets schema 8 (three columns on groups), so an older server can't open it any more; keep a copy of the database if you may go back. Against an older server, the new `ined-gui`'s "Rescan ▸" and `inedctl group rescan` / `discover list` get the server's error ("unknown field", "method not allowed"); everything else works.
 
 ### Added
 - Networks can be scanned again on a schedule. A network group's context menu in `ined-gui` has "Rescan ▸" (off, every hour, 6 hours, day or week), and `inedctl group rescan <id> 24h|off` sets any interval from 15 minutes. The server scans one network at a time, the one waiting longest first, and remembers when each was last scanned, also over a restart. A scan you start by hand that covers the whole network counts as its scan, and one you start over a running scheduled scan stops that scan first. New hosts are added as with a scan by hand; nothing is moved or removed. The group's details show "Rescan: every day, last 03:15, 2 new". `discovery.scheduled = false` in `server.toml` turns all scheduled scans off.

@@ -50,3 +50,10 @@
      - Both were repeated with overlay probes.
    - CI: `main` @ `8054d74` green, macOS included. On the user's guess about the macOS queue: the release's attempt 2 waited at the same time as `871e450`'s macOS job, so two of our own macOS jobs were queued at once, under GitHub's capacity limits.
    - Decisions asked: D1 fix C1, C2; D2 fix L1–L3, P1–P3; D3 rerun the release when no run on `main` is queued; rescan into 0.8.0.
+13. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `0076431`); the release's third attempt was queued. The crosscheck's fixes are on `fix/crosscheck-18-02` (merged as `0596b66`; `bin/` at v0.7.0-9-g0596b66):
+   - C1: a group that can't be scanned is passed over, so the others are scanned.
+   - C2: other edits of such a group work.
+   - L1–L3: the waits end when the setting changes; a future last scan is due; a scan where every probe failed doesn't count.
+   - P1–P3: Changes, README and SPEC-957, tests. Spec v0.58.
+   - The first merge had `schedule_test.go` not gofmt-ed (seen right after with `gofmt -l`); fixed with a follow-up commit and a second merge before any push.

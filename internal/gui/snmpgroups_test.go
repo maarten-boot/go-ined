@@ -2,9 +2,11 @@ package gui
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/netip"
@@ -385,11 +387,12 @@ func TestViewCommunitiesGUI(t *testing.T) {
 // room for 4. The tests hold one (crosscheck 2026-11-19-05 L3), and sends requests to
 // /snmp/checks/ without the token while noAuth is set.
 type hookTransport struct {
-	holdPath string
-	hold     atomic.Bool
-	noAuth   atomic.Bool
-	seen     chan struct{}
-	release  chan struct{}
+	holdPath   string
+	holdMethod string // default GET
+	hold       atomic.Bool
+	noAuth     atomic.Bool
+	seen       chan struct{}
+	release    chan struct{}
 }
 
 func (h *hookTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -397,7 +400,7 @@ func (h *hookTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		r = r.Clone(r.Context())
 		r.Header.Del("Authorization")
 	}
-	held := r.Method == http.MethodGet && r.URL.Path == h.holdPath && h.hold.Load()
+	held := r.Method == cmp.Or(h.holdMethod, http.MethodGet) && r.URL.Path == h.holdPath && h.hold.Load()
 	resp, err := http.DefaultTransport.RoundTrip(r)
 	if held && err == nil {
 		// The server has answered; the answer is read only later.
@@ -620,4 +623,83 @@ func TestDetailsOlderGroupAnswerDropped(t *testing.T) {
 			t.Errorf("the older answer replaced newer data: note %q\n%s", g.details.note.Text, formText(g.details))
 		}
 	})
+}
+
+// TC-759 (crosscheck 2026-11-19-08 C1, D3a, L1): selecting the same item
+// again (a tab switch) keeps unsaved typing; leaving it for another item
+// says "Note of host N not saved"; a failed load says so in the field.
+func TestNoteKeptOnReshowAndWarned(t *testing.T) {
+	e := startWith(t, testserver.Options{})
+	c, ctx := e.c, e.ctx
+	h1 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Note: "server note", X: ptr(100.0), Y: ptr(100.0)}))
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", X: ptr(300.0), Y: ptr(100.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h2.ID) != nil })
+	k1, k2 := mapmodel.HostKey(h1.ID), mapmodel.HostKey(h2.ID)
+	e.ui.Wait(func() { g.details.show(1, &k1) })
+	eventually(t, e.ui, "shown", func() bool { return g.details.note.Text == "server note" })
+	var before int
+	e.ui.Wait(func() {
+		g.details.note.SetText("unsaved typing")
+		before = g.details.answers
+		g.details.show(1, &k1) // as a tab switch does
+		if g.details.note.Text != "unsaved typing" || g.details.note.Disabled() {
+			t.Errorf("at once: %q disabled %v", g.details.note.Text, g.details.note.Disabled())
+		}
+	})
+	eventually(t, e.ui, "answer", func() bool { return g.details.answers > before })
+	e.ui.Wait(func() {
+		if g.details.note.Text != "unsaved typing" {
+			t.Errorf("after the answer: %q", g.details.note.Text)
+		}
+		g.details.show(1, &k2)
+	})
+	eventually(t, e.ui, "warned", func() bool {
+		return strings.Contains(g.status.Text(), fmt.Sprintf("Note of host %d not saved", h1.ID))
+	})
+	k9 := mapmodel.HostKey(999)
+	e.ui.Wait(func() { g.details.show(1, &k9) })
+	eventually(t, e.ui, "not loaded", func() bool {
+		return strings.HasPrefix(g.details.note.PlaceHolder, "Note not loaded") && g.details.note.Disabled()
+	})
+}
+
+// TC-759 (crosscheck 2026-11-19-08 C2): a save still on its way when
+// another item is selected doesn't mark that item's note as edited: an
+// event still updates it.
+func TestNoteSaveLandsAfterSwitch(t *testing.T) {
+	tr := &hookTransport{holdMethod: http.MethodPatch, seen: make(chan struct{}, 4), release: make(chan struct{})}
+	e := hookedEnv(t, testserver.Options{}, tr)
+	c, ctx := e.c, e.ctx
+	h1 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Note: "one", X: ptr(100.0), Y: ptr(100.0)}))
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", Note: "two", X: ptr(300.0), Y: ptr(100.0)}))
+	tr.holdPath = "/api/v1/hosts/" + strconv.FormatInt(h1.ID, 10)
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h2.ID) != nil })
+	k1, k2 := mapmodel.HostKey(h1.ID), mapmodel.HostKey(h2.ID)
+	e.ui.Wait(func() { g.details.show(1, &k1) })
+	eventually(t, e.ui, "one shown", func() bool { return g.details.note.Text == "one" })
+	tr.hold.Store(true)
+	e.ui.Wait(func() {
+		g.details.note.SetText("edit")
+		g.details.saveNote()
+	})
+	<-tr.seen // the save's answer is held
+	tr.hold.Store(false)
+	e.ui.Wait(func() { g.details.show(1, &k2) })
+	eventually(t, e.ui, "two shown", func() bool { return g.details.note.Text == "two" && !g.details.note.Disabled() })
+	close(tr.release)
+	eventually(t, e.ui, "saved", func() bool { return strings.Contains(g.status.Text(), fmt.Sprintf("note of host %d saved", h1.ID)) })
+	e.ui.Wait(func() {
+		if g.details.note.Text != "two" || g.details.lastNote != "two" {
+			t.Errorf("host two after host one's save: field %q, loaded %q", g.details.note.Text, g.details.lastNote)
+		}
+	})
+	must(c.UpdateHost(ctx, h2.ID, apitypes.HostPatch{Note: apitypes.Some("two, changed elsewhere")}))
+	eventually(t, e.ui, "event updates the note", func() bool { return g.details.note.Text == "two, changed elsewhere" })
+	if got := must(c.Host(ctx, h1.ID)).Note; got != "edit" {
+		t.Errorf("host one's note is %q", got)
+	}
 }

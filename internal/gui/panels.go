@@ -321,8 +321,9 @@ func (l growLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 }
 
 func (d *details) clear() {
+	d.warnUnsaved()
 	d.seq++
-	d.key, d.host, d.group = nil, nil, nil
+	d.key, d.host, d.group, d.noteSet = nil, nil, nil, false
 	d.title.SetText("Nothing selected")
 	d.setProblem("")
 	d.form.Objects = nil
@@ -338,15 +339,25 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 		d.clear()
 		return
 	}
+	// The same item again (a tab switch, a click on the selection): its
+	// note stays as it is, typing included (crosscheck 2026-11-19-08 C1).
+	same := d.key != nil && *d.key == *k && d.noteSet
+	if !same {
+		d.warnUnsaved()
+	}
 	d.seq++
 	d.reloads++ // show() is a read too (crosscheck 2026-11-19-05 C1)
 	seq, n, g := d.seq, d.reloads, d.g
-	d.view, d.key, d.missed, d.noteSet = view, k, false, false
-	// The previous item's note mustn't be saved onto this one (crosscheck
-	// 2026-11-19-07 C1).
-	d.note.SetText("")
-	d.note.Disable()
-	d.save.Disable()
+	d.view, d.key, d.missed = view, k, false
+	if !same {
+		// The previous item's note mustn't be saved onto this one
+		// (crosscheck 2026-11-19-07 C1).
+		d.noteSet = false
+		d.note.SetText("")
+		d.note.SetPlaceHolder("Note")
+		d.note.Disable()
+		d.save.Disable()
+	}
 	go func() {
 		var (
 			h   apitypes.Host
@@ -365,6 +376,9 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 			d.answers++
 			if err != nil {
 				g.status.message(fmt.Sprintf("%s %d: %v", k.Type, k.ID, err))
+				if !d.noteSet { // L1
+					d.note.SetPlaceHolder("Note not loaded; select the item again")
+				}
 				return
 			}
 			if k.Type == apitypes.TypeHost {
@@ -374,7 +388,7 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 					// 2026-11-19-05 C1). What was typed since is kept.
 					return
 				}
-				d.setHost(h, true)
+				d.setHost(h, !same)
 				if d.missed { // the answer may be older than that event (C1)
 					d.missed = false
 					d.reload()
@@ -383,10 +397,20 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 				if n != d.reloads && d.group != nil && *d.key == mapmodel.GroupKey(d.group.ID) {
 					return // as for a host (crosscheck 2026-11-19-07 L1)
 				}
-				d.setGroup(gr, true)
+				d.setGroup(gr, !same)
 			}
 		})
 	}()
+}
+
+// warnUnsaved says in the status bar that typing in the note of the item
+// being left wasn't saved; it isn't kept (SPEC-708; crosscheck
+// 2026-11-19-08 D3a).
+func (d *details) warnUnsaved() {
+	if d.key == nil || !d.noteSet || d.note.Text == d.lastNote {
+		return
+	}
+	d.g.status.message(fmt.Sprintf("Note of %s %d not saved", d.key.Type, d.key.ID))
 }
 
 func (d *details) setHost(h apitypes.Host, loadNote bool) {
@@ -752,7 +776,14 @@ func (d *details) saveNote() {
 				g.status.message(fmt.Sprintf("note of %s %d not saved: %v", k.Type, k.ID, err))
 				return
 			}
-			d.lastNote = text
+			if d.key != nil && *d.key == k && d.noteSet { // still that item (crosscheck 2026-11-19-08 C2)
+				if d.note.Text == d.lastNote {
+					// Unedited since it was shown, perhaps loaded again
+					// before the save landed: show what was saved.
+					d.note.SetText(text)
+				}
+				d.lastNote = text
+			}
 			g.status.message(fmt.Sprintf("note of %s %d saved", k.Type, k.ID))
 		})
 	}()

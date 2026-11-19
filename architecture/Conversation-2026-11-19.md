@@ -93,4 +93,11 @@
    - One speed probe of reviewer 1 was still running when it reported; Claude left it, as it ends by itself and writes nothing to the repo.
    - CI on `main` @ `98ecf43` green.
    - Decisions asked: D1 C1, C2; D2 L1, L3–L6, P1, P2.
+16. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `568a4a0`) and fixed the crosscheck on `fix/crosscheck-19-04` (merged as `0ce8164`; see its section 7). Spec v0.70.
+   - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. Both new tests fail without their fix.
+   - On the way:
+     - The first C1 test held the request rather than the server's answer, so it passed without the fix. It was changed to hold the answer, and now fails without the fix.
+     - One test edit didn't match its anchor and was written as a new test instead.
+   - The speed probe of the server reviewer has ended by itself.
 

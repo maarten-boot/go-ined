@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.69** (2026-11-19)
+Status: **draft v0.70** (2026-11-19)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -115,6 +115,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
     - **Lookup**, first match wins: the host's own list; the list of the first custom view, in tab order (`order`, then id), that the host is placed in and that has one; the nearest network group's above it; the server's. `snmp_communities_from` can be `"view 5"`.
     - **Setting it:** `PATCH /views/{id}` with `"snmp_communities": [...]`, `[]` inherits; saved with the view (schema 11). The log says "SNMP communities set" with `view` and the count.
     - **`networks`:** a view's list is used also outside `snmp.networks` (as G4a).
+    - **Events (v0.70, crosscheck 2026-11-19-04 L6):** a host's `snmp_communities_from` is current when the host is read; it is not sent as `host.updated` when it changes through a group or a view. Clients that show it read the host again on `group.updated`, `group.moved`, `view.updated`, `view.deleted` and placement events.
     - **Effect:** a view's list set or cleared, a host placed in or removed from a view, a view deleted or reordered: the hosts whose list changed are looked for again at the manager's next tick. Only `view.updated`, `view.deleted` and placement events are sent, no per-host events; clients read a shown host again on them.
 
 ## 7. Reverse DNS
@@ -160,7 +161,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
 - **SPEC-514** SHOULD (v0.60; design `Design-snmp.md`, N5): **SNMP in the API.** Host JSON has `snmp`: `null` while never checked, else `{version, name, descr, object_id, contact, location, checked_at, values}`, `version` `"v2c"`, `"v1"` or `""` (no answer), `values` `null` or `{at, uptime_s, cpu_pct (null without a processor table), cpu_max_pct (the busiest CPU, v0.62), cpus (their number, 0 without a table, v0.62), storage: [{name, kind ("disk" or "memory"), size_bytes, used_pct}]}`. `POST /hosts/{id}/check-snmp` (no body) looks for the agent now and reads its values, saves them and answers the host (the values also for an unmonitored host, SPEC-313); clients wait up to 5 min for it (`client.SNMPCheckTimeout`, v0.61, L11); it can take every community and version times the timeout and retries. Unknown host 404; a host outside `snmp.networks` 400; SNMP off 503 `unavailable` ("snmp.enabled = false"); a host changed meanwhile 409.
 - **SPEC-515** SHOULD (v0.65, user request; design `Design-snmp-gui.md`, G1): **SNMP check jobs.**
   - **Starting:** `POST /snmp/checks` with `{"group_id": N}` (the group with its subgroups, in its own view) or `{"host_ids": [...]}` answers 202 with the job. Neither or both is 400; an unknown group or host 404; SNMP off 503.
-  - **Running:** every host's agent is looked for with its list (SPEC-315) and its values read, as on request (SPEC-514), at most `snmp.concurrency` at once. A host outside `snmp.networks` without a list of its own or a group's is skipped.
+  - **Running:** every host's agent is looked for with its list (SPEC-315) and its values read, as on request (SPEC-514), at most `snmp.concurrency` at once. A host outside `snmp.networks` without a list of its own, a view's or a group's is skipped (v0.70).
   - **The job:** `{id, group_id, state (running, done, cancelled), total, checked, found, no_answer, skipped, started_at, finished_at}`. `snmp.check.progress` comes at most once a second, and `snmp.check.finished` at the end.
   - **Other calls:** `GET /snmp/checks` lists the jobs (running and the last 20 finished, oldest first); `GET` and `DELETE /snmp/checks/{id}` read and cancel one. Jobs live in memory and are cancelled at shutdown (SPEC-804).
   - **v0.66 (crosscheck 2026-11-19-01):** progress is sent after every host, whatever its outcome. A host changed during its check counts as skipped. A cancelled job counts the hosts not started as skipped, so `checked` reaches `total` (L2). After shutdown has begun, a start answers 503 (L1). With SNMP off, `POST /snmp/checks` answers 503 before reading the body (L6). `group_id` is the job's own copy (L4).
@@ -238,7 +239,11 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - **v0.69 (Design-snmp-views.md):** a custom view's **View** menu (toolbar) has **"SNMP communities…"**, the same dialog, for the hosts placed in the view; the network view's menu doesn't. A host's row can say "from view switches". The details pane reads the shown host again on `view.updated` and `view.deleted`.
   - **v0.68 (crosscheck 2026-11-19-03):**
     - **Details:** only a host the pane really shows is read again; while another item loads, group events read nothing (C1). Of several reads only the newest answer is used, and none that started before a `host.updated` (L2). When the map doesn't know a group on the host's path yet, the host is read again anyway (L1).
-    - **Following a check:** a 503 "unavailable" (SNMP off) and any 4xx end following a job, with the reason in the status bar: "SNMP check <id>: SNMP is off on the server; no longer followed" or "…: no longer known to the server; no longer followed" (C2, L5). After a network error, a timeout or another 5xx the job stays followed, with Cancel.
+    - **Following a check:** a 503 "unavailable" (SNMP off) and a 404 end following a job (v0.70: not any 4xx), with the reason in the status bar: "SNMP check <id>: SNMP is off on the server; no longer followed" or "…: no longer known to the server; no longer followed" (C2, L5). After a network error, a timeout or another 5xx the job stays followed, with Cancel.
+  - **v0.70 (crosscheck 2026-11-19-04):**
+    - **Details:** an event that wants the shown host read again while it is still loading is remembered; when the answer comes, the host is read once more (C1). `view.updated` and `view.deleted` read the shown host again only when it is placed in that view (L1).
+    - **Following a check:** any answer other than 404 and 503 "unavailable", such as 401 after a token change, keeps the job followed with Cancel, and the status bar says "SNMP check <id>: not read: …" (C2).
+    - **The dialog** for a view without a list says "none set here; its hosts use their group's or the server's list" (L3). It closes when its host, group or view is deleted; the status bar says "SNMP communities: the view was deleted" (L4).
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.

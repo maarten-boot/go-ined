@@ -167,19 +167,19 @@ type details struct {
 	note        *widget.Entry
 	save        *widget.Button
 
-	view    int64
-	key     *mapmodel.Key
-	seq     int  // ignores answers for an older selection
-	reloads int  // ignores answers of an older reload (crosscheck 2026-11-19-03 L2)
-	missed  bool // an event wanted a reload while show() was loading the host (crosscheck 2026-11-19-04 C1)
-	// noteSet: the selection's note is in the field; until then the first
-	// record shown sets it, whatever the field holds (crosscheck
-	// 2026-11-19-06 L1).
-	noteSet  bool
-	answers  int // show() answers handled, applied or dropped (tests)
+	view     int64
+	key      *mapmodel.Key
+	seq      int  // ignores answers for an older selection
+	reloads  int  // ignores answers of an older reload (crosscheck 2026-11-19-03 L2)
+	missed   bool // an event wanted a reload while show() was loading the host (crosscheck 2026-11-19-04 C1)
 	host     *apitypes.Host
 	group    *apitypes.Group
 	lastNote string // the note as loaded; edits aren't overwritten by events
+	// noteSet: the selection's note is in the field. Until then the field
+	// is empty and disabled, Save does nothing, and the first record shown
+	// sets it (crosscheck 2026-11-19-06 L1, 2026-11-19-07 C1).
+	noteSet bool
+	answers int // show() answers handled, applied or dropped (tests)
 }
 
 func newDetails(g *GUI) *details {
@@ -342,6 +342,11 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 	d.reloads++ // show() is a read too (crosscheck 2026-11-19-05 C1)
 	seq, n, g := d.seq, d.reloads, d.g
 	d.view, d.key, d.missed, d.noteSet = view, k, false, false
+	// The previous item's note mustn't be saved onto this one (crosscheck
+	// 2026-11-19-07 C1).
+	d.note.SetText("")
+	d.note.Disable()
+	d.save.Disable()
 	go func() {
 		var (
 			h   apitypes.Host
@@ -375,6 +380,9 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 					d.reload()
 				}
 			} else {
+				if n != d.reloads && d.group != nil && *d.key == mapmodel.GroupKey(d.group.ID) {
+					return // as for a host (crosscheck 2026-11-19-07 L1)
+				}
 				d.setGroup(gr, true)
 			}
 		})
@@ -679,6 +687,7 @@ func (d *details) onEvent(ev client.Event) {
 	case apitypes.EventGroupUpdated:
 		var g apitypes.Group
 		if json.Unmarshal(ev.Data, &g) == nil && k == mapmodel.GroupKey(g.ID) {
+			d.reloads++ // newer than a show() answer under way (L1)
 			d.setGroup(g, false)
 		}
 		if g.ViewID == mapmodel.NetworkView && d.above(g.ID) {
@@ -727,7 +736,7 @@ func (d *details) onEvent(ev client.Event) {
 
 // saveNote writes the note (SPEC-708, SPEC-718).
 func (d *details) saveNote() {
-	if d.key == nil {
+	if d.key == nil || !d.noteSet { // not before the selection's note is in (C1)
 		return
 	}
 	k, text, g := *d.key, d.note.Text, d.g

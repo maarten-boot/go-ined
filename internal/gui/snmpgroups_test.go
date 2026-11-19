@@ -549,3 +549,75 @@ func TestCommunitiesDialogOneAndGroupOfDeletedView(t *testing.T) {
 		return g.commDialog == nil && strings.Contains(g.status.Text(), "SNMP communities: the group was deleted")
 	})
 }
+
+// TC-759 (crosscheck 2026-11-19-07 C1): while a newly selected host loads,
+// the note field is empty and disabled and Save does nothing, so the
+// previous host's note can't be saved onto it.
+func TestNoteNotSavedOntoNextItem(t *testing.T) {
+	tr := &hookTransport{seen: make(chan struct{}, 4), release: make(chan struct{})}
+	e := hookedEnv(t, testserver.Options{}, tr)
+	c, ctx := e.c, e.ctx
+	h1 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Note: "note of one", X: ptr(100.0), Y: ptr(100.0)}))
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", Note: "note of two", X: ptr(300.0), Y: ptr(100.0)}))
+	tr.holdPath = "/api/v1/hosts/" + strconv.FormatInt(h2.ID, 10)
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h2.ID) != nil })
+	k1, k2 := mapmodel.HostKey(h1.ID), mapmodel.HostKey(h2.ID)
+	e.ui.Wait(func() { g.details.show(1, &k1) })
+	eventually(t, e.ui, "one shown", func() bool { return g.details.note.Text == "note of one" })
+	tr.hold.Store(true)
+	e.ui.Wait(func() { g.details.show(1, &k2) })
+	<-tr.seen
+	tr.hold.Store(false)
+	var before int
+	e.ui.Wait(func() {
+		if g.details.note.Text != "" || !g.details.note.Disabled() || !g.details.save.Disabled() {
+			t.Errorf("while loading: note %q disabled %v, save disabled %v", g.details.note.Text, g.details.note.Disabled(), g.details.save.Disabled())
+		}
+		g.details.saveNote() // as a click that came through anyway
+		before = g.details.answers
+	})
+	close(tr.release)
+	eventually(t, e.ui, "answer", func() bool { return g.details.answers > before })
+	e.ui.Wait(func() {
+		if g.details.note.Text != "note of two" || g.details.save.Disabled() {
+			t.Errorf("after loading: note %q, save disabled %v", g.details.note.Text, g.details.save.Disabled())
+		}
+	})
+	if got := must(c.Host(ctx, h2.ID)).Note; got != "note of two" {
+		t.Errorf("host two's note is %q", got)
+	}
+}
+
+// TC-759 (crosscheck 2026-11-19-07 L1): a group.updated while the group's
+// answer is held is not replaced by the older answer.
+func TestDetailsOlderGroupAnswerDropped(t *testing.T) {
+	tr := &hookTransport{seen: make(chan struct{}, 4), release: make(chan struct{})}
+	e := hookedEnv(t, testserver.Options{}, tr)
+	c, ctx := e.c, e.ctx
+	gr := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "lab", X: ptr(100.0), Y: ptr(100.0)}))
+	tr.holdPath = "/api/v1/groups/" + strconv.FormatInt(gr.ID, 10)
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "group", gr.ID) != nil })
+	k := mapmodel.GroupKey(gr.ID)
+	tr.hold.Store(true)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	<-tr.seen
+	tr.hold.Store(false)
+	must(c.UpdateGroup(ctx, gr.ID, apitypes.GroupPatch{Description: apitypes.Some("second floor")}))
+	eventually(t, e.ui, "description from the event", func() bool { return strings.Contains(formText(g.details), "second floor") })
+	var before int
+	e.ui.Wait(func() {
+		before = g.details.answers
+		g.details.note.SetText("typed") // kept
+	})
+	close(tr.release)
+	eventually(t, e.ui, "answer", func() bool { return g.details.answers > before })
+	e.ui.Wait(func() {
+		if !strings.Contains(formText(g.details), "second floor") || g.details.note.Text != "typed" {
+			t.Errorf("the older answer replaced newer data: note %q\n%s", g.details.note.Text, formText(g.details))
+		}
+	})
+}

@@ -170,6 +170,7 @@ type details struct {
 	view     int64
 	key      *mapmodel.Key
 	seq      int // ignores answers for an older selection
+	reloads  int // ignores answers of an older reload (crosscheck 2026-11-19-03 L2)
 	host     *apitypes.Host
 	group    *apitypes.Group
 	lastNote string // the note as loaded; edits aren't overwritten by events
@@ -426,28 +427,40 @@ func (d *details) viewNames(ids []int64) string {
 	return dash(strings.Join(names, ", "))
 }
 
-// reload loads the selected item's record again, keeping an unsaved note.
+// reload loads the shown host's record again, keeping an unsaved note. Only
+// a host: while another item loads, the key isn't the host any more
+// (crosscheck 2026-11-19-03 C1). Only the newest reload's answer is used,
+// and none that started before a host.updated (L2).
 func (d *details) reload() {
-	if d.key == nil {
+	if !d.showsHost() {
 		return
 	}
-	k, g, seq := *d.key, d.g, d.seq
+	d.reloads++
+	k, g, seq, n := *d.key, d.g, d.seq, d.reloads
 	go func() {
 		h, err := g.c.Host(g.ctx, k.ID)
 		g.do(func() {
-			if err == nil && seq == d.seq {
+			if err == nil && seq == d.seq && n == d.reloads {
 				d.setHost(h, false)
 			}
 		})
 	}()
 }
 
+// showsHost reports whether the pane shows a host and is not loading
+// another item.
+func (d *details) showsHost() bool {
+	return d.key != nil && d.host != nil && *d.key == mapmodel.HostKey(d.host.ID)
+}
+
 // above reports whether a network-view group lies above the shown host.
-// The model already has the event applied, so a group moved to a new parent
-// counts where it is now. Without the network view loaded it answers true:
-// one reload too many is cheap.
+// The map's tree may not have the event's change yet (group.updated and
+// group.moved reload the view), but a group moved elsewhere is above the
+// host before and after. When the trail doesn't reach the top (a group the
+// map doesn't have yet) or the network view isn't loaded, it answers true:
+// one reload too many is cheap (crosscheck 2026-11-19-03 L1).
 func (d *details) above(group int64) bool {
-	if d.host == nil || d.host.ParentID == nil {
+	if !d.showsHost() || d.host.ParentID == nil {
 		return false
 	}
 	d.g.mu.Lock()
@@ -455,7 +468,11 @@ func (d *details) above(group int64) bool {
 	if !d.g.model.Loaded(mapmodel.NetworkView) {
 		return true
 	}
-	for _, it := range d.g.model.Trail(mapmodel.NetworkView, *d.host.ParentID) {
+	trail := d.g.model.Trail(mapmodel.NetworkView, *d.host.ParentID)
+	if len(trail) == 0 || trail[0].ParentID != nil {
+		return true
+	}
+	for _, it := range trail {
 		if it.ID == group {
 			return true
 		}
@@ -606,6 +623,7 @@ func (d *details) onEvent(ev client.Event) {
 	case apitypes.EventHostStatus, apitypes.EventHostUpdated:
 		var h apitypes.Host
 		if json.Unmarshal(ev.Data, &h) == nil && k == mapmodel.HostKey(h.ID) {
+			d.reloads++ // a reload under way may answer with older data (L2)
 			d.setHost(h, false)
 		}
 	case apitypes.EventServiceStatus:

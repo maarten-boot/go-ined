@@ -118,4 +118,7 @@
    - Findings: no H or M, 3 L (a note typed during a load is lost as before, a 300 ms wait in a test, a comment).
    - CI on `main` @ `cade2ed` green. The watcher ended before the macOS job had reported; Claude checked the run again: all 8 jobs green.
    - Decision asked: D1 L1–L3, optional, recommended together with the next change.
+20. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `757b886`) and fixed L1–L3 of crosscheck 2026-11-19-06 now, as they were small, on `fix/crosscheck-19-06` (`5ea9a33`, merged as `4483862`). L1 was fixed rather than only commented: a note typed while a host loads is kept. Spec v0.72.
+   - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. The changed test fails with the old behaviour.
 

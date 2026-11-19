@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.74** (2026-11-19)
+Status: **draft v0.75** (2026-11-19)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -254,6 +254,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
     - **Leaving an item** with unsaved typing in its note: the typing is not kept, as before, and the status bar says "Note of host 12 not saved" (D3a). Notes are saved only with "Save note" (SPEC-708).
     - **A save's answer** after another item was selected leaves that item's note alone; for the same item, an unedited field shows the saved text (C2).
     - **A failed load:** the field says "Note not loaded; select the item again" (L1).
+  - **v0.75 (crosscheck 2026-11-19-09):** a save's answer changes the note field only when no newer note came since the save started, so it can't bring its text back over a note another client wrote meanwhile (C1). No "not saved" while the text is being saved (L1). The placeholder is "Note" again once a note is in (L2).
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.

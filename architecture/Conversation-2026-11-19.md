@@ -153,4 +153,8 @@
      - C1: an older save's answer can put the saved text back over a newer note from another client. It is new, from the C2 fix of 2026-11-19-08. Claude reproduced it with its own probe (field "X", server "B").
    - CI on `main` @ `edec893` green.
    - Decisions asked: D1 C1; D2 L1, L2, P1.
+26. **User**: pushed; then "OK, all".
+   **Claude** checked the push (`main` and `docs/architecture` at `7b8f21a`) and fixed the crosscheck on `fix/crosscheck-19-09` (`d34ba47`, merged as `694431b`; see its section 7). Spec v0.75.
+   - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass.
+   - On the way: the first mutation check of C1 didn't compile (an unused variable), so it seemed to pass. Redone, the test fails 3 of 3 runs without the fix.
 

@@ -132,4 +132,13 @@
    **Claude** checked the push (`main` and `docs/architecture` at `f4e0b30`) and fixed the crosscheck on `fix/crosscheck-19-07` (`3083d9c`, merged as `ed4b352`; see its section 7). Spec v0.73.
    - A new selection now empties and disables the note and Save until its note is in.
    - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. Both new tests fail without their fix.
+23. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `cf6344e`, `fix/crosscheck-19-07` at `3083d9c`) and wrote `Crosscheck-2026-11-19-08.md`:
+   - One reviewer with read-only access, asked for every way a note can be lost.
+   - The 2026-11-19-07 fixes work.
+   - Findings: 1 H, 1 M, 2 L, 1 P.
+     - C1 (H, old): selecting the same item again, as a tab switch does, wipes unsaved typing in the note. Claude reproduced it with its own probe.
+     - C2 (M): a save on its way when the selection changes marks the new item's note as edited.
+   - CI on `main` @ `cf6344e` green.
+   - Decisions asked: D1 C1, C2; D2 L1, P1; D3 what to do with unsaved typing when switching to another item (recommended: a status-bar warning).
 

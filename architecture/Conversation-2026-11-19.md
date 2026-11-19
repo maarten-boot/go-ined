@@ -109,4 +109,7 @@
      - The reviewer reported a second M: a group's dialog stays open when its view is deleted. Claude found that the GUI offers the dialog only for network-view groups, and the network view can't be deleted, so it is L5.
    - CI on `main` @ `a9cdba1` green.
    - Decisions asked: D1 C1; D2 L1, L3–L5, P1.
+18. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `32862b4`) and fixed the crosscheck on `fix/crosscheck-19-05` (merged as `f0c0918`; see its section 7). Spec v0.71.
+   - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. Both new tests fail without their fix.
 

@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.70** (2026-11-19)
+Status: **draft v0.71** (2026-11-19)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -244,6 +244,9 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
     - **Details:** an event that wants the shown host read again while it is still loading is remembered; when the answer comes, the host is read once more (C1). `view.updated` and `view.deleted` read the shown host again only when it is placed in that view (L1).
     - **Following a check:** any answer other than 404 and 503 "unavailable", such as 401 after a token change, keeps the job followed with Cancel, and the status bar says "SNMP check <id>: not read: …" (C2).
     - **The dialog** for a view without a list says "none set here; its hosts use their group's or the server's list" (L3). It closes when its host, group or view is deleted; the status bar says "SNMP communities: the view was deleted" (L4).
+  - **v0.71 (crosscheck 2026-11-19-05):**
+    - **Details:** loading a selected host counts as a read: when an event or a newer read already shows the host, the older answer is dropped and only the note is taken from what is shown (C1).
+    - **The dialog:** one at a time (a new one closes the open one); none for an item deleted while it was read; it closes when the GUI no longer has its host, group or view, also a group that went with its view (L1, L5).
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.

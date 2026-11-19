@@ -121,4 +121,11 @@
 20. **User**: pushed; OK, all.
    **Claude** checked the push (`main` and `docs/architecture` at `757b886`) and fixed L1–L3 of crosscheck 2026-11-19-06 now, as they were small, on `fix/crosscheck-19-06` (`5ea9a33`, merged as `4483862`). L1 was fixed rather than only commented: a note typed while a host loads is kept. Spec v0.72.
    - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. The changed test fails with the old behaviour.
+21. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `4cc2539`, `fix/crosscheck-19-06` at `5ea9a33`) and wrote `Crosscheck-2026-11-19-07.md`:
+   - One reviewer with read-only access. The 2026-11-19-06 fixes work.
+   - The reviewer reported as L that "Save note" stays enabled with the previous item's text while a new item loads. Claude's probe showed that this loses data: host 1's note was saved onto host 2. It is old (since notes were added), and is C1 (H) here.
+   - Findings: 1 H, 0 M, 2 L, 1 P.
+   - CI on `main` @ `4cc2539` green.
+   - Decisions asked: D1 C1; D2 L1, L2, P1.
 

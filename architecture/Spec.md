@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.68** (2026-11-19)
+Status: **draft v0.69** (2026-11-19)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -60,7 +60,7 @@ There are two kinds of **items**: host and group. A group with a `cidr` is a **n
 ## 4b. Views (M4b, v0.16)
 Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **view** is one map: one tab in the GUI. Hosts are shared by all views (one status, one note, pinged once); each view has its own groups and its own placement of hosts. Where these items conflict with §4, they take precedence: §4's "tree" and "single map" hold **per view**.
 
-- **SPEC-117** MUST: A **view** has an id, a name, a kind (`network` or `custom`), an `order` and created/updated timestamps. There is exactly one network view, with id 1, created by the server (initial name "Networks"). It can be renamed and reordered but not deleted (409). Custom views can be created, renamed, reordered and deleted by any client; views are shared by all clients (V5). Names are unique and 1–255 bytes. Views are listed by `order`, then id; a new view gets an `order` after all others. View ids are never reused (SPEC-116).
+- **SPEC-117** MUST: A **view** has an id, a name, a kind (`network` or `custom`), an `order` and created/updated timestamps. There is exactly one network view, with id 1, created by the server (initial name "Networks"). It can be renamed and reordered but not deleted (409). Custom views can be created, renamed, reordered and deleted by any client; views are shared by all clients (V5). Names are unique and 1–255 bytes. A custom view can have SNMP community strings (SPEC-315, v0.69); its JSON has `snmp_communities_set`. Views are listed by `order`, then id; a new view gets an `order` after all others. View ids are never reused (SPEC-116).
 - **SPEC-118** MUST: Every group belongs to exactly one view (`view_id`, default 1), fixed when the group is created. A group's parent must be a group in the same view (400 otherwise). Network groups (with `cidr`) exist only in the network view: a `cidr` in a custom view is rejected with 400 (V2). SPEC-103, 104 and 112 apply within each view.
 - **SPEC-119** MUST: A **placement** puts a host in a view: a parent group of that view (or the view's root) and a position. In the network view every host has exactly one placement: its `parent_id`, `x` and `y`, with SPEC-106/107 as before. In a custom view a host has at most one placement (V1), and only where a client put it. Hosts created by hand or by discovery are placed only in the network view (V4). A placement without `x`/`y` gets a free position near its parent (SPEC-106).
 - **SPEC-120** MUST: Deleting in a custom view never deletes hosts (V3). Deleting a group with `children=cascade` removes its subgroups and the placements in them; `children=reparent` moves its subgroups and placements to its parent. Deleting a custom view removes all its groups and placements. Deleting a host removes all its placements. In the network view, SPEC-104 is unchanged (cascade deletes hosts).
@@ -110,6 +110,12 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - **Effect:** when the list a host's agent was looked for with changes (set on it or a group, or the host moved below another group), it is looked for again at once, as on request.
   - **v0.66 (crosscheck 2026-11-19-01):** ~~a group's new list also sends `host.updated` for the hosts below it, with their new origin (L3)~~ (replaced in v0.67: `group.updated` only). The new list is recorded for a host only when its search starts, so hosts beyond `snmp.concurrency` get theirs at a later tick, not never (C3). A host that may no longer be asked (it left `networks`, or its list was removed) keeps its last agent until it is changed or checked (L5, noted).
   - **v0.67 (crosscheck 2026-11-19-02):** a group's new list sends only `group.updated`, no `host.updated` per host below it: a big group overflowed the clients' event buffers and made them all resync (C1). Clients that show a host's origin read the host again on a `group.updated` or `group.moved` of a network-view group above it, which also covers a group moved elsewhere (L4). The GUI's dialog and `inedctl`'s stdin keep each string as typed, spaces at the ends too, and leave out only blank lines (stdin also drops the CR of a Windows line end); `inedctl`'s comma list `a, b` is still trimmed (L3).
+  - **v0.69 (user request; design `Design-snmp-views.md`, V1–V6): lists per custom view.**
+    - **Where:** a custom view can have a list, with the same rules (at most 10, 1–255 bytes, none twice); the network view can't (400): for all hosts there is `snmp.communities`. Groups in custom views still can't.
+    - **Lookup**, first match wins: the host's own list; the list of the first custom view, in tab order (`order`, then id), that the host is placed in and that has one; the nearest network group's above it; the server's. `snmp_communities_from` can be `"view 5"`.
+    - **Setting it:** `PATCH /views/{id}` with `"snmp_communities": [...]`, `[]` inherits; saved with the view (schema 11). The log says "SNMP communities set" with `view` and the count.
+    - **`networks`:** a view's list is used also outside `snmp.networks` (as G4a).
+    - **Effect:** a view's list set or cleared, a host placed in or removed from a view, a view deleted or reordered: the hosts whose list changed are looked for again at the manager's next tick. Only `view.updated`, `view.deleted` and placement events are sent, no per-host events; clients read a shown host again on them.
 
 ## 7. Reverse DNS
 - **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20). It uses Go's resolver (the system's DNS settings), with 5 s per lookup. At startup, the refreshes of the existing hosts are spread across `dns.refresh`. A changed name is saved and emits `host.updated`. When a host's IP changes, its PTR name is cleared at once and looked up again (v0.11). `dns.enabled = false` turns reverse DNS off; PTR names then stay as stored (v0.11).
@@ -229,6 +235,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
     - **Following a check:** only "not found" (the server restarted) ends following a job; after another error of its refresh the job stays followed with its Cancel button, and the status bar says "SNMP check <id>: not read: …" (C2). Of a job's early events the newest is kept (most hosts checked, or the end) (L1); at 50 jobs the oldest is dropped, not all (L2).
     - **The dialog** disables Save, Inherit and Add while it saves. After Cancel, a failed save is reported in the status bar (C3). It keeps what is typed, spaces at the ends too; it no longer trims (L3).
     - **One host and groups selected:** the host's menu keeps "Check SNMP now" and "SNMP communities…"; the job item is left out when it would check that host alone (L5).
+  - **v0.69 (Design-snmp-views.md):** a custom view's **View** menu (toolbar) has **"SNMP communities…"**, the same dialog, for the hosts placed in the view; the network view's menu doesn't. A host's row can say "from view switches". The details pane reads the shown host again on `view.updated` and `view.deleted`.
   - **v0.68 (crosscheck 2026-11-19-03):**
     - **Details:** only a host the pane really shows is read again; while another item loads, group events read nothing (C1). Of several reads only the newest answer is used, and none that started before a `host.updated` (L2). When the map doesn't know a group on the host's path yet, the host is read again anyway (L1).
     - **Following a check:** a 503 "unavailable" (SNMP off) and any 4xx end following a job, with the reason in the status bar: "SNMP check <id>: SNMP is off on the server; no longer followed" or "…: no longer known to the server; no longer followed" (C2, L5). After a network error, a timeout or another 5xx the job stays followed, with Cancel.
@@ -280,7 +287,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - `discover start|status|cancel`
   - `events` (streams events until interrupted)
   - `health`
-  - `view list|add|show|rename|order|rm|place|unplace` (SPEC-124)
+  - `view list|add|show|rename|order|rm|place|unplace` (SPEC-124); `view snmp-communities <id> LIST|-|--clear` for a custom view, and `view list` (column COMMUNITIES) and `view show` (row "Communities") show "2 set here", "none set here", or "-" for the network view (SPEC-315, v0.69)
   - `group shift <id> [--dx N] [--dy N]` (SPEC-507, v0.22)
   - `host services <id> [--check]` (SPEC-511, v0.47)
   - `host watch <id> [LIST | --add LIST | --remove LIST | --clear]` (SPEC-904, v0.50)

@@ -1,6 +1,9 @@
 # Design: SNMP community strings per view
 
-Status: **accepted** (2026-11-19): V1–V6 as recommended ("OK, all as recommended"); being built on `feature/snmp-views`.
+Status: **implemented** (2026-11-19): V1–V6 as recommended ("OK, all as recommended"), on `feature/snmp-views` (`2c66977`, merged as `05dce9d`; SPEC-315, 117, 737, 901 in Spec v0.69; TC-330, 760, 911). Settled in the build:
+- **Lookup:** the views come from the host's placements in tab order (`hostViews`), so a reorder needs no extra code; the manager's per-host list comparison sees every change.
+- **GUI:** a new tab shows its own selection, so a host's row is read in the view where it is selected.
+- **`inedctl`:** `view list` has a COMMUNITIES column; the network view shows "-".
 
 User request (2026-11-19), after "SNMP communities has inherit … can I set a community on a group or a view?":
 - "as I create new views on hosts with similar capabilities it would be very helpful if I can set communities on a view"

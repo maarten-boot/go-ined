@@ -73,4 +73,13 @@
    **Claude** checked the push (`main` and `docs/architecture` at `c8186e1`), fixed the crosscheck first on `fix/crosscheck-19-03` (merged as `16ebf4f`; see its section 7; Spec v0.68), then started the view lists on `feature/snmp-views`.
    - The first test edit didn't match: gofmt had wrapped a line of the test since. The test was rewritten from the file as it stood.
    - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. The new C1 test fails against the old code.
+14. **Claude**, continuing entry 13, built the view lists on `feature/snmp-views` (merged as `05dce9d`; Spec v0.69):
+   - **Server:** schema 11, `PATCH /views/{id}` with `snmp_communities`, the lookup host → first view in tab order → network group → server, "view N" as the origin.
+   - **GUI:** "SNMP communities…" in a custom view's View menu, "from view switches".
+   - **`inedctl`:** `view snmp-communities`; `view list` and `view show` show the count.
+   - **Tests:** TC-330, 760, 911. The full Go suite with `-race`, staticcheck v0.8.2 and the 65 Python tests pass.
+   - **On the way:**
+     - Two edit scripts didn't match the text and were redone against it: a comment said "group lan", not "lab".
+     - The API tests had no log capture, so one was added to check that no string reaches the log.
+     - The GUI test first assumed the details pane keeps its host across a tab switch; a new tab shows its own selection, which is right, so the test selects the host in the view.
 

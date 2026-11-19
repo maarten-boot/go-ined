@@ -23,7 +23,7 @@ Response: `200`
   "version": "dev",
   "icmp_mode": "disabled",
   "db": "ok",
-  "run_id": "a32db58a31c186b8",
+  "run_id": "c63f232e33bb719d",
   "access": "full"
 }
 ```
@@ -55,8 +55,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-19T12:36:06.089Z",
-  "updated_at": "2026-11-19T12:36:06.089Z"
+  "created_at": "2026-11-19T19:23:03.325Z",
+  "updated_at": "2026-11-19T19:23:03.325Z"
 }
 ```
 
@@ -87,8 +87,8 @@ Response: `201`
   "status": "unknown",
   "x": 100,
   "y": 220,
-  "created_at": "2026-11-19T12:36:06.098Z",
-  "updated_at": "2026-11-19T12:36:06.098Z"
+  "created_at": "2026-11-19T19:23:03.334Z",
+  "updated_at": "2026-11-19T19:23:03.334Z"
 }
 ```
 
@@ -129,8 +129,8 @@ Response: `201`
   "snmp_communities_from": "server",
   "x": 200,
   "y": 220,
-  "created_at": "2026-11-19T12:36:06.109Z",
-  "updated_at": "2026-11-19T12:36:06.109Z"
+  "created_at": "2026-11-19T19:23:03.344Z",
+  "updated_at": "2026-11-19T19:23:03.344Z"
 }
 ```
 
@@ -171,8 +171,8 @@ Response: `200`
   "snmp_communities_from": "server",
   "x": 140,
   "y": 260,
-  "created_at": "2026-11-19T12:36:06.109Z",
-  "updated_at": "2026-11-19T12:36:06.118Z"
+  "created_at": "2026-11-19T19:23:03.344Z",
+  "updated_at": "2026-11-19T19:23:03.354Z"
 }
 ```
 
@@ -203,8 +203,8 @@ Response: `200`
   "status": "unknown",
   "x": 100,
   "y": 100,
-  "created_at": "2026-11-19T12:36:06.089Z",
-  "updated_at": "2026-11-19T12:36:06.129Z"
+  "created_at": "2026-11-19T19:23:03.325Z",
+  "updated_at": "2026-11-19T19:23:03.364Z"
 }
 ```
 
@@ -368,11 +368,11 @@ In another: `POST /hosts {"ip":"192.168.1.20"}`, then `DELETE /hosts/2`. The str
 ```text
 : connected
 
-id: a32db58a31c186b8-10
+id: c63f232e33bb719d-10
 event: host.created
-data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"services":null,"services_checked_at":null,"watch":[],"snmp":null,"snmp_communities_set":0,"snmp_communities_from":"server","x":40,"y":40,"created_at":"2026-11-19T12:36:06.512Z","updated_at":"2026-11-19T12:36:06.512Z"}
+data: {"id":2,"ip":"192.168.1.20","ptr_name":"","name":"","display_name":"192.168.1.20","description":"","note":"","parent_id":null,"monitored":true,"status":"unknown","rtt_ms":null,"loss_pct":null,"last_seen":null,"last_change":null,"stale":false,"outside_cidr":false,"views":[1],"services":null,"services_checked_at":null,"watch":[],"snmp":null,"snmp_communities_set":0,"snmp_communities_from":"server","x":40,"y":40,"created_at":"2026-11-19T19:23:03.745Z","updated_at":"2026-11-19T19:23:03.745Z"}
 
-id: a32db58a31c186b8-11
+id: c63f232e33bb719d-11
 event: host.deleted
 data: {"id":2}
 
@@ -388,7 +388,7 @@ Response: `202`
 
 ```json
 {
-  "id": "a32db58a31c186b8-1",
+  "id": "c63f232e33bb719d-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "running",
@@ -398,7 +398,7 @@ Response: `202`
   "added": 0,
   "errors": 0,
   "scheduled": false,
-  "started_at": "2026-11-19T12:36:06.829Z",
+  "started_at": "2026-11-19T19:23:04.064Z",
   "finished_at": null
 }
 ```
@@ -406,14 +406,14 @@ Response: `202`
 ### Get the job: done, with 2 hosts found and added
 
 ```bash
-curl -s $INED/api/v1/discovery/a32db58a31c186b8-1
+curl -s $INED/api/v1/discovery/c63f232e33bb719d-1
 ```
 
 Response: `200`
 
 ```json
 {
-  "id": "a32db58a31c186b8-1",
+  "id": "c63f232e33bb719d-1",
   "cidr": "127.0.0.0/30",
   "group_id": 3,
   "state": "done",
@@ -423,8 +423,8 @@ Response: `200`
   "added": 2,
   "errors": 0,
   "scheduled": false,
-  "started_at": "2026-11-19T12:36:06.829Z",
-  "finished_at": "2026-11-19T12:36:06.835Z"
+  "started_at": "2026-11-19T19:23:04.064Z",
+  "finished_at": "2026-11-19T19:23:04.07Z"
 }
 ```
 
@@ -496,8 +496,8 @@ Bar colour:  none
 Rescan:      off
 Communities: none set here
 Position:    40, 40
-Created:     2026-11-19 13:36:08
-Updated:     2026-11-19 13:36:08
+Created:     2026-11-19 20:23:06
+Updated:     2026-11-19 20:23:06
 Note:        -
 ```
 
@@ -529,8 +529,8 @@ SNMP:         not checked yet
 Communities:  the server's list
 Outside CIDR: no
 Position:     40, 160
-Created:      2026-11-19 13:36:08
-Updated:      2026-11-19 13:36:08
+Created:      2026-11-19 20:23:06
+Updated:      2026-11-19 20:23:06
 Note:         2nd floor
 ```
 
@@ -597,8 +597,8 @@ inedctl --json host show 5
   "snmp_communities_from": "server",
   "x": 40,
   "y": 160,
-  "created_at": "2026-11-19T12:36:08.882Z",
-  "updated_at": "2026-11-19T12:36:08.882Z"
+  "created_at": "2026-11-19T19:23:06.166Z",
+  "updated_at": "2026-11-19T19:23:06.166Z"
 }
 ```
 
@@ -633,8 +633,8 @@ inedctl discover start 127.0.0.4/30 --wait
 ```
 
 ```text
-job a32db58a31c186b8-2 127.0.0.4/30 running probed 0/2 found 0 added 0
-job a32db58a31c186b8-2 127.0.0.4/30 done probed 2/2 found 2 added 2
+job c63f232e33bb719d-2 127.0.0.4/30 running probed 0/2 found 0 added 0
+job c63f232e33bb719d-2 127.0.0.4/30 done probed 2/2 found 2 added 2
 ```
 
 Exit code: `0`
@@ -694,8 +694,9 @@ Response: `201`
   "name": "Printers",
   "kind": "custom",
   "order": 1,
-  "created_at": "2026-11-19T12:36:08.933Z",
-  "updated_at": "2026-11-19T12:36:08.933Z"
+  "created_at": "2026-11-19T19:23:06.26Z",
+  "updated_at": "2026-11-19T19:23:06.26Z",
+  "snmp_communities_set": 0
 }
 ```
 
@@ -726,8 +727,8 @@ Response: `201`
   "status": "unknown",
   "x": 40,
   "y": 40,
-  "created_at": "2026-11-19T12:36:08.942Z",
-  "updated_at": "2026-11-19T12:36:08.942Z"
+  "created_at": "2026-11-19T19:23:06.278Z",
+  "updated_at": "2026-11-19T19:23:06.278Z"
 }
 ```
 
@@ -837,9 +838,9 @@ inedctl view list
 ```
 
 ```text
-ID  NAME      KIND     ORDER
-1   Networks  network  0
-2   Printers  custom   1
+ID  NAME      KIND     ORDER  COMMUNITIES
+1   Networks  network  0      -
+2   Printers  custom   1      none set here
 ```
 
 Exit code: `0`
@@ -851,12 +852,13 @@ inedctl view show 2
 ```
 
 ```text
-ID:      2
-Name:    Printers
-Kind:    custom
-Order:   1
-Created: 2026-11-19 13:36:08
-Updated: 2026-11-19 13:36:08
+ID:          2
+Name:        Printers
+Kind:        custom
+Order:       1
+Communities: none set here
+Created:     2026-11-19 20:23:06
+Updated:     2026-11-19 20:23:06
 
 ID  IP         NAME     STATUS   PARENT
 5   10.10.0.5  printer  unknown  6
@@ -895,8 +897,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 40,
-  "created_at": "2026-11-19T12:36:08.942Z",
-  "updated_at": "2026-11-19T12:36:08.998Z"
+  "created_at": "2026-11-19T19:23:06.278Z",
+  "updated_at": "2026-11-19T19:23:06.391Z"
 }
 ```
 
@@ -918,10 +920,10 @@ Collapsed:   no
 Labels:      inherit
 Bar colour:  none
 Rescan:      off
-Communities: none set here
+Communities: – (custom view)
 Position:    90, 80
-Created:     2026-11-19 13:36:08
-Updated:     2026-11-19 13:36:09
+Created:     2026-11-19 20:23:06
+Updated:     2026-11-19 20:23:06
 Note:        -
 ```
 
@@ -954,8 +956,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-19T12:36:08.942Z",
-  "updated_at": "2026-11-19T12:36:09.006Z"
+  "created_at": "2026-11-19T19:23:06.278Z",
+  "updated_at": "2026-11-19T19:23:06.407Z"
 }
 ```
 
@@ -985,8 +987,8 @@ SNMP:         not checked yet
 Communities:  the server's list
 Outside CIDR: no
 Position:     240, 40
-Created:      2026-11-19 13:36:08
-Updated:      2026-11-19 13:36:09
+Created:      2026-11-19 20:23:06
+Updated:      2026-11-19 20:23:06
 Note:         Toner replaced 2026-11
 ```
 
@@ -1023,8 +1025,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-19T12:36:08.942Z",
-  "updated_at": "2026-11-19T12:36:09.028Z"
+  "created_at": "2026-11-19T19:23:06.278Z",
+  "updated_at": "2026-11-19T19:23:06.452Z"
 }
 ```
 
@@ -1063,10 +1065,10 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Rescan:      off
-Communities: none set here
+Communities: – (custom view)
 Position:    90, 80
-Created:     2026-11-19 13:36:08
-Updated:     2026-11-19 13:36:09
+Created:     2026-11-19 20:23:06
+Updated:     2026-11-19 20:23:06
 Note:        -
 ```
 
@@ -1103,8 +1105,8 @@ Response: `200`
   "status": "unknown",
   "x": 90,
   "y": 80,
-  "created_at": "2026-11-19T12:36:08.942Z",
-  "updated_at": "2026-11-19T12:36:09.051Z"
+  "created_at": "2026-11-19T19:23:06.278Z",
+  "updated_at": "2026-11-19T19:23:06.516Z"
 }
 ```
 
@@ -1143,10 +1145,10 @@ Collapsed:   no
 Labels:      name and IP
 Bar colour:  none
 Rescan:      off
-Communities: none set here
+Communities: – (custom view)
 Position:    90, 80
-Created:     2026-11-19 13:36:08
-Updated:     2026-11-19 13:36:09
+Created:     2026-11-19 20:23:06
+Updated:     2026-11-19 20:23:06
 Note:        -
 ```
 
@@ -1349,8 +1351,8 @@ Response: `200`
   "snmp_communities_from": "server",
   "x": 40,
   "y": 120,
-  "created_at": "2026-11-19T12:36:08.882Z",
-  "updated_at": "2026-11-19T12:36:09.14Z"
+  "created_at": "2026-11-19T19:23:06.166Z",
+  "updated_at": "2026-11-19T19:23:06.746Z"
 }
 ```
 
@@ -1467,7 +1469,7 @@ Response: `200`
 {
   "format": "go-ined-network",
   "version": 1,
-  "exported_at": "2026-11-19T12:36:09.204Z",
+  "exported_at": "2026-11-19T19:23:06.921Z",
   "server_version": "dev",
   "from": "Networks › lab",
   "group": {

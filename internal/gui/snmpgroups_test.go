@@ -380,8 +380,9 @@ func TestViewCommunitiesGUI(t *testing.T) {
 	})
 }
 
-// hookTransport holds the server's answer to GET holdPath while hold is
-// set (until release is closed; seen gets a value per held answer), and sends requests to
+// hookTransport holds the server's answers to GET holdPath while hold is
+// set, until release is closed; seen gets a value per held answer and has
+// room for 4. The tests hold one (crosscheck 2026-11-19-05 L3), and sends requests to
 // /snmp/checks/ without the token while noAuth is set.
 type hookTransport struct {
 	holdPath string
@@ -471,5 +472,72 @@ func TestSNMPCheckRefresh401KeepsJob(t *testing.T) {
 		if !g.snmpJobs["run-1"] || !g.status.cancelB.Visible() {
 			t.Errorf("after a 401: followed %v, cancel %v", g.snmpJobs["run-1"], g.status.cancelB.Visible())
 		}
+	})
+}
+
+// TC-759 (crosscheck 2026-11-19-05 C1): while show()'s answer is held, a
+// host.updated and a placement show newer data; the older answer of
+// show() then doesn't replace it.
+func TestDetailsOlderShowAnswerDropped(t *testing.T) {
+	tr := &hookTransport{seen: make(chan struct{}, 4), release: make(chan struct{})}
+	e := hookedEnv(t, testserver.Options{}, tr)
+	c, ctx := e.c, e.ctx
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", X: ptr(100.0), Y: ptr(100.0)}))
+	v := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "switches"}))
+	tr.holdPath = "/api/v1/hosts/" + strconv.FormatInt(h.ID, 10)
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h.ID) != nil })
+	k := mapmodel.HostKey(h.ID)
+	tr.hold.Store(true)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	<-tr.seen // show()'s answer is held: it has no description and one view
+	tr.hold.Store(false)
+	must(c.UpdateHost(ctx, h.ID, apitypes.HostPatch{Description: apitypes.Some("core switch")}))
+	eventually(t, e.ui, "description from the event", func() bool { return strings.Contains(formText(g.details), "core switch") })
+	must(c.PlaceHost(ctx, v.ID, h.ID, apitypes.PlacementSet{}))
+	eventually(t, e.ui, "views from the reload", func() bool { return strings.Contains(formText(g.details), "Views\nNetworks, switches") })
+	close(tr.release)
+	time.Sleep(300 * time.Millisecond) // the held answer is applied, or dropped, by now
+	e.ui.Wait(func() {
+		if txt := formText(g.details); !strings.Contains(txt, "core switch") || !strings.Contains(txt, "Views\nNetworks, switches") {
+			t.Errorf("an older answer replaced newer data:\n%s", txt)
+		}
+	})
+}
+
+// TC-760 (crosscheck 2026-11-19-05 L1, L5): a second dialog closes the
+// first; a group's dialog closes when its view is deleted, which sends no
+// group.deleted.
+func TestCommunitiesDialogOneAndGroupOfDeletedView(t *testing.T) {
+	e := startWith(t, testserver.Options{})
+	c, ctx := e.c, e.ctx
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", X: ptr(100.0), Y: ptr(100.0)}))
+	v := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "lab"}))
+	cg := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "rack", ViewID: &v.ID}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h.ID) != nil })
+	e.ui.Wait(func() { g.selectView(v.ID) }) // load the custom view's map
+	eventually(t, e.ui, "view loaded", func() bool {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		_, ok := g.model.GroupView(cg.ID)
+		return ok
+	})
+	var first *communitiesDialog
+	e.ui.Wait(func() {
+		g.communitiesDialog("host", h.ID, "h", 0, "server")
+		first = g.commDialog
+		g.communitiesDialog("group", cg.ID, "rack", 0, "")
+		if !first.closed || g.commDialog == first {
+			t.Error("the first dialog stays open")
+		}
+	})
+	if err := c.DeleteView(ctx, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, e.ui, "group dialog closed", func() bool {
+		return g.commDialog == nil && strings.Contains(g.status.Text(), "SNMP communities: the group was deleted")
 	})
 }

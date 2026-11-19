@@ -334,7 +334,8 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 		return
 	}
 	d.seq++
-	seq, g := d.seq, d.g
+	d.reloads++ // show() is a read too (crosscheck 2026-11-19-05 C1)
+	seq, n, g := d.seq, d.reloads, d.g
 	d.view, d.key, d.missed = view, k, false
 	go func() {
 		var (
@@ -356,6 +357,13 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 				return
 			}
 			if k.Type == apitypes.TypeHost {
+				if n != d.reloads && d.showsHost() {
+					// An event or a newer read already shows the host: this
+					// answer may be older (crosscheck 2026-11-19-05 C1). The
+					// note is taken as for a new selection.
+					d.setNote(d.host.Note, true)
+					return
+				}
 				d.setHost(h, true)
 				if d.missed { // the answer may be older than that event (C1)
 					d.missed = false
@@ -675,6 +683,8 @@ func (d *details) onEvent(ev client.Event) {
 		// A view's list or its place in the tab order may change the list
 		// of the hosts placed in it (SPEC-315 v0.69, Design-snmp-views.md
 		// V5); other hosts aren't read again (crosscheck 2026-11-19-04 L1).
+		// A host just placed in a view is read again by the placement event
+		// (crosscheck 2026-11-19-05 L4).
 		var v struct {
 			ID int64 `json:"id"`
 		}

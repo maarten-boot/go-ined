@@ -299,21 +299,49 @@ type communitiesDialog struct {
 }
 
 // closeCommunitiesFor closes the dialog when its host, group or view is
-// deleted (crosscheck 2026-11-19-04 L4).
+// deleted (crosscheck 2026-11-19-04 L4), also a group that went with its
+// view, which sends only view.deleted (crosscheck 2026-11-19-05 L5).
 func (g *GUI) closeCommunitiesFor(ev client.Event) {
 	cd := g.commDialog
 	if cd == nil {
 		return
 	}
-	kind := map[string]string{apitypes.EventHostDeleted: "host", apitypes.EventGroupDeleted: "group", apitypes.EventViewDeleted: "view"}[ev.Type]
-	var del apitypes.DeletedEvent
-	if kind == "" || kind != cd.kind || json.Unmarshal(ev.Data, &del) != nil || del.ID != cd.id {
+	switch ev.Type {
+	case apitypes.EventHostDeleted, apitypes.EventGroupDeleted, apitypes.EventViewDeleted:
+	default:
 		return
 	}
+	if g.communitiesItemExists(cd.kind, cd.id) {
+		return
+	}
+	g.closeCommunities(cd)
+	g.status.message(fmt.Sprintf("SNMP communities: the %s was deleted", cd.kind))
+}
+
+// communitiesItemExists reports whether the GUI's model still has the host,
+// group or view. A host or group in a view not loaded counts as there.
+func (g *GUI) communitiesItemExists(kind string, id int64) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	switch kind {
+	case "view":
+		_, ok := g.model.View(id)
+		return ok
+	case "group":
+		_, ok := g.model.GroupView(id)
+		return ok || !g.model.Loaded(mapmodel.NetworkView)
+	}
+	return !g.model.Loaded(mapmodel.NetworkView) || g.item(mapmodel.NetworkView, mapmodel.HostKey(id)) != nil
+}
+
+// closeCommunities hides a communities dialog; a save under way reports to
+// the status bar.
+func (g *GUI) closeCommunities(cd *communitiesDialog) {
 	cd.closed = true
 	cd.d.Hide()
-	g.commDialog = nil
-	g.status.message(fmt.Sprintf("SNMP communities: the %s was deleted", kind))
+	if g.commDialog == cd {
+		g.commDialog = nil
+	}
 }
 
 func (g *GUI) openCommunities(kind string, id int64, name string) {
@@ -341,11 +369,22 @@ func (g *GUI) openCommunities(kind string, id int64, name string) {
 			}
 			set = gr.SNMPCommunitiesSet
 		}
-		g.do(func() { g.communitiesDialog(kind, id, name, set, from) })
+		g.do(func() {
+			// Not for an item deleted while it was read (crosscheck
+			// 2026-11-19-05 L1).
+			if !g.communitiesItemExists(kind, id) {
+				g.status.message(fmt.Sprintf("SNMP communities: the %s was deleted", kind))
+				return
+			}
+			g.communitiesDialog(kind, id, name, set, from)
+		})
 	}()
 }
 
 func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, from string) {
+	if old := g.commDialog; old != nil { // one at a time (L1)
+		g.closeCommunities(old)
+	}
 	cd := &communitiesDialog{info: widget.NewLabel(""), rows: container.NewVBox(), kind: kind, id: id}
 	now := g.communitiesText(set, from)
 	if kind == "view" && set == 0 { // L3

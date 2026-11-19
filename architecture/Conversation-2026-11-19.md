@@ -112,4 +112,10 @@
 18. **User**: pushed; OK, all.
    **Claude** checked the push (`main` and `docs/architecture` at `32862b4`) and fixed the crosscheck on `fix/crosscheck-19-05` (merged as `f0c0918`; see its section 7). Spec v0.71.
    - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. Both new tests fail without their fix.
+19. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `cade2ed`, `fix/crosscheck-19-05` at `b8bcf1b`) and wrote `Crosscheck-2026-11-19-06.md`:
+   - One reviewer with read-only access; the scope was one fix commit.
+   - Findings: no H or M, 3 L (a note typed during a load is lost as before, a 300 ms wait in a test, a comment).
+   - CI on `main` @ `cade2ed` green. The watcher ended before the macOS job had reported; Claude checked the run again: all 8 jobs green.
+   - Decision asked: D1 L1–L3, optional, recommended together with the next change.
 

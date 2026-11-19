@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
@@ -253,8 +254,9 @@ func TestSNMPFollowDetailsAndDialogBusy(t *testing.T) {
 	})
 }
 
-// TC-759 (crosscheck 2026-11-19-02 C2): a refresh error other than "not
-// found" (here 503: SNMP is off) keeps following the check, with Cancel.
+// TC-759 (crosscheck 2026-11-19-03 C2): a 503 "unavailable" (SNMP is off,
+// as after a restart with it turned off) ends following the check and
+// hides Cancel; a network error (the server down) keeps it, with Cancel.
 func TestSNMPCheckRefreshErrorKeepsJob(t *testing.T) {
 	e := startWith(t, testserver.Options{})
 	e.open()
@@ -262,10 +264,50 @@ func TestSNMPCheckRefreshErrorKeepsJob(t *testing.T) {
 	e.ui.Wait(func() {
 		g.registerSNMPCheck(apitypes.SNMPCheck{ID: "run-1", State: apitypes.DiscoveryRunning, Total: 2})
 	})
-	eventually(t, e.ui, "error shown", func() bool { return strings.Contains(g.status.Text(), "SNMP check run-1: not read") })
+	eventually(t, e.ui, "503 unfollows", func() bool {
+		return strings.Contains(g.status.Text(), "SNMP check run-1: SNMP is off on the server; no longer followed") &&
+			!g.snmpJobs["run-1"] && !g.status.cancelB.Visible()
+	})
+	e.srv.Down()
+	defer e.srv.Up()
 	e.ui.Wait(func() {
-		if !g.snmpJobs["run-1"] || !g.status.cancelB.Visible() {
-			t.Errorf("after a 503: followed %v, cancel %v", g.snmpJobs["run-1"], g.status.cancelB.Visible())
+		g.registerSNMPCheck(apitypes.SNMPCheck{ID: "run-2", State: apitypes.DiscoveryRunning, Total: 2})
+	})
+	eventually(t, e.ui, "network error kept", func() bool { return strings.Contains(g.status.Text(), "SNMP check run-2: not read") })
+	e.ui.Wait(func() {
+		if !g.snmpJobs["run-2"] || !g.status.cancelB.Visible() {
+			t.Errorf("after a network error: followed %v, cancel %v", g.snmpJobs["run-2"], g.status.cancelB.Visible())
+		}
+	})
+}
+
+// TC-759 (crosscheck 2026-11-19-03 C1): an event of a group above the
+// shown host while the pane loads a group doesn't put a host in the pane.
+func TestDetailsGroupEventWhileLoading(t *testing.T) {
+	e := startWith(t, testserver.Options{})
+	c, ctx := e.c, e.ctx
+	lab := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "lab", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	other := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "other", X: ptr(600.0), Y: ptr(100.0)}))
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &lab.ID, X: ptr(100.0), Y: ptr(200.0)}))
+	for i := range 3 { // so a host has the group's id
+		must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2." + strconv.Itoa(10+i), X: ptr(900.0), Y: ptr(float64(100 * i))}))
+	}
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h.ID) != nil })
+	k, gk := mapmodel.HostKey(h.ID), mapmodel.GroupKey(other.ID)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	eventually(t, e.ui, "host shown", func() bool { return g.details.host != nil && g.details.host.ID == h.ID })
+	b, _ := json.Marshal(lab)
+	e.ui.Wait(func() {
+		g.details.show(1, &gk)
+		g.details.onEvent(client.Event{Type: apitypes.EventGroupUpdated, Data: b})
+	})
+	eventually(t, e.ui, "group shown", func() bool { return g.details.group != nil && g.details.group.ID == other.ID })
+	time.Sleep(300 * time.Millisecond) // a wrong reload would have landed by now
+	e.ui.Wait(func() {
+		if g.details.host != nil || g.details.group == nil {
+			t.Errorf("key %v, host %v, group %v", *g.details.key, g.details.host != nil, g.details.group != nil)
 		}
 	})
 }

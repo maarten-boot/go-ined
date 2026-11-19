@@ -118,9 +118,10 @@ func (a *app) communitiesArg(arg string, clear bool) ([]string, error) {
 		var out []string
 		sc := bufio.NewScanner(io.LimitReader(a.stdin, 64<<10))
 		for sc.Scan() {
-			// As typed, but a CR of a Windows line end; blank lines are
-			// left out (crosscheck 2026-11-19-02 L3).
-			if l := strings.TrimSuffix(sc.Text(), "\r"); strings.TrimSpace(l) != "" {
+			// As typed (ScanLines already drops the CR of a Windows line
+			// end); blank lines are left out (crosscheck 2026-11-19-02 L3,
+			// 2026-11-19-03 L4).
+			if l := sc.Text(); strings.TrimSpace(l) != "" {
 				out = append(out, l)
 			}
 		}

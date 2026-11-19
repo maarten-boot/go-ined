@@ -113,19 +113,27 @@ func (g *GUI) registerSNMPCheck(j apitypes.SNMPCheck) {
 }
 
 // refreshSNMPCheck reads a job and shows it, if this GUI still follows it.
-// Only "not found" ends following it (the server restarted); after another
-// error the job may still run, so Cancel stays and the next event or
-// refresh settles it (crosscheck 2026-11-19-02 C2).
+// An answer that the job is gone ends following it: 404 (the server
+// restarted or dropped it), 503 "unavailable" (SNMP is off) and any other
+// 4xx (crosscheck 2026-11-19-03 C2, L5). After a network error, a timeout
+// or another 5xx the job may still run, so Cancel stays and the next event
+// or refresh settles it (crosscheck 2026-11-19-02 C2).
 func (g *GUI) refreshSNMPCheck(id string) {
 	go func() {
 		j, err := g.c.SNMPCheck(g.ctx, id)
 		g.do(func() {
 			var ae *client.APIError
+			isAE := errors.As(err, &ae)
 			switch {
 			case !g.snmpJobs[id]:
-			case errors.As(err, &ae) && ae.Status == http.StatusNotFound:
+			case isAE && (ae.Status/100 == 4 || ae.Status == http.StatusServiceUnavailable && ae.Code == apitypes.CodeUnavailable):
 				delete(g.snmpJobs, id)
-				g.showSNMPCheck(apitypes.SNMPCheck{ID: id, State: apitypes.DiscoveryCancelled})
+				g.showSNMPCheck(apitypes.SNMPCheck{ID: id, State: apitypes.DiscoveryCancelled}) // the button
+				why := "no longer known to the server"
+				if ae.Status == http.StatusServiceUnavailable {
+					why = "SNMP is off on the server"
+				}
+				g.status.message(fmt.Sprintf("SNMP check %s: %s; no longer followed", id, why))
 			case err != nil:
 				g.status.message(fmt.Sprintf("SNMP check %s: not read: %v", id, err))
 			default:

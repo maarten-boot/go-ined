@@ -69,4 +69,8 @@
    **Claude** explained: a network-view group can have a list ("SNMP communities…" on its menu, or `inedctl group snmp-communities`); groups in custom views and whole views can't; "Inherit" removes the list set on the item, so the nearest group's list or the server's is used.
 12. **User**: "as i create new views on hosts with similar capabilities it would be very helpful if i can set communities on a view", "and then use inherit".
    **Claude** wrote `Design-snmp-views.md`: lists on custom views, which hosts get by inheriting (V1–V6); decisions asked. The crosscheck 2026-11-19-03 decisions are still open too.
+13. **User**: pushed; OK, all as recommended (the view design V1–V6, and D1, D2 of crosscheck 2026-11-19-03).
+   **Claude** checked the push (`main` and `docs/architecture` at `c8186e1`), fixed the crosscheck first on `fix/crosscheck-19-03` (merged as `16ebf4f`; see its section 7; Spec v0.68), then started the view lists on `feature/snmp-views`.
+   - The first test edit didn't match: gofmt had wrapped a line of the test since. The test was rewritten from the file as it stood.
+   - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. The new C1 test fails against the old code.
 

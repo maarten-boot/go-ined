@@ -1,6 +1,6 @@
 # Design: SNMP community strings per view
 
-Status: **proposed** (2026-11-19); waiting for the user's OK.
+Status: **accepted** (2026-11-19): V1–V6 as recommended ("OK, all as recommended"); being built on `feature/snmp-views`.
 
 User request (2026-11-19), after "SNMP communities has inherit … can I set a community on a group or a view?":
 - "as I create new views on hosts with similar capabilities it would be very helpful if I can set communities on a view"

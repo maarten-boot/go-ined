@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.67** (2026-11-19)
+Status: **draft v0.68** (2026-11-19)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -108,7 +108,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - **Setting it:** `PATCH /hosts/{id}` or `/groups/{id}` with `"snmp_communities": [...]`; `[]` inherits. It is saved with the host or group (schema 10). The log says "SNMP communities set" with the count, never the strings.
   - **Write-only (G5a):** the strings are never read back, not in the API (not even with the full token), events, the export file or the log. Host JSON has `snmp_communities_set` (how many are set on it) and `snmp_communities_from` (`"host"`, `"group 12"` or `"server"`); group JSON has `snmp_communities_set`.
   - **Effect:** when the list a host's agent was looked for with changes (set on it or a group, or the host moved below another group), it is looked for again at once, as on request.
-  - **v0.66 (crosscheck 2026-11-19-01):** a group's new list also sends `host.updated` for the hosts below it, with their new origin (L3). The new list is recorded for a host only when its search starts, so hosts beyond `snmp.concurrency` get theirs at a later tick, not never (C3). A host that may no longer be asked (it left `networks`, or its list was removed) keeps its last agent until it is changed or checked (L5, noted).
+  - **v0.66 (crosscheck 2026-11-19-01):** ~~a group's new list also sends `host.updated` for the hosts below it, with their new origin (L3)~~ (replaced in v0.67: `group.updated` only). The new list is recorded for a host only when its search starts, so hosts beyond `snmp.concurrency` get theirs at a later tick, not never (C3). A host that may no longer be asked (it left `networks`, or its list was removed) keeps its last agent until it is changed or checked (L5, noted).
   - **v0.67 (crosscheck 2026-11-19-02):** a group's new list sends only `group.updated`, no `host.updated` per host below it: a big group overflowed the clients' event buffers and made them all resync (C1). Clients that show a host's origin read the host again on a `group.updated` or `group.moved` of a network-view group above it, which also covers a group moved elsewhere (L4). The GUI's dialog and `inedctl`'s stdin keep each string as typed, spaces at the ends too, and leave out only blank lines (stdin also drops the CR of a Windows line end); `inedctl`'s comma list `a, b` is still trimmed (L3).
 
 ## 7. Reverse DNS
@@ -229,6 +229,9 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
     - **Following a check:** only "not found" (the server restarted) ends following a job; after another error of its refresh the job stays followed with its Cancel button, and the status bar says "SNMP check <id>: not read: …" (C2). Of a job's early events the newest is kept (most hosts checked, or the end) (L1); at 50 jobs the oldest is dropped, not all (L2).
     - **The dialog** disables Save, Inherit and Add while it saves. After Cancel, a failed save is reported in the status bar (C3). It keeps what is typed, spaces at the ends too; it no longer trims (L3).
     - **One host and groups selected:** the host's menu keeps "Check SNMP now" and "SNMP communities…"; the job item is left out when it would check that host alone (L5).
+  - **v0.68 (crosscheck 2026-11-19-03):**
+    - **Details:** only a host the pane really shows is read again; while another item loads, group events read nothing (C1). Of several reads only the newest answer is used, and none that started before a `host.updated` (L2). When the map doesn't know a group on the host's path yet, the host is read again anyway (L1).
+    - **Following a check:** a 503 "unavailable" (SNMP off) and any 4xx end following a job, with the reason in the status bar: "SNMP check <id>: SNMP is off on the server; no longer followed" or "…: no longer known to the server; no longer followed" (C2, L5). After a network error, a timeout or another 5xx the job stays followed, with Cancel.
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.

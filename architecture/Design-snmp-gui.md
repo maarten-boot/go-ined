@@ -1,6 +1,10 @@
 # Design: SNMP checks for groups, and community strings per group and host
 
-Status: **proposed** (2026-11-19), waiting for the user's OK.
+Status: **implemented** (2026-11-19): G1–G6 as recommended ("OK, all as recommended"; G3a, G4a, G5a), on `feature/snmp-groups` (`e7e0238`, merged as `1657b2d`; SPEC-315, 515, 737; Spec v0.65). Settled in the build:
+- **Looking again after a change:** the manager notices a changed list by the list each host was last looked for with. A move below another group needs no extra code in the inventory.
+- **The job's ids:** `<run>-snmp-N`; 20 finished jobs are kept.
+- **`inedctl`:** the rows are labelled "Communities", so the columns of `host show` and `group show` stay as they were.
+- **The dialog:** "Save" with no string typed asks for one or "Inherit".
 
 User request (2026-11-19), after "how does one start a SNMP scan from the GUI?":
 - "Check SNMP now" on a group;

@@ -19,3 +19,12 @@
    - G4: lists you set are used also outside `networks` (G4a, recommended).
    - G5: the strings are never shown again (G5a, recommended).
    - Waiting for the user's OK.
+5. **User**: pused all (confirmed: pushed, and "OK, all as recommended" for `Design-snmp-gui.md`).
+   **Claude** checked the push (`main` and `docs/architecture` at `af7d6b1`) and built G1–G6 on `feature/snmp-groups` (merged as `1657b2d`):
+   - **Server:** community lists on network-view groups and hosts (schema 10), write-only, with the count and origin in JSON. The lookup is host, then nearest group, then server, and the most specific list replaces the others. Lists you set go outside `networks` too. A changed list is looked for again at once.
+   - **Check jobs:** `POST/GET/DELETE /snmp/checks` with progress and finished events, cancelled at shutdown.
+   - **`inedctl`:** `snmp-communities` (also from stdin), `snmp check|list|status|cancel`.
+   - **GUI:** "Check SNMP now (N hosts)" on groups and selections, progress and "Cancel SNMP check" in the status bar; "SNMP communities…" dialog with masked fields; details rows.
+   - **Fixed on the way:** a data race the new tests found (the progress throttle of a job was shared between goroutines), and a list order that depended on equal start times.
+   - **Tests:** the full Go suite with `-race`, staticcheck v0.8.2, `make nogui-check` and the 65 Python tests pass.
+   - **Docs:** Spec v0.65 (SPEC-315, 515, 737, and the additions to SPEC-312, 502, 804, 901); TC-328, 329, 758, 910; Changes; README; API examples; design status.

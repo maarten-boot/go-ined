@@ -65,4 +65,8 @@
      - C1: an ancestor group's event while the details pane loads another item can show a host under a group's title. Claude reproduced it with its own probe (2 of 4 runs).
      - C2: a 503 from the server (SNMP off after a restart) keeps a check followed for good, with its Cancel button.
    - Decisions asked: D1 C1, C2; D2 L1–L5, P1.
+11. **User**: "snmp communities has inherit, that is nice if i can set a community on a group or a view but i cant it seems , can i ?"
+   **Claude** explained: a network-view group can have a list ("SNMP communities…" on its menu, or `inedctl group snmp-communities`); groups in custom views and whole views can't; "Inherit" removes the list set on the item, so the nearest group's list or the server's is used.
+12. **User**: "as i create new views on hosts with similar capabilities it would be very helpful if i can set communities on a view", "and then use inherit".
+   **Claude** wrote `Design-snmp-views.md`: lists on custom views, which hosts get by inheriting (V1–V6); decisions asked. The crosscheck 2026-11-19-03 decisions are still open too.
 

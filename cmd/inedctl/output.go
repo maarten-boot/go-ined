@@ -53,7 +53,7 @@ func (a *app) hostDetails(h apitypes.Host) {
 		{"Description", h.Description}, {"Parent", parent(h.ParentID)}, {"Monitored", yesNo(h.Monitored)},
 		{"Status", status(h.Status, h.Stale)}, {"RTT", ms(h.RTTms)}, {"Loss", loss},
 		{"Last seen", when(h.LastSeen)}, {"Last change", when(h.LastChange)}, {"Services", servicesText(h)},
-		{"Watched", watchedText(h)}, {"SNMP", snmpText(h)},
+		{"Watched", watchedText(h)}, {"SNMP", snmpText(h)}, {"Communities", communitiesText(h.SNMPCommunitiesSet, h.SNMPCommunitiesFrom)},
 		{"Outside CIDR", yesNo(h.OutsideCIDR)}, {"Position", pos(h.X, h.Y)},
 		{"Created", h.CreatedAt.Local().Format(time.DateTime)}, {"Updated", h.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(h.Note)},
@@ -184,7 +184,7 @@ func (a *app) groupDetails(g apitypes.Group) {
 	a.details([][2]string{
 		{"ID", id(g.ID)}, {"Name", g.Name}, {"CIDR", dash(g.CIDR)}, {"Description", g.Description},
 		{"View", id(g.ViewID)}, {"Parent", parent(g.ParentID)}, {"Status", g.Status}, {"Collapsed", yesNo(g.Collapsed)},
-		{"Labels", labelsText(g.Labels)}, {"Bar colour", colorText(g.Color)}, {"Rescan", rescanText(g)}, {"Position", pos(g.X, g.Y)},
+		{"Labels", labelsText(g.Labels)}, {"Bar colour", colorText(g.Color)}, {"Rescan", rescanText(g)}, {"Communities", communitiesText(g.SNMPCommunitiesSet, "")}, {"Position", pos(g.X, g.Y)},
 		{"Created", g.CreatedAt.Local().Format(time.DateTime)}, {"Updated", g.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(g.Note)},
 	}, false)

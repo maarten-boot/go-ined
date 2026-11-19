@@ -113,7 +113,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "description": "Server-Sent Events (SPEC-502). Event types: host.created, host.updated, host.status (Host); host.deleted, group.deleted, view.deleted (DeletedEvent); group.created, group.updated (Group); group.status (GroupStatusEvent); group.moved (GroupMovedEvent); map.arranged (MapArrangedEvent); view.created, view.updated (View); placement.updated (Placement); placement.deleted (PlacementDeletedEvent); discovery.progress, discovery.finished (Discovery); service.status (ServiceStatusEvent); snmp.values (SNMPValuesEvent); resync (ResyncEvent). Event ids are <run>-<seq>; send Last-Event-ID to resume (SPEC-503).",
+        "description": "Server-Sent Events (SPEC-502). Event types: host.created, host.updated, host.status (Host); host.deleted, group.deleted, view.deleted (DeletedEvent); group.created, group.updated (Group); group.status (GroupStatusEvent); group.moved (GroupMovedEvent); map.arranged (MapArrangedEvent); view.created, view.updated (View); placement.updated (Placement); placement.deleted (PlacementDeletedEvent); discovery.progress, discovery.finished (Discovery); service.status (ServiceStatusEvent); snmp.values (SNMPValuesEvent); snmp.check.progress, snmp.check.finished (SNMPCheck); resync (ResyncEvent). Event ids are <run>-<seq>; send Last-Event-ID to resume (SPEC-503).",
         "parameters": [
           {
             "name": "Last-Event-ID",
@@ -1073,6 +1073,115 @@
           }
         }
       }
+    },
+    "/snmp/checks": {
+      "get": {
+        "summary": "List the SNMP check jobs kept (running and the last 20 finished), oldest first (SPEC-515). 503 when snmp.enabled = false.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SNMPCheck"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Start an SNMP check of a group (with its subgroups) or of hosts (SPEC-515): each host's agent is looked for with its community list and its values read, at most snmp.concurrency at once. 202 with the job; snmp.check.progress and snmp.check.finished follow. 404 for an unknown group or host, 400 for neither or both, 503 when snmp.enabled = false.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SNMPCheckCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SNMPCheck"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/snmp/checks/{id}": {
+      "get": {
+        "summary": "An SNMP check job (SPEC-515)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SNMPCheck"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Cancel an SNMP check job; the answer shows it at that moment, snmp.check.finished follows (SPEC-515)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SNMPCheck"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1221,6 +1330,14 @@
             ],
             "description": "The host's SNMP agent and its latest values; null while never checked (SPEC-312)"
           },
+          "snmp_communities_set": {
+            "type": "integer",
+            "description": "How many SNMP community strings are set on the host itself (SPEC-315); the strings are never shown"
+          },
+          "snmp_communities_from": {
+            "type": "string",
+            "description": "Where the community list used for the host comes from: \"host\", \"group 12\" or \"server\" (SPEC-315)"
+          },
           "x": {
             "type": "number",
             "format": "double"
@@ -1264,7 +1381,9 @@
           "services",
           "services_checked_at",
           "watch",
-          "snmp"
+          "snmp",
+          "snmp_communities_set",
+          "snmp_communities_from"
         ]
       },
       "Group": {
@@ -1333,6 +1452,10 @@
             "type": "integer",
             "description": "The new hosts that scan added in the range (SPEC-206)"
           },
+          "snmp_communities_set": {
+            "type": "integer",
+            "description": "How many SNMP community strings are set on the group (network view only; SPEC-315); the strings are never shown"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -1377,7 +1500,8 @@
           "x",
           "y",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "snmp_communities_set"
         ]
       },
       "MapItem": {
@@ -1589,6 +1713,16 @@
             },
             "maxItems": 20,
             "description": "replaces the watched services (SPEC-310): ssh, rdp, vnc, vnc:1..vnc:9, http, https or tcp:N; no port twice; [] watches nothing"
+          },
+          "snmp_communities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "maxItems": 10,
+            "description": "Replaces the SNMP community strings set here (SPEC-315); [] = inherit (the nearest group's, else the server's). Write-only: never read back. 400 when more than 10, empty, longer than 255 bytes or given twice"
           }
         },
         "additionalProperties": false
@@ -1693,6 +1827,16 @@
           "rescan": {
             "type": "string",
             "description": "Scan the network again every this long (SPEC-206): \"6h\", \"24h\", … (15m to 8760h); \"\" or \"off\" = off. 400 on a group without an IPv4 CIDR or one larger than discovery.max_prefix. Turning it on makes a scan due at once; a new CIDR clears rescan_last."
+          },
+          "snmp_communities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "maxItems": 10,
+            "description": "Replaces the SNMP community strings set here (SPEC-315); [] = inherit (the nearest group's, else the server's). Write-only: never read back. 400 when more than 10, empty, longer than 255 bytes or given twice; 400 on a group of a custom view"
           },
           "x": {
             "type": "number",
@@ -2851,6 +2995,89 @@
           "display_name",
           "ip",
           "values"
+        ]
+      },
+      "SNMPCheckCreate": {
+        "type": "object",
+        "description": "Body of POST /snmp/checks: give either group_id (the group with its subgroups, in its view) or host_ids (SPEC-515)",
+        "additionalProperties": false,
+        "properties": {
+          "group_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "host_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "SNMPCheck": {
+        "type": "object",
+        "description": "An SNMP check job (SPEC-515); also the payload of snmp.check.progress and snmp.check.finished",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "cancelled"
+            ]
+          },
+          "total": {
+            "type": "integer"
+          },
+          "checked": {
+            "type": "integer"
+          },
+          "found": {
+            "type": "integer",
+            "description": "hosts whose agent answered"
+          },
+          "no_answer": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer",
+            "description": "hosts not asked: outside snmp.networks without a list of their own or a group's, or gone"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "group_id",
+          "state",
+          "total",
+          "checked",
+          "found",
+          "no_answer",
+          "skipped",
+          "started_at",
+          "finished_at"
         ]
       }
     }

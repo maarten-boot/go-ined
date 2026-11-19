@@ -23,14 +23,16 @@ var commands = map[string]map[string]command{
 	"host": {
 		"list": hostList, "add": hostAdd, "show": hostShow, "edit": hostEdit,
 		"rm": hostRm, "move": hostMove, "services": hostServices, "snmp": hostSNMP,
-		"watch": hostWatch,
+		"snmp-communities": hostCommunities,
+		"watch":            hostWatch,
 	},
 	"group": {
 		"list": groupList, "add": groupAdd, "show": groupShow, "edit": groupEdit,
 		"rm": groupRm, "move": groupMove, "shift": groupShift,
 		"collapse": groupCollapse(true), "expand": groupCollapse(false),
 		"labels": groupLabels, "color": groupColor, "rescan": groupRescan, "copy": groupCopy,
-		"export": groupExport,
+		"snmp-communities": groupCommunities,
+		"export":           groupExport,
 	},
 	"note": {"get": noteGet, "set": noteSet, "clear": noteClear},
 	"view": {
@@ -40,6 +42,7 @@ var commands = map[string]map[string]command{
 	"discover": {
 		"start": discoverStart, "status": discoverStatus, "cancel": discoverCancel, "list": discoverList,
 	},
+	"snmp": {"check": snmpCheck, "list": snmpList, "status": snmpStatus, "cancel": snmpCancel},
 }
 
 func path(kind string, id int64) string { return fmt.Sprintf("/%ss/%d", kind, id) }
@@ -373,7 +376,7 @@ func groupEdit(a *app, name string, args []string) error {
 	if given["description"] {
 		p.Description = apitypes.Some(*desc)
 	}
-	if p == (apitypes.GroupPatch{}) {
+	if !given["name"] && !given["cidr"] && !given["description"] {
 		return usagef("%s: nothing to change (give --name, --cidr or --description)", name)
 	}
 	var g apitypes.Group

@@ -789,3 +789,30 @@ func TestWatchAPI(t *testing.T) {
 		t.Fatalf("read token: %d %+v", c, eb)
 	}
 }
+
+// TC-329 (API): with SNMP off, the check jobs and check-snmp answer 503;
+// PATCH snmp_communities sets a list that GET never shows.
+func TestSNMPOffAndCommunities(t *testing.T) {
+	e := newEnv(t, "")
+	var h apitypes.Host
+	e.want(201, "POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1"}, &h)
+	e.wantErr(503, apitypes.CodeUnavailable, "GET", "/snmp/checks", nil)
+	e.wantErr(503, apitypes.CodeUnavailable, "POST", "/snmp/checks", apitypes.SNMPCheckCreate{HostIDs: []int64{h.ID}})
+	e.wantErr(503, apitypes.CodeUnavailable, "GET", "/snmp/checks/x", nil)
+	e.wantErr(503, apitypes.CodeUnavailable, "DELETE", "/snmp/checks/x", nil)
+	e.wantErr(503, apitypes.CodeUnavailable, "POST", "/hosts/"+itoa(h.ID)+"/check-snmp", nil)
+	e.want(200, "PATCH", "/hosts/"+itoa(h.ID), `{"snmp_communities":["s3cret"]}`, &h)
+	if h.SNMPCommunitiesSet != 1 || h.SNMPCommunitiesFrom != "host" {
+		t.Errorf("after PATCH: %+v", h)
+	}
+	e.wantErr(400, apitypes.CodeInvalidArgument, "PATCH", "/hosts/"+itoa(h.ID), `{"snmp_communities":[""]}`)
+	resp, err := http.Get(e.srv.URL + "/api/v1/hosts/" + itoa(h.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if strings.Contains(string(b), "s3cret") {
+		t.Errorf("the community is shown: %s", b)
+	}
+}

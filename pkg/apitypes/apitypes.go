@@ -210,11 +210,16 @@ type Host struct {
 	Watch []WatchedService `json:"watch"`
 	// SNMP is the host's SNMP agent and its latest values; null while
 	// never checked (v0.60, SPEC-312).
-	SNMP      *SNMP     `json:"snmp"`
-	X         float64   `json:"x"`
-	Y         float64   `json:"y"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	SNMP *SNMP `json:"snmp"`
+	// SNMPCommunitiesSet is how many community strings are set on the host
+	// itself; SNMPCommunitiesFrom where the list used comes from: "host",
+	// "group 12" or "server" (v0.65, SPEC-315). The strings are never shown.
+	SNMPCommunitiesSet  int       `json:"snmp_communities_set"`
+	SNMPCommunitiesFrom string    `json:"snmp_communities_from"`
+	X                   float64   `json:"x"`
+	Y                   float64   `json:"y"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 // WatchedService is a service watched on a host (SPEC-310): a known name
@@ -247,11 +252,14 @@ type Group struct {
 	Rescan      string     `json:"rescan"`
 	RescanLast  *time.Time `json:"rescan_last"`
 	RescanFound int        `json:"rescan_found"`
-	Status      string     `json:"status"`
-	X           float64    `json:"x"`
-	Y           float64    `json:"y"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	// SNMPCommunitiesSet is how many SNMP community strings are set on the
+	// group (network view only; v0.65, SPEC-315). Never the strings.
+	SNMPCommunitiesSet int       `json:"snmp_communities_set"`
+	Status             string    `json:"status"`
+	X                  float64   `json:"x"`
+	Y                  float64   `json:"y"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // MapItem is one entry of GET /map (SPEC-501).
@@ -311,6 +319,9 @@ type HostPatch struct {
 	// Watch replaces the list of watched services (SPEC-310), such as
 	// ["ssh", "https", "tcp:5432"]; [] watches nothing.
 	Watch Opt[[]string] `json:"watch,omitzero"`
+	// SNMPCommunities replaces the host's own SNMP community strings
+	// (SPEC-315); [] means inherit. Write-only: never read back.
+	SNMPCommunities Opt[[]string] `json:"snmp_communities,omitzero"`
 }
 
 // GroupCreate is the body of POST /groups. Name defaults to the CIDR when
@@ -413,17 +424,20 @@ func NormColor(s string) (string, bool) {
 // GroupPatch is the body of PATCH /groups/{id}. "cidr": "" turns a network
 // group into an ordinary group; "parent_id": null moves it to the root.
 type GroupPatch struct {
-	Name        Opt[string]  `json:"name,omitzero"`
-	Description Opt[string]  `json:"description,omitzero"`
-	Note        Opt[string]  `json:"note,omitzero"`
-	CIDR        Opt[string]  `json:"cidr,omitzero"`
-	ParentID    Opt[*int64]  `json:"parent_id,omitzero"`
-	Collapsed   Opt[bool]    `json:"collapsed,omitzero"`
-	Labels      Opt[string]  `json:"labels,omitzero"` // SPEC-725; "" = as the parent
-	Color       Opt[string]  `json:"color,omitzero"`  // SPEC-727; "" = none
-	Rescan      Opt[string]  `json:"rescan,omitzero"` // SPEC-206; "" or "off" = off
-	X           Opt[float64] `json:"x,omitzero"`
-	Y           Opt[float64] `json:"y,omitzero"`
+	Name        Opt[string] `json:"name,omitzero"`
+	Description Opt[string] `json:"description,omitzero"`
+	Note        Opt[string] `json:"note,omitzero"`
+	CIDR        Opt[string] `json:"cidr,omitzero"`
+	ParentID    Opt[*int64] `json:"parent_id,omitzero"`
+	Collapsed   Opt[bool]   `json:"collapsed,omitzero"`
+	Labels      Opt[string] `json:"labels,omitzero"` // SPEC-725; "" = as the parent
+	Color       Opt[string] `json:"color,omitzero"`  // SPEC-727; "" = none
+	Rescan      Opt[string] `json:"rescan,omitzero"` // SPEC-206; "" or "off" = off
+	// SNMPCommunities replaces a network-view group's SNMP community
+	// strings (SPEC-315); [] means inherit. Write-only: never read back.
+	SNMPCommunities Opt[[]string] `json:"snmp_communities,omitzero"`
+	X               Opt[float64]  `json:"x,omitzero"`
+	Y               Opt[float64]  `json:"y,omitzero"`
 }
 
 // Discovery job states (SPEC-205).

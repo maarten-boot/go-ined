@@ -89,7 +89,7 @@ func TestOpenAPI(t *testing.T) {
 		"ExportPlacement": apitypes.ExportPlacement{}, "ExportViewGroup": apitypes.ExportViewGroup{},
 		"ImportCounts": apitypes.ImportCounts{}, "ImportReport": apitypes.ImportReport{}, "ImportConflict": apitypes.ImportConflict{},
 		"SNMP": apitypes.SNMP{}, "SNMPValues": apitypes.SNMPValues{}, "SNMPStorage": apitypes.SNMPStorage{},
-		"SNMPValuesEvent": apitypes.SNMPValuesEvent{},
+		"SNMPValuesEvent": apitypes.SNMPValuesEvent{}, "SNMPCheck": apitypes.SNMPCheck{}, "SNMPCheckCreate": apitypes.SNMPCheckCreate{},
 	} {
 		sc, ok := doc.Components.Schemas[name]
 		if !ok {
@@ -119,8 +119,8 @@ func TestOpenAPI(t *testing.T) {
 			}
 		}
 	}
-	if len(doc.Components.Schemas) != 43 {
-		t.Errorf("%d schemas, want the 43 checked", len(doc.Components.Schemas))
+	if len(doc.Components.Schemas) != 45 {
+		t.Errorf("%d schemas, want the 45 checked", len(doc.Components.Schemas))
 	}
 
 	// Served without a token, as JSON.

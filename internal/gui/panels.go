@@ -42,6 +42,7 @@ type statusBar struct {
 	connL, msgL, warnL, pingL *widget.Label
 	verL                      *widget.Label // the server is older than the GUI (SPEC-728)
 	copyB                     *widget.Button
+	cancelB                   *widget.Button // stops the SNMP check started here (SPEC-737)
 	clip                      func() fyne.Clipboard
 	log                       []string // recent messages with their time, newest last
 }
@@ -73,9 +74,11 @@ func newStatusBar(url string, tokenInClear bool, clip func() fyne.Clipboard) *st
 		s.warnL.TextStyle.Bold = true
 	}
 	s.copyB = widget.NewButton("Copy", s.copyLog)
+	s.cancelB = widget.NewButton("Cancel SNMP check", nil)
+	s.cancelB.Hide()
 	s.obj = container.NewBorder(container.NewVBox(s.verL, s.pingL), nil,
 		container.NewHBox(widget.NewLabel(url), widget.NewSeparator(), s.connL, widget.NewSeparator()),
-		container.NewHBox(s.warnL, s.copyB), s.msgL)
+		container.NewHBox(s.warnL, s.cancelB, s.copyB), s.msgL)
 	return s
 }
 
@@ -513,6 +516,7 @@ func (d *details) fill() {
 			{"Services", servicesText(*h)}, {"Watched", watchedText(h.Watch)},
 		}
 		rows = append(rows, snmpRows(*h)...)
+		rows = append(rows, [2]string{"SNMP communities", d.g.communitiesText(h.SNMPCommunitiesSet, h.SNMPCommunitiesFrom)})
 		rows = append(rows, [][2]string{
 			{"Parent (this view)", d.parentName()}, {"Views", d.viewNames(h.Views)},
 			{"Description", dash(h.Description)},
@@ -550,6 +554,9 @@ func (d *details) fill() {
 			{"Collapsed", yesNo(gr.Collapsed)}, {"Host labels", labels}, {"Bar colour", theme.BarName(gr.Color)},
 			{"Parent (this view)", d.parentName()},
 			{"View", dash(view.Name)}, {"Description", dash(gr.Description)},
+		}
+		if gr.ViewID == mapmodel.NetworkView {
+			rows = append(rows, [2]string{"SNMP communities", d.g.communitiesText(gr.SNMPCommunitiesSet, "")})
 		}
 		if gr.CIDR != "" && !strings.Contains(gr.CIDR, ":") {
 			rows = slices.Insert(rows, 3, [2]string{"Rescan", rescanText(gr)}) // after CIDR

@@ -82,9 +82,12 @@ type Host struct {
 	// SNMPSavedAt is when SNMP was last written to the database, in memory
 	// only (crosscheck 2026-11-18-04 C2).
 	SNMPSavedAt time.Time
-	X, Y        float64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// SNMPCommunities are the host's own community strings (SPEC-315);
+	// nil inherits.
+	SNMPCommunities []string
+	X, Y            float64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // Watched is a service watched on a host (SPEC-310).
@@ -134,9 +137,12 @@ type Group struct {
 	// RescanGen changes whenever Rescan or CIDR does; in memory only, so
 	// the scheduler can tell a changed setting (crosscheck 2026-11-18-02 L1).
 	RescanGen uint64
-	X, Y      float64
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	// SNMPCommunities are the group's community strings for the hosts
+	// below it in the network view (SPEC-315); nil inherits.
+	SNMPCommunities []string
+	X, Y            float64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // label names a group in messages: "name (cidr)", or just the CIDR when

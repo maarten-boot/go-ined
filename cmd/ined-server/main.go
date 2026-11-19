@@ -254,15 +254,18 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 			log.Info("watched services set to unknown", "count", n)
 		}
 	}
-	var snmpCheck api.SNMPChecker // nil: the endpoint answers 503
+	var snmpCheck api.SNMPChecker // nil: the endpoints answer 503
+	var snmpMgr *snmp.Manager
 	if cfg.SNMP.Enabled {
 		m := snmp.New(svc, snmp.Config{
 			Communities: cfg.SNMP.Communities, Networks: cfg.SNMP.SNMPNetworks(),
 			Interval: cfg.SNMP.Interval, Rescan: cfg.SNMP.Rescan, Concurrency: cfg.SNMP.Concurrency,
 			Client: snmp.UDP{Port: uint16(cfg.SNMP.Port), Timeout: cfg.SNMP.Timeout, Retries: cfg.SNMP.Retries},
+			Notify: bus, RunID: runID,
 		}, log)
 		goBG(m.Run)
 		snmpCheck = m
+		snmpMgr = m
 		log.Info("SNMP enabled", "communities", len(cfg.SNMP.Communities), "networks", cfg.SNMP.Networks)
 	}
 	disc := discovery.New(svc, prober, "", bus, runID, discovery.Config{
@@ -276,6 +279,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	// pending results), the prober, then the SSE streams.
 	stopBackground := func() {
 		disc.Close()
+		if snmpMgr != nil {
+			snmpMgr.Close() // SNMP check jobs (SPEC-804)
+		}
 		bgStop()
 		bgWG.Wait()
 		prober.Close()

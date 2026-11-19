@@ -635,6 +635,42 @@ func TestHostSNMP(t *testing.T) {
 	}
 }
 
+// TC-910: snmp-communities on a host and a group (a list, stdin, --clear),
+// the Communities rows, never the strings; snmp check --group --wait and
+// snmp list; mistakes are usage errors.
+func TestSNMPCommunitiesAndChecks(t *testing.T) {
+	isolate(t)
+	s := testserver.Start(t, testserver.Options{SNMP: &snmp.Config{Communities: []string{"public"}, Client: snmp.Static{
+		Community: "lab-ro", Version: snmp.V2c, Sys: inventory.SNMPSystem{Name: "web"}}}})
+	u := "--url=" + s.URL()
+	ok(t, u, "group", "add", "--name", "lab")
+	ok(t, u, "host", "add", "192.0.2.1", "--parent", "1")
+	ok(t, u, "host", "add", "192.0.2.2", "--parent", "1")
+	contains(t, ok(t, u, "host", "show", "1"), "Communities:", "the server's list")
+	contains(t, ok(t, u, "group", "snmp-communities", "1", "lab-ro,other"), "SNMP communities: 2 set here")
+	contains(t, ok(t, u, "host", "show", "1"), "Communities:", "from group 1")
+	if r := ctlIn(t, "mine\nyours\n\n", u, "host", "snmp-communities", "2", "-"); r.code != 0 || !strings.Contains(r.out, "2 set here") {
+		t.Fatalf("stdin: %+v", r)
+	}
+	contains(t, ok(t, u, "host", "snmp-communities", "2", "--clear"), "SNMP communities: from group 1")
+	for _, o := range []string{ok(t, u, "--json", "host", "show", "1"), ok(t, u, "--json", "group", "show", "1")} {
+		if strings.Contains(o, "lab-ro") || strings.Contains(o, "mine") {
+			t.Errorf("shown: %s", o)
+		}
+	}
+	out := ok(t, u, "snmp", "check", "--group", "1", "--wait")
+	contains(t, out, " running 0/2", " done 2/2: 2 answered, 0 no answer, 0 skipped")
+	contains(t, ok(t, u, "snmp", "list"), " done 2/2: 2 answered")
+	for _, args := range [][]string{
+		{"snmp", "check"}, {"snmp", "check", "--group", "1", "2"}, {"host", "snmp-communities", "1"},
+		{"host", "snmp-communities", "1", "a", "--clear"}, {"host", "snmp-communities", "1", ","},
+	} {
+		if r := ctl(t, append([]string{u}, args...)...); r.code != 2 {
+			t.Errorf("%v: %+v", args, r)
+		}
+	}
+}
+
 // TC-907: host watch sets, adds to, removes from and clears the watched
 // services and shows them; host show has a Watched line, host list an SVC
 // column; mistakes are reported.

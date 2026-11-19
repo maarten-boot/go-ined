@@ -163,4 +163,7 @@
    - Findings: no H or M, 3 L.
    - CI on `main` @ `89f8043` green.
    - The user ended the session (`/exit`) before the report. Claude wrote the crosscheck when CI finished, so it is on file for the next session. Nothing is pushed yet.
+28. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `238d8cf`) and fixed L1 of crosscheck 2026-11-19-10 now, as it was small, on `fix/crosscheck-19-10` (`7dcb404`, merged as `eae18ac`; see its section 7). L2 is noted with the reason; L3 accepted. Spec v0.76.
+   - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass.
 

@@ -9,3 +9,13 @@
    - The release run 44507479025 was green on the first attempt; its macOS job waited 11 min for a runner. 0.8.0 was published at 11:04 UTC.
    - Checked as before: 11 archives and SHA256SUMS, every checksum OK. The linux/amd64 binaries print `v0.8.0`, the darwin and linux/arm64 GUI binaries are of the right architecture, `ined-gui.exe` is in the Windows zip, and the release text equals the `[0.8.0]` section.
    - Releases and artifacts (the user's rule): 10 releases, no CI artifacts stored, so there is nothing to clean up.
+3. **User**: how does one start a snmp scan from the gui?
+   **Claude**: there is no network-wide SNMP scan in the GUI. The server looks for agents by itself once `[snmp] enabled = true`. The GUI has "Check SNMP now" for one host, and the results are in the details. Offered a design for groups and selections.
+4. **User**: yes, write the design note; yes a group makes sense as we can configure a group to have the same community string, it would be helpfull to allow configuring community strings per group and per host via the gui.
+   **Claude** wrote `Design-snmp-gui.md`:
+   - G1: "Check SNMP now" on groups and selections, as a server job with progress and cancel (`POST /snmp/checks`, `inedctl snmp check`).
+   - G2: write-only community lists per network-view group and per host, set in a GUI dialog with masked fields, `inedctl` (stdin) and the API; the host's own list, then the nearest group's, then the server's; schema 10.
+   - G3: the most specific list replaces the others (G3a, recommended) or comes first (G3b).
+   - G4: lists you set are used also outside `networks` (G4a, recommended).
+   - G5: the strings are never shown again (G5a, recommended).
+   - Waiting for the user's OK.

@@ -141,4 +141,9 @@
      - C2 (M): a save on its way when the selection changes marks the new item's note as edited.
    - CI on `main` @ `cf6344e` green.
    - Decisions asked: D1 C1, C2; D2 L1, P1; D3 what to do with unsaved typing when switching to another item (recommended: a status-bar warning).
+24. **User**: pushed; OK, all as recommended.
+   **Claude** checked the push (`main` and `docs/architecture` at `1685aa2`) and fixed the crosscheck on `fix/crosscheck-19-08` (`2b50947`, merged as `41a6aa3`; see its section 7). Spec v0.74.
+   - Selecting the same item keeps unsaved typing. Leaving an item with unsaved typing says so in the status bar.
+   - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass.
+   - On the way: the first C2 test passed with the old code, because a later event hid the wrong field. It was strengthened, and now fails without the fix.
 

@@ -147,6 +147,9 @@ type View struct {
 	Order     int64     `json:"order"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// SNMPCommunitiesSet is how many SNMP community strings are set on a
+	// custom view (SPEC-315, v0.69); the strings are never shown.
+	SNMPCommunitiesSet int `json:"snmp_communities_set"`
 }
 
 // ViewCreate is the body of POST /views. Without order the view goes last.
@@ -159,6 +162,9 @@ type ViewCreate struct {
 type ViewPatch struct {
 	Name  Opt[string] `json:"name,omitzero"`
 	Order Opt[int64]  `json:"order,omitzero"`
+	// SNMPCommunities replaces a custom view's SNMP community strings
+	// (SPEC-315, v0.69); [] inherits. Write-only.
+	SNMPCommunities Opt[[]string] `json:"snmp_communities,omitzero"`
 }
 
 // Placement puts a host in a custom view (SPEC-119). It is the response of

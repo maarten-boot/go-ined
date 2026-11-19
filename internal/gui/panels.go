@@ -654,6 +654,11 @@ func (d *details) onEvent(ev client.Event) {
 		if g.ViewID == mapmodel.NetworkView && d.above(g.ID) {
 			d.reload() // where its SNMP list comes from may have changed (crosscheck 2026-11-19-02 C1)
 		}
+	case apitypes.EventViewUpdated, apitypes.EventViewDeleted:
+		// A view's list or the tab order may change the host's list
+		// (SPEC-315 v0.69, Design-snmp-views.md V5). Views change rarely:
+		// the host is read again without asking whether it is placed there.
+		d.reload()
 	case apitypes.EventGroupMoved:
 		var m apitypes.GroupMovedEvent
 		if json.Unmarshal(ev.Data, &m) == nil && m.ViewID == mapmodel.NetworkView && d.above(m.ID) {

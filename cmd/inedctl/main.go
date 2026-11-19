@@ -85,6 +85,8 @@ Commands:
   view unplace <view-id> <host-id>
   view arrange <view-id> [--group ID] [--width N] [--height N]
                                                (lay out members on a grid; default 100 x 80)
+  view snmp-communities <id> LIST|-|--clear   (SNMP community strings for the hosts in a custom view
+                                               that have none of their own)
   discover start <cidr> | --group ID [--parent ID] [--wait]
   discover status <job-id>
   discover list                                (every job the server keeps, scheduled ones too)

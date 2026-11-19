@@ -143,6 +143,8 @@ var migrations = []string{
 	// JSON list; '' inherits.
 	`ALTER TABLE groups ADD COLUMN snmp_communities TEXT NOT NULL DEFAULT '';
 	ALTER TABLE hosts ADD COLUMN snmp_communities TEXT NOT NULL DEFAULT '';`,
+	// 10 → 11: SNMP community strings per custom view (SPEC-315, v0.69).
+	`ALTER TABLE views ADD COLUMN snmp_communities TEXT NOT NULL DEFAULT '';`,
 }
 
 // Store is a SQLite-backed inventory.Repository.
@@ -339,7 +341,7 @@ func (s *Store) Load(ctx context.Context) (inventory.State, error) {
 }
 
 func (s *Store) loadViews(ctx context.Context) ([]inventory.View, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, kind, ord, created_at, updated_at FROM views ORDER BY id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, kind, ord, snmp_communities, created_at, updated_at FROM views ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("store: load views: %w", err)
 	}
@@ -348,8 +350,12 @@ func (s *Store) loadViews(ctx context.Context) ([]inventory.View, error) {
 	for rows.Next() {
 		var v inventory.View
 		var created, updated sql.NullString
-		if err := rows.Scan(&v.ID, &v.Name, &v.Kind, &v.Order, &created, &updated); err != nil {
+		var comms string
+		if err := rows.Scan(&v.ID, &v.Name, &v.Kind, &v.Order, &comms, &created, &updated); err != nil {
 			return nil, fmt.Errorf("store: scan view: %w", err)
+		}
+		if v.SNMPCommunities, err = loadList(comms); err != nil {
+			return nil, fmt.Errorf("store: view %d: bad snmp_communities: %w", v.ID, err)
 		}
 		if v.CreatedAt, err = parseTime(created); err != nil {
 			return nil, fmt.Errorf("store: view %d: %w", v.ID, err)
@@ -539,9 +545,10 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 		}
 	}
 	for _, v := range c.Views {
-		_, err = tx.ExecContext(ctx, `INSERT INTO views (id, name, kind, ord, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-			ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, ord=excluded.ord, updated_at=excluded.updated_at`,
-			v.ID, v.Name, v.Kind, v.Order, fmtTime(v.CreatedAt), fmtTime(v.UpdatedAt))
+		_, err = tx.ExecContext(ctx, `INSERT INTO views (id, name, kind, ord, snmp_communities, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, ord=excluded.ord,
+				snmp_communities=excluded.snmp_communities, updated_at=excluded.updated_at`,
+			v.ID, v.Name, v.Kind, v.Order, saveList(v.SNMPCommunities), fmtTime(v.CreatedAt), fmtTime(v.UpdatedAt))
 		if err != nil {
 			return fmt.Errorf("store: upsert view %d: %w", v.ID, err)
 		}

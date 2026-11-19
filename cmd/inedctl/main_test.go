@@ -814,3 +814,30 @@ func TestCommunitiesArgKeepsSpaces(t *testing.T) {
 		t.Errorf("comma list: %q", got)
 	}
 }
+
+// TC-911 (SPEC-901, 315 v0.69): `view snmp-communities` sets a custom
+// view's list; a host placed there says "from view 2"; `view list` and
+// `view show` have the count, the network view "-"; the network view's
+// list is refused; --clear inherits; no string is printed.
+func TestViewCommunitiesCtl(t *testing.T) {
+	isolate(t)
+	s := testserver.Start(t, testserver.Options{})
+	u := "--url=" + s.URL()
+	ok(t, u, "host", "add", "192.0.2.1")
+	ok(t, u, "view", "add", "switches")
+	ok(t, u, "view", "place", "2", "1")
+	contains(t, ok(t, u, "view", "snmp-communities", "2", "sw-ro,sw-2"), "SNMP communities: 2 set here")
+	contains(t, ok(t, u, "host", "show", "1"), "Communities:", "from view 2")
+	out := ok(t, u, "view", "list")
+	contains(t, out, "COMMUNITIES", "2 set here")
+	contains(t, ok(t, u, "view", "show", "1"), "Communities:", "-")
+	contains(t, ok(t, u, "view", "show", "2"), "Communities:", "2 set here")
+	if r := ctl(t, u, "view", "snmp-communities", "1", "x"); r.code == 0 {
+		t.Errorf("the network view took a list: %+v", r)
+	}
+	contains(t, ok(t, u, "view", "snmp-communities", "2", "--clear"), "SNMP communities: none set here")
+	contains(t, ok(t, u, "host", "show", "1"), "Communities:", "the server's list")
+	if strings.Contains(out+ok(t, u, "--json", "view", "show", "2"), "sw-ro") {
+		t.Error("a string is printed")
+	}
+}

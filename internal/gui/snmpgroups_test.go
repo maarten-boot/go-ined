@@ -311,3 +311,52 @@ func TestDetailsGroupEventWhileLoading(t *testing.T) {
 		}
 	})
 }
+
+// TC-760 (SPEC-737 v0.69, Design-snmp-views.md): a custom view's View menu
+// has "SNMP communities…", the network view's not; the dialog sets the
+// view's list; a host placed there says "from view switches" and follows
+// the view's list without a host event; "Inherit" clears it.
+func TestViewCommunitiesGUI(t *testing.T) {
+	e := startWith(t, testserver.Options{SNMP: &snmp.Config{Communities: []string{"public"}, Client: snmp.Static{Community: "public", Version: snmp.V2c}}})
+	c, ctx := e.c, e.ctx
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", X: ptr(100.0), Y: ptr(100.0)}))
+	v := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "switches"}))
+	must(c.PlaceHost(ctx, v.ID, h.ID, apitypes.PlacementSet{}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "tabs", func() bool { return e.tabNames() == "Networks,switches" })
+	e.ui.Wait(func() {
+		if menuItem(g.viewMenuItems(), "SNMP communities…") != nil {
+			t.Error("the network view has SNMP communities…")
+		}
+	})
+	k := mapmodel.HostKey(h.ID)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	eventually(t, e.ui, "server's list", func() bool { return strings.Contains(formText(g.details), "SNMP communities\nthe server's list") })
+	e.ui.Wait(func() { g.selectView(v.ID) })
+	eventually(t, e.ui, "view selected", func() bool { return g.currentView() == v.ID })
+	e.ui.Wait(func() { g.details.show(v.ID, &k) }) // a new tab shows its own selection
+	eventually(t, e.ui, "host in the view", func() bool { return strings.Contains(formText(g.details), "SNMP communities\nthe server's list") })
+	e.ui.Wait(func() {
+		it := menuItem(g.viewMenuItems(), "SNMP communities…")
+		if it == nil {
+			t.Fatal("no SNMP communities… in the custom view's menu")
+		}
+		it.Action()
+	})
+	eventually(t, e.ui, "dialog", func() bool { return g.commDialog != nil })
+	e.ui.Wait(func() { g.commDialog.save([]string{"sw-ro", "sw-2"}) })
+	eventually(t, e.ui, "saved", func() bool { return must(c.View(ctx, v.ID)).SNMPCommunitiesSet == 2 })
+	eventually(t, e.ui, "host row", func() bool { return strings.Contains(formText(g.details), "SNMP communities\nfrom view switches") })
+	eventually(t, e.ui, "status", func() bool { return strings.Contains(g.status.Text(), "SNMP communities of view switches: 2 set here") })
+	if strings.Contains(formText(g.details)+g.status.Text(), "sw-ro") {
+		t.Error("a string is shown")
+	}
+	e.ui.Wait(func() {
+		g.commDialog = nil
+		menuItem(g.viewMenuItems(), "SNMP communities…").Action()
+	})
+	eventually(t, e.ui, "dialog again", func() bool { return g.commDialog != nil && strings.Contains(g.commDialog.info.Text, "2 set here") })
+	e.ui.Wait(func() { g.commDialog.save([]string{}) })
+	eventually(t, e.ui, "inherit", func() bool { return strings.Contains(formText(g.details), "SNMP communities\nthe server's list") })
+}

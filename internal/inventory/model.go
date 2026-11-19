@@ -31,6 +31,10 @@ type View struct {
 	Order     int64
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	// SNMPCommunities are a custom view's community strings for the hosts
+	// placed in it that have none of their own (SPEC-315, v0.69); nil
+	// inherits.
+	SNMPCommunities []string
 }
 
 // Placement puts a host in a custom view (SPEC-119). A host's placement in

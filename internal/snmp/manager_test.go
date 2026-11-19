@@ -688,3 +688,45 @@ func (b blocking) System(ctx context.Context, _ netip.Addr, _, _ string) (invent
 func (blocking) Values(context.Context, netip.Addr, string, string) (apitypes.SNMPValues, error) {
 	return apitypes.SNMPValues{}, errNoAnswer
 }
+
+// TC-330 (SPEC-315 v0.69): a host placed in a custom view with a list is
+// asked with it, also outside networks (V4), at once after it is placed,
+// and again at once when the view's list changes (V5).
+func TestViewCommunityList(t *testing.T) {
+	ctx := context.Background()
+	b := &byCommunity{answer: "sw-ro"}
+	r := newRig(t, nil, Config{Client: b, Communities: []string{"public"}, Networks: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}})
+	view, err := r.svc.CreateView(ctx, apitypes.ViewCreate{Name: "switches"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.svc.UpdateView(ctx, view.ID, apitypes.ViewPatch{SNMPCommunities: apitypes.Some([]string{"sw-ro"})}); err != nil {
+		t.Fatal(err)
+	}
+	h, err := r.svc.CreateHost(ctx, apitypes.HostCreate{IP: "127.0.0.9"}) // outside networks
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.run(t)
+	time.Sleep(50 * time.Millisecond)
+	if got := b.seen("127.0.0.9"); len(got) != 0 {
+		t.Fatalf("asked before it is in the view: %v", got)
+	}
+	if _, err := r.svc.PlaceHost(ctx, view.ID, h.ID, apitypes.PlacementSet{}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "found with the view's list", func() bool { x, _ := r.svc.Host(h.ID); return x.SNMP != nil && x.SNMP.Version == V2c })
+	if got := b.seen("127.0.0.9"); strings.Join(got, ",") != "sw-ro" {
+		t.Errorf("asked with %v", got)
+	}
+	b.set("sw-new")
+	if _, err := r.svc.UpdateView(ctx, view.ID, apitypes.ViewPatch{SNMPCommunities: apitypes.Some([]string{"sw-new"})}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "asked with the new list", func() bool { return slices.Contains(b.seen("127.0.0.9"), "sw-new") })
+	vs := r.svc.Views()
+	vb, _ := json.Marshal(vs)
+	if strings.Contains(string(vb), "sw-") {
+		t.Errorf("shown: %s", vb)
+	}
+}

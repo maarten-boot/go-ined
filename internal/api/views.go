@@ -40,6 +40,9 @@ func (s *server) patchView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, err := s.svc.UpdateView(r.Context(), id, p)
+	if err == nil && p.SNMPCommunities.Set { // never the strings (SPEC-315)
+		s.log.Info("SNMP communities set", "view", id, "count", len(p.SNMPCommunities.Value))
+	}
 	s.respond(w, http.StatusOK, v, err)
 }
 

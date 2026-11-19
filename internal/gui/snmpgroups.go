@@ -244,12 +244,22 @@ func (g *GUI) forgetSeen(id string) {
 }
 
 // communitiesText is the details row (SPEC-737): "2 set here", "from
-// group lan", "the server's list"; for a group without a list "none set
-// here (inherited)".
+// view switches", "from group lan", "the server's list"; for a group or
+// view without a list "none set here (inherited)".
 func (g *GUI) communitiesText(set int, from string) string {
 	switch {
 	case set > 0:
 		return fmt.Sprintf("%d set here", set)
+	case strings.HasPrefix(from, "view "):
+		name := from
+		if id, err := strconv.ParseInt(strings.TrimPrefix(from, "view "), 10, 64); err == nil {
+			g.mu.Lock()
+			if v, ok := g.model.View(id); ok {
+				name = "view " + v.Name
+			}
+			g.mu.Unlock()
+		}
+		return "from " + name
 	case strings.HasPrefix(from, "group "):
 		name := from
 		if id, err := strconv.ParseInt(strings.TrimPrefix(from, "group "), 10, 64); err == nil {
@@ -266,8 +276,8 @@ func (g *GUI) communitiesText(set int, from string) string {
 	return "none set here (inherited)"
 }
 
-// communitiesItem is "SNMP communities…" on a host or a network-view
-// group.
+// communitiesItem is "SNMP communities…" on a host, a network-view
+// group or (in the View menu) a custom view.
 func (g *GUI) communitiesItem(kind string, id int64, name string) *fyne.MenuItem {
 	return fyne.NewMenuItem("SNMP communities…", func() { g.openCommunities(kind, id, name) })
 }
@@ -295,6 +305,13 @@ func (g *GUI) openCommunities(kind string, id int64, name string) {
 				return
 			}
 			set, from = h.SNMPCommunitiesSet, h.SNMPCommunitiesFrom
+		} else if kind == "view" {
+			v, err := g.c.View(g.ctx, id)
+			if err != nil {
+				g.fail("SNMP communities", err)
+				return
+			}
+			set = v.SNMPCommunitiesSet
 		} else {
 			gr, err := g.c.Group(g.ctx, id)
 			if err != nil {
@@ -337,10 +354,7 @@ func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, fro
 		}
 		addRow()
 	})
-	what := "host " + name
-	if kind == "group" {
-		what = "group " + name
-	}
+	what := kind + " " + name
 	cd.save = func(list []string) {
 		if err := apitypes.CheckCommunities(list); err != nil {
 			cd.info.SetText(err.Error())
@@ -360,6 +374,11 @@ func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, fro
 				var h apitypes.Host
 				if h, err = g.c.UpdateHost(g.ctx, id, apitypes.HostPatch{SNMPCommunities: apitypes.Some(list)}); err == nil {
 					text = g.communitiesText(h.SNMPCommunitiesSet, h.SNMPCommunitiesFrom)
+				}
+			} else if kind == "view" {
+				var v apitypes.View
+				if v, err = g.c.UpdateView(g.ctx, id, apitypes.ViewPatch{SNMPCommunities: apitypes.Some(list)}); err == nil {
+					text = g.communitiesText(v.SNMPCommunitiesSet, "")
 				}
 			} else {
 				var gr apitypes.Group

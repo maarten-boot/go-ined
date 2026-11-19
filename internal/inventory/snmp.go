@@ -69,12 +69,19 @@ func communityList(l []string) ([]string, error) {
 }
 
 // communitiesFor is the list a host's agent is looked for with (SPEC-315):
-// the host's own, else the nearest group's above it in the network view,
-// with where it comes from ("host", "group 12"); nil and "server" for the
-// server's list. Caller holds the lock.
+// the host's own, else that of the first custom view in tab order it is
+// placed in that has one (v0.69, Design-snmp-views.md V2, V3), else the
+// nearest group's above it in the network view, with where it comes from
+// ("host", "view 5", "group 12"); nil and "server" for the server's list.
+// Caller holds the lock.
 func (s *Service) communitiesFor(h *Host) ([]string, string) {
 	if len(h.SNMPCommunities) > 0 {
 		return h.SNMPCommunities, "host"
+	}
+	for _, vid := range s.hostViews(h.ID)[1:] { // custom views, in tab order
+		if v := s.m.Views[vid]; v != nil && len(v.SNMPCommunities) > 0 {
+			return v.SNMPCommunities, fmt.Sprintf("view %d", v.ID)
+		}
 	}
 	for id, n := h.ParentID, 0; id != Root && n < 10000; n++ {
 		g := s.m.Groups[id]

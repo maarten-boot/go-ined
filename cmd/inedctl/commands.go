@@ -38,6 +38,7 @@ var commands = map[string]map[string]command{
 	"view": {
 		"list": viewList, "add": viewAdd, "show": viewShow, "rename": viewRename, "order": viewOrder,
 		"rm": viewRm, "place": viewPlace, "unplace": viewUnplace, "arrange": viewArrange,
+		"snmp-communities": viewCommunities,
 	},
 	"discover": {
 		"start": discoverStart, "status": discoverStatus, "cancel": discoverCancel, "list": discoverList,

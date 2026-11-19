@@ -315,3 +315,83 @@ func TestCommunitiesHostEvents(t *testing.T) {
 		t.Errorf("the same list again: %s", ev)
 	}
 }
+
+// TC-330 (SPEC-315 v0.69, Design-snmp-views.md): a custom view's list is
+// used by the hosts placed in it without a list of their own; it beats the
+// network group's; with two views the first in tab order wins; unplacing,
+// reordering and deleting views change it; the network view takes none;
+// the view's JSON has only the count.
+func TestViewCommunities(t *testing.T) {
+	s, _ := newSvc(t)
+	lan := mustGroup(t, s, apitypes.GroupCreate{Name: "lan"})
+	h := mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &lan.ID})
+	mk := func(name string) apitypes.View {
+		v, err := s.CreateView(ctx, apitypes.ViewCreate{Name: name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.PlaceHost(ctx, v.ID, h.ID, apitypes.PlacementSet{}); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	sw, pr := mk("switches"), mk("printers")
+	setV := func(id int64, l []string) (apitypes.View, error) {
+		return s.UpdateView(ctx, id, apitypes.ViewPatch{SNMPCommunities: apitypes.Some(l)})
+	}
+	from := func() string { v, _ := s.Host(h.ID); return v.SNMPCommunitiesFrom }
+	if _, err := setV(NetworkView, []string{"x"}); KindOf(err) != Invalid {
+		t.Errorf("the network view took a list: %v", err)
+	}
+	if _, err := setV(sw.ID, []string{"a", "a"}); KindOf(err) != Invalid {
+		t.Errorf("a list with a string twice: %v", err)
+	}
+	if _, err := s.UpdateGroup(ctx, lan.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{"lan-ro"})}); err != nil {
+		t.Fatal(err)
+	}
+	if from() != fmt.Sprintf("group %d", lan.ID) {
+		t.Errorf("before view lists: %q", from())
+	}
+	v, err := setV(pr.ID, []string{"pr-ro", "pr-2"})
+	if err != nil || v.SNMPCommunitiesSet != 2 {
+		t.Fatalf("set: %+v %v", v, err)
+	}
+	if b, _ := json.Marshal(v); strings.Contains(string(b), "pr-ro") {
+		t.Errorf("shown: %s", b)
+	}
+	if from() != fmt.Sprintf("view %d", pr.ID) {
+		t.Errorf("view beats group: %q", from())
+	}
+	setV(sw.ID, []string{"sw-ro"})
+	if from() != fmt.Sprintf("view %d", sw.ID) {
+		t.Errorf("first in tab order: %q", from())
+	}
+	if _, err := s.UpdateView(ctx, pr.ID, apitypes.ViewPatch{Order: apitypes.Some(int64(-1))}); err != nil {
+		t.Fatal(err)
+	}
+	if from() != fmt.Sprintf("view %d", pr.ID) {
+		t.Errorf("after reordering: %q", from())
+	}
+	if err := s.UnplaceHost(ctx, pr.ID, h.ID); err != nil {
+		t.Fatal(err)
+	}
+	if from() != fmt.Sprintf("view %d", sw.ID) {
+		t.Errorf("after unplacing: %q", from())
+	}
+	if _, err := s.UpdateHost(ctx, h.ID, apitypes.HostPatch{SNMPCommunities: apitypes.Some([]string{"own"})}); err != nil {
+		t.Fatal(err)
+	}
+	if from() != "host" {
+		t.Errorf("the host's own: %q", from())
+	}
+	s.UpdateHost(ctx, h.ID, apitypes.HostPatch{SNMPCommunities: apitypes.Some([]string{})})
+	if err := s.DeleteView(ctx, sw.ID); err != nil {
+		t.Fatal(err)
+	}
+	if from() != fmt.Sprintf("group %d", lan.ID) {
+		t.Errorf("after deleting the view: %q", from())
+	}
+	if v, _ := setV(pr.ID, []string{}); v.SNMPCommunitiesSet != 0 {
+		t.Errorf("inherit: %+v", v)
+	}
+}

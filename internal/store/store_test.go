@@ -317,7 +317,7 @@ func TestRoundTripViews(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(st.Views) != 2 || st.Views[1] != v || len(st.Placements) != 1 || st.Placements[0] != pl ||
+	if len(st.Views) != 2 || !reflect.DeepEqual(st.Views[1], v) || len(st.Placements) != 1 || st.Placements[0] != pl ||
 		st.Groups[0].ViewID != 2 || st.NextViewID != 3 {
 		t.Fatalf("state: %+v", st)
 	}
@@ -608,5 +608,40 @@ func TestMigration10(t *testing.T) {
 	st, err = s.Load(ctx)
 	if err != nil || !reflect.DeepEqual(st.Groups[0].SNMPCommunities, g.SNMPCommunities) || !reflect.DeepEqual(st.Hosts[0].SNMPCommunities, h.SNMPCommunities) {
 		t.Fatalf("saved: %+v %+v %v", st.Groups[0].SNMPCommunities, st.Hosts[0].SNMPCommunities, err)
+	}
+}
+
+// TC-330: migration 11 adds a view's community list; none after it, and a
+// saved list is loaded back.
+func TestMigration11(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v10.db")
+	db, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(ctx, db, migrations[:10]); err != nil {
+		t.Fatal(err)
+	}
+	ts := "2026-11-01T10:00:00Z"
+	if _, err := db.Exec(`INSERT INTO views (id, name, kind, ord, created_at, updated_at) VALUES (2, 'switches', 'custom', 1, ?1, ?1)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s, err := Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	st, err := s.Load(ctx)
+	if err != nil || len(st.Views) != 2 || st.Views[1].SNMPCommunities != nil {
+		t.Fatalf("after migration: %+v %v", st.Views, err)
+	}
+	v := st.Views[1]
+	v.SNMPCommunities = []string{"sw-ro", `a "b"`}
+	if err := s.Apply(ctx, inventory.Changes{Views: []inventory.View{v}}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err = s.Load(ctx); err != nil || !reflect.DeepEqual(st.Views[1].SNMPCommunities, v.SNMPCommunities) {
+		t.Fatalf("saved: %+v %v", st.Views, err)
 	}
 }

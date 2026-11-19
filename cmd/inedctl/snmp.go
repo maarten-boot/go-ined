@@ -150,6 +150,12 @@ func groupCommunities(a *app, name string, args []string) error {
 	return setCommunities(a, name, args, "group")
 }
 
+// viewCommunities sets a custom view's list, for the hosts placed in it
+// (SPEC-315 v0.69).
+func viewCommunities(a *app, name string, args []string) error {
+	return setCommunities(a, name, args, "view")
+}
+
 func setCommunities(a *app, name string, args []string, kind string) error {
 	fs := a.flags(name)
 	clear := fs.Bool("clear", false, "remove the list set here: inherit")
@@ -179,18 +185,23 @@ func setCommunities(a *app, name string, args []string, kind string) error {
 				fmt.Fprintln(a.out, "SNMP communities: "+communitiesText(h.SNMPCommunitiesSet, h.SNMPCommunitiesFrom))
 			})
 	}
+	if kind == "view" {
+		var v apitypes.View
+		return a.call(http.MethodPatch, path("view", id), apitypes.ViewPatch{SNMPCommunities: apitypes.Some(list)}, &v,
+			func() { fmt.Fprintln(a.out, "SNMP communities: "+communitiesText(v.SNMPCommunitiesSet, "")) })
+	}
 	var g apitypes.Group
 	return a.call(http.MethodPatch, path("group", id), apitypes.GroupPatch{SNMPCommunities: apitypes.Some(list)}, &g,
 		func() { fmt.Fprintln(a.out, "SNMP communities: "+communitiesText(g.SNMPCommunitiesSet, "")) })
 }
 
-// communitiesText is "2 set here", "from group 12", "the server's list" or
-// "none set here" (for a group) (SPEC-315).
+// communitiesText is "2 set here", "from view 5", "from group 12", "the
+// server's list" or "none set here" (for a group or view) (SPEC-315).
 func communitiesText(set int, from string) string {
 	switch {
 	case set > 0:
 		return fmt.Sprintf("%d set here", set)
-	case strings.HasPrefix(from, "group "):
+	case strings.HasPrefix(from, "group "), strings.HasPrefix(from, "view "):
 		return "from " + from
 	case from == "server":
 		return "the server's list"

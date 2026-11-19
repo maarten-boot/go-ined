@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -14,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +34,8 @@ type env struct {
 	st    *store.Store
 	svc   *inventory.Service
 	bus   *events.Bus
-	runs  int // number of starts; the run id is "run<runs>"
+	runs  int       // number of starts; the run id is "run<runs>"
+	log   lockedBuf // the server's log
 	// services, if set, is what a service check finds (SPEC-309); nil =
 	// checks are turned off.
 	services []string
@@ -76,7 +79,8 @@ func (e *env) start() {
 			return h, err
 		})
 	}
-	e.srv = httptest.NewServer(New(svc, Options{Token: e.token, ReadToken: e.read, Version: "test", RunID: run, DBPing: st.Ping, Events: e.bus, Services: checker}))
+	e.srv = httptest.NewServer(New(svc, Options{Token: e.token, ReadToken: e.read, Version: "test", RunID: run, DBPing: st.Ping, Events: e.bus, Services: checker,
+		Logger: slog.New(slog.NewTextHandler(&e.log, nil))}))
 	e.t.Cleanup(e.stop)
 }
 
@@ -87,6 +91,24 @@ func (e *env) stop() {
 		e.st.Close()
 		e.srv = nil
 	}
+}
+
+// lockedBuf is a log sink that tests can read while the server writes.
+type lockedBuf struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuf) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (e *env) logs() string {
+	e.log.mu.Lock()
+	defer e.log.mu.Unlock()
+	return e.log.b.String()
 }
 
 // restart simulates a server restart on the same database.
@@ -815,5 +837,41 @@ func TestSNMPOffAndCommunities(t *testing.T) {
 	b, _ := io.ReadAll(resp.Body)
 	if strings.Contains(string(b), "s3cret") {
 		t.Errorf("the community is shown: %s", b)
+	}
+}
+
+// TC-330: PATCH /views/{id} sets a custom view's list (only the count comes
+// back, and in the log); the network view and a bad list are 400; a host
+// placed there says "view N".
+func TestViewCommunitiesAPI(t *testing.T) {
+	e := newEnv(t, "")
+	var h apitypes.Host
+	var v apitypes.View
+	e.want(201, "POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1"}, &h)
+	e.want(201, "POST", "/views", apitypes.ViewCreate{Name: "switches"}, &v)
+	e.want(200, "PUT", "/views/"+itoa(v.ID)+"/hosts/"+itoa(h.ID), apitypes.PlacementSet{}, nil)
+	e.want(200, "PATCH", "/views/"+itoa(v.ID), `{"snmp_communities":["s3cret","two"]}`, &v)
+	if v.SNMPCommunitiesSet != 2 {
+		t.Errorf("view: %+v", v)
+	}
+	e.wantErr(400, apitypes.CodeInvalidArgument, "PATCH", "/views/1", `{"snmp_communities":["x"]}`)
+	e.wantErr(400, apitypes.CodeInvalidArgument, "PATCH", "/views/"+itoa(v.ID), `{"snmp_communities":[""]}`)
+	e.want(200, "GET", "/hosts/"+itoa(h.ID), nil, &h)
+	if h.SNMPCommunitiesFrom != "view "+itoa(v.ID) {
+		t.Errorf("host from %q", h.SNMPCommunitiesFrom)
+	}
+	for _, u := range []string{"/views", "/views/" + itoa(v.ID), "/hosts/" + itoa(h.ID)} {
+		resp, err := http.Get(e.srv.URL + "/api/v1" + u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if strings.Contains(string(b), "s3cret") {
+			t.Errorf("%s shows the community: %s", u, b)
+		}
+	}
+	if strings.Contains(e.logs(), "s3cret") || !strings.Contains(e.logs(), "SNMP communities set") {
+		t.Errorf("log: %s", e.logs())
 	}
 }

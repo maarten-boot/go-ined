@@ -1336,7 +1336,7 @@
           },
           "snmp_communities_from": {
             "type": "string",
-            "description": "Where the community list used for the host comes from: \"host\", \"group 12\" or \"server\" (SPEC-315)"
+            "description": "Where the community list used for the host comes from: \"host\", \"view 5\", \"group 12\" or \"server\" (SPEC-315)"
           },
           "x": {
             "type": "number",
@@ -1722,7 +1722,7 @@
               "maxLength": 255
             },
             "maxItems": 10,
-            "description": "Replaces the SNMP community strings set here (SPEC-315); [] = inherit (the nearest group's, else the server's). Write-only: never read back. 400 when more than 10, empty, longer than 255 bytes or given twice"
+            "description": "Replaces the SNMP community strings set here (SPEC-315); [] = inherit (a view's, the nearest group's, else the server's). Write-only: never read back. 400 when more than 10, empty, longer than 255 bytes or given twice"
           }
         },
         "additionalProperties": false
@@ -1836,7 +1836,7 @@
               "maxLength": 255
             },
             "maxItems": 10,
-            "description": "Replaces the SNMP community strings set here (SPEC-315); [] = inherit (the nearest group's, else the server's). Write-only: never read back. 400 when more than 10, empty, longer than 255 bytes or given twice; 400 on a group of a custom view"
+            "description": "Replaces the SNMP community strings set here (SPEC-315); [] = inherit (a view's, the nearest group's, else the server's). Write-only: never read back. 400 when more than 10, empty, longer than 255 bytes or given twice; 400 on a group of a custom view"
           },
           "x": {
             "type": "number",
@@ -1901,6 +1901,10 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "snmp_communities_set": {
+            "type": "integer",
+            "description": "How many SNMP community strings are set on the view (custom views only; SPEC-315, v0.69); the strings are never shown"
           }
         },
         "additionalProperties": false,
@@ -1910,7 +1914,8 @@
           "kind",
           "order",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "snmp_communities_set"
         ]
       },
       "ViewCreate": {
@@ -1940,6 +1945,16 @@
           "order": {
             "type": "integer",
             "format": "int64"
+          },
+          "snmp_communities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "maxItems": 10,
+            "description": "Replaces the SNMP community strings of a custom view (SPEC-315, v0.69), used by the hosts placed in it that have none of their own; with several views, the first in tab order wins. [] = inherit. Write-only: never read back. 400 on the network view, and as for groups"
           }
         },
         "additionalProperties": false

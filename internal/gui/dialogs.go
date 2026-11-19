@@ -536,7 +536,7 @@ func (g *GUI) viewMenuItems() []*fyne.MenuItem {
 	left.Disabled, right.Disabled = i == 0, i >= len(views)-1
 	del.Disabled = cur.ID == mapmodel.NetworkView || cur.ID == 0
 	cur2 := cur.ID
-	return []*fyne.MenuItem{
+	items := []*fyne.MenuItem{
 		fyne.NewMenuItem("New view…", func() { g.newViewDialog() }),
 		fyne.NewMenuItem("Rename view…", func() { g.renameViewDialog() }),
 		left, right,
@@ -547,8 +547,12 @@ func (g *GUI) viewMenuItems() []*fyne.MenuItem {
 			}
 			g.reflowDialog(cur2, nil)
 		}),
-		fyne.NewMenuItemSeparator(), del,
 	}
+	if cur.Kind == apitypes.ViewCustom {
+		// For the hosts placed in it (SPEC-737 v0.69, Design-snmp-views.md V1).
+		items = append(items, g.communitiesItem("view", cur.ID, cur.Name))
+	}
+	return append(items, fyne.NewMenuItemSeparator(), del)
 }
 
 func (g *GUI) newViewDialog() *formDialog {

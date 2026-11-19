@@ -285,16 +285,27 @@ func dash(s string) string {
 func (a *app) viewTable(vs []apitypes.View) {
 	rows := make([][]string, len(vs))
 	for i, v := range vs {
-		rows[i] = []string{id(v.ID), v.Name, v.Kind, strconv.FormatInt(v.Order, 10)}
+		rows[i] = []string{id(v.ID), v.Name, v.Kind, strconv.FormatInt(v.Order, 10), viewCommunitiesText(v)}
 	}
-	a.table("ID\tNAME\tKIND\tORDER", rows) // in tab order, as the API lists them
+	a.table("ID\tNAME\tKIND\tORDER\tCOMMUNITIES", rows) // in tab order, as the API lists them
 }
 
 func (a *app) viewDetails(v apitypes.View) {
 	a.details([][2]string{
 		{"ID", id(v.ID)}, {"Name", v.Name}, {"Kind", v.Kind}, {"Order", strconv.FormatInt(v.Order, 10)},
+		{"Communities", viewCommunitiesText(v)},
 		{"Created", v.CreatedAt.Local().Format(time.DateTime)}, {"Updated", v.UpdatedAt.Local().Format(time.DateTime)},
 	}, false)
+}
+
+// viewCommunitiesText is a view's "Communities": "2 set here", "none set
+// here", or "-" for the network view, which can't have a list (SPEC-315
+// v0.69).
+func viewCommunitiesText(v apitypes.View) string {
+	if v.Kind != apitypes.ViewCustom {
+		return "-"
+	}
+	return communitiesText(v.SNMPCommunitiesSet, "")
 }
 
 // viewHosts prints the hosts of a view's map, sorted by ID.

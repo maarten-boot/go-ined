@@ -80,6 +80,16 @@ func (s *Service) UpdateView(ctx context.Context, id int64, p apitypes.ViewPatch
 	if p.Order.Set {
 		v.Order = p.Order.Value
 	}
+	if p.SNMPCommunities.Set {
+		if v.Kind != apitypes.ViewCustom {
+			return apitypes.View{}, invalidf("SNMP community strings can be set on custom views only; for all hosts the server has snmp.communities")
+		}
+		l, err := communityList(p.SNMPCommunities.Value)
+		if err != nil {
+			return apitypes.View{}, err
+		}
+		v.SNMPCommunities = l
+	}
 	v.UpdatedAt = s.stamp()
 	if err := s.repo.Apply(ctx, Changes{Views: []View{v}}); err != nil {
 		return apitypes.View{}, err
@@ -224,7 +234,8 @@ func (s *Service) unplace(k PlacementKey) {
 }
 
 func viewView(v *View) apitypes.View {
-	return apitypes.View{ID: v.ID, Name: v.Name, Kind: v.Kind, Order: v.Order, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
+	return apitypes.View{ID: v.ID, Name: v.Name, Kind: v.Kind, Order: v.Order, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt,
+		SNMPCommunitiesSet: len(v.SNMPCommunities)}
 }
 
 func placementView(p *Placement) apitypes.Placement {

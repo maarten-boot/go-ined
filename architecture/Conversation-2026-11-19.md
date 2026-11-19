@@ -100,4 +100,13 @@
      - The first C1 test held the request rather than the server's answer, so it passed without the fix. It was changed to hold the answer, and now fails without the fix.
      - One test edit didn't match its anchor and was written as a new test instead.
    - The speed probe of the server reviewer has ended by itself.
+17. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `a9cdba1`, `fix/crosscheck-19-04` at `a7eaca4`) and wrote `Crosscheck-2026-11-19-05.md`:
+   - One reviewer with read-only access; its probes had to end before it reported.
+   - Every fix of 2026-11-19-04 works, and the new tests passed 15 runs in a row.
+   - Findings: 0 H, 1 M, 5 L, 1 P.
+     - C1: an older `show()` answer can replace newer data in the details pane. Claude confirmed it in the code; part of it existed before.
+     - The reviewer reported a second M: a group's dialog stays open when its view is deleted. Claude found that the GUI offers the dialog only for network-view groups, and the network view can't be deleted, so it is L5.
+   - CI on `main` @ `a9cdba1` green.
+   - Decisions asked: D1 C1; D2 L1, L3–L5, P1.
 

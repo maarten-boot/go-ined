@@ -128,4 +128,8 @@
    - Findings: 1 H, 0 M, 2 L, 1 P.
    - CI on `main` @ `4cc2539` green.
    - Decisions asked: D1 C1; D2 L1, L2, P1.
+22. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `f4e0b30`) and fixed the crosscheck on `fix/crosscheck-19-07` (`3083d9c`, merged as `ed4b352`; see its section 7). Spec v0.73.
+   - A new selection now empties and disables the note and Save until its note is in.
+   - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. Both new tests fail without their fix.
 

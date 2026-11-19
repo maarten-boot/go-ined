@@ -180,6 +180,9 @@ type details struct {
 	// sets it (crosscheck 2026-11-19-06 L1, 2026-11-19-07 C1).
 	noteSet bool
 	answers int // show() answers handled, applied or dropped (tests)
+	// saving is the text of each item's save on its way (crosscheck
+	// 2026-11-19-09 L1).
+	saving map[mapmodel.Key]string
 }
 
 func newDetails(g *GUI) *details {
@@ -410,6 +413,9 @@ func (d *details) warnUnsaved() {
 	if d.key == nil || !d.noteSet || d.note.Text == d.lastNote {
 		return
 	}
+	if t, ok := d.saving[*d.key]; ok && t == d.note.Text {
+		return // being saved (L1)
+	}
 	d.g.status.message(fmt.Sprintf("Note of %s %d not saved", d.key.Type, d.key.ID))
 }
 
@@ -439,6 +445,7 @@ func (d *details) setNote(n string, force bool) {
 		d.note.SetText(n)
 	}
 	d.lastNote, d.noteSet = n, true
+	d.note.SetPlaceHolder("Note") // also after "Note not loaded" (crosscheck 2026-11-19-09 L2)
 	d.note.Enable()
 	d.save.Enable()
 }
@@ -763,7 +770,13 @@ func (d *details) saveNote() {
 	if d.key == nil || !d.noteSet { // not before the selection's note is in (C1)
 		return
 	}
-	k, text, g := *d.key, d.note.Text, d.g
+	// before: the note as loaded when the save starts; the answer touches
+	// the field only while it is still that (crosscheck 2026-11-19-09 C1).
+	k, text, before, g := *d.key, d.note.Text, d.lastNote, d.g
+	if d.saving == nil {
+		d.saving = map[mapmodel.Key]string{}
+	}
+	d.saving[k] = text
 	go func() {
 		var err error
 		if k.Type == apitypes.TypeHost {
@@ -772,11 +785,16 @@ func (d *details) saveNote() {
 			_, err = g.c.UpdateGroup(g.ctx, k.ID, apitypes.GroupPatch{Note: apitypes.Some(text)})
 		}
 		g.do(func() {
+			if d.saving[k] == text {
+				delete(d.saving, k)
+			}
 			if err != nil {
 				g.status.message(fmt.Sprintf("note of %s %d not saved: %v", k.Type, k.ID, err))
 				return
 			}
-			if d.key != nil && *d.key == k && d.noteSet { // still that item (crosscheck 2026-11-19-08 C2)
+			// Still that item, and no newer note came since the save
+			// started (an event of this save or of another client's).
+			if d.key != nil && *d.key == k && d.noteSet && d.lastNote == before { // crosscheck 2026-11-19-08 C2, -09 C1
 				if d.note.Text == d.lastNote {
 					// Unedited since it was shown, perhaps loaded again
 					// before the save landed: show what was saved.

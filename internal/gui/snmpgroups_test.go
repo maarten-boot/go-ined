@@ -703,3 +703,60 @@ func TestNoteSaveLandsAfterSwitch(t *testing.T) {
 		t.Errorf("host one's note is %q", got)
 	}
 }
+
+// TC-759 (crosscheck 2026-11-19-09 C1, L1, L2): a save's late answer
+// doesn't bring its text back over a newer note from another client; a
+// switch while the save is on its way gives no "not saved"; a note set
+// after "Note not loaded" gets the placeholder "Note" back.
+func TestNoteOlderSaveAnswer(t *testing.T) {
+	tr := &hookTransport{holdMethod: http.MethodPatch, seen: make(chan struct{}, 4), release: make(chan struct{})}
+	e := hookedEnv(t, testserver.Options{}, tr)
+	c, ctx := e.c, e.ctx
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Note: "A", X: ptr(100.0), Y: ptr(100.0)}))
+	h2 := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", X: ptr(300.0), Y: ptr(100.0)}))
+	tr.holdPath = "/api/v1/hosts/" + strconv.FormatInt(h.ID, 10)
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h2.ID) != nil })
+	k, k2 := mapmodel.HostKey(h.ID), mapmodel.HostKey(h2.ID)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	eventually(t, e.ui, "shown", func() bool { return g.details.note.Text == "A" })
+	tr.hold.Store(true)
+	e.ui.Wait(func() { g.details.note.SetText("X"); g.details.saveNote() })
+	<-tr.seen // the save's answer is held; the server has X
+	tr.hold.Store(false)
+	must(c.UpdateHost(ctx, h.ID, apitypes.HostPatch{Note: apitypes.Some("B")})) // another client
+	eventually(t, e.ui, "B shown", func() bool { return g.details.note.Text == "B" })
+	close(tr.release)
+	eventually(t, e.ui, "saved", func() bool { return strings.Contains(g.status.Text(), fmt.Sprintf("note of host %d saved", h.ID)) })
+	e.ui.Wait(func() {
+		if g.details.note.Text != "B" || g.details.lastNote != "B" {
+			t.Errorf("an older save's answer came back: field %q, loaded %q", g.details.note.Text, g.details.lastNote)
+		}
+	})
+
+	// L1: save, then another host at once: no "not saved".
+	tr2 := make(chan struct{})
+	tr.release, tr.seen = tr2, make(chan struct{}, 4)
+	tr.hold.Store(true)
+	e.ui.Wait(func() { g.details.note.SetText("Y"); g.details.saveNote() })
+	<-tr.seen
+	tr.hold.Store(false)
+	e.ui.Wait(func() {
+		g.details.show(1, &k2)
+		if strings.Contains(g.status.Text(), "not saved") {
+			t.Errorf("warned while saving: %q", g.status.Text())
+		}
+	})
+	close(tr2)
+	eventually(t, e.ui, "Y saved", func() bool { return must(c.Host(ctx, h.ID)).Note == "Y" })
+
+	// L2: the placeholder comes back with a note.
+	e.ui.Wait(func() {
+		g.details.note.SetPlaceHolder("Note not loaded; select the item again")
+		g.details.setNote("n", true)
+		if g.details.note.PlaceHolder != "Note" {
+			t.Errorf("placeholder %q", g.details.note.PlaceHolder)
+		}
+	})
+}

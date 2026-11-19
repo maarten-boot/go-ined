@@ -217,15 +217,20 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		if h != nil {
 			items = append(items, g.connectItem(h))
 		}
+		oneHost := !onSelection || len(selectedHosts(sel)) == 1
 		if onSelection && len(sel) > 1 {
 			// A check of every selected host, and of the hosts below the
 			// selected groups, as a job (SPEC-737; crosscheck 2026-11-19-01 L10).
 			g.mu.Lock()
 			in, n := g.checkTarget(view, k, sel, true)
 			g.mu.Unlock()
-			items = append(items, g.snmpCheckItem(in, n))
-		} else if h != nil {
-			items = append(items, g.checkSNMPItem(*h), g.communitiesItem("host", h.ID, h.DisplayName)) // one host (crosscheck 2026-11-18-03 L7)
+			if !oneHost || n != 1 { // not the same as the direct check below
+				items = append(items, g.snmpCheckItem(in, n))
+			}
+		}
+		if h != nil && oneHost {
+			// One host, also with groups selected (crosscheck 2026-11-19-02 L5).
+			items = append(items, g.checkSNMPItem(*h), g.communitiesItem("host", h.ID, h.DisplayName)) // crosscheck 2026-11-18-03 L7
 		}
 		if remove != nil {
 			items = append(items, remove)

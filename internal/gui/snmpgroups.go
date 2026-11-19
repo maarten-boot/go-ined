@@ -2,7 +2,9 @@ package gui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -102,7 +104,7 @@ func (g *GUI) registerSNMPCheck(j apitypes.SNMPCheck) {
 	if seen, ok := g.snmpSeen[j.ID]; ok && (seen.Checked > j.Checked || seen.State != apitypes.DiscoveryRunning) {
 		j = seen
 	}
-	delete(g.snmpSeen, j.ID)
+	g.forgetSeen(j.ID)
 	if j.State == apitypes.DiscoveryRunning {
 		g.snmpJobs[j.ID] = true
 		g.refreshSNMPCheck(j.ID)
@@ -111,15 +113,21 @@ func (g *GUI) registerSNMPCheck(j apitypes.SNMPCheck) {
 }
 
 // refreshSNMPCheck reads a job and shows it, if this GUI still follows it.
+// Only "not found" ends following it (the server restarted); after another
+// error the job may still run, so Cancel stays and the next event or
+// refresh settles it (crosscheck 2026-11-19-02 C2).
 func (g *GUI) refreshSNMPCheck(id string) {
 	go func() {
 		j, err := g.c.SNMPCheck(g.ctx, id)
 		g.do(func() {
+			var ae *client.APIError
 			switch {
 			case !g.snmpJobs[id]:
-			case err != nil: // gone (the server restarted): stop following it
+			case errors.As(err, &ae) && ae.Status == http.StatusNotFound:
 				delete(g.snmpJobs, id)
 				g.showSNMPCheck(apitypes.SNMPCheck{ID: id, State: apitypes.DiscoveryCancelled})
+			case err != nil:
+				g.status.message(fmt.Sprintf("SNMP check %s: not read: %v", id, err))
 			default:
 				g.showSNMPCheck(j)
 			}
@@ -192,14 +200,39 @@ func (g *GUI) onSNMPCheckEvent(ev client.Event) {
 	}
 	if !g.snmpJobs[j.ID] {
 		// Perhaps one this GUI just started, whose answer is still on its
-		// way: kept for registerSNMPCheck (C1); a few at most.
-		if len(g.snmpSeen) > 50 {
-			clear(g.snmpSeen)
-		}
-		g.snmpSeen[j.ID] = j
+		// way: kept for registerSNMPCheck (C1).
+		g.keepSeen(j)
 		return
 	}
 	g.showSNMPCheck(j)
+}
+
+// maxSeen is how many events of jobs not followed here are kept.
+const maxSeen = 50
+
+// keepSeen keeps the newest event of a job: events are sent outside the
+// job's lock, so an older one can come last (crosscheck 2026-11-19-02 L1).
+// When full, the oldest job is dropped, not all (L2).
+func (g *GUI) keepSeen(j apitypes.SNMPCheck) {
+	if old, ok := g.snmpSeen[j.ID]; ok {
+		if old.State == apitypes.DiscoveryRunning && (j.State != apitypes.DiscoveryRunning || j.Checked >= old.Checked) {
+			g.snmpSeen[j.ID] = j
+		}
+		return
+	}
+	if len(g.snmpSeenIDs) >= maxSeen {
+		delete(g.snmpSeen, g.snmpSeenIDs[0])
+		g.snmpSeenIDs = slices.Delete(g.snmpSeenIDs, 0, 1)
+	}
+	g.snmpSeen[j.ID] = j
+	g.snmpSeenIDs = append(g.snmpSeenIDs, j.ID)
+}
+
+func (g *GUI) forgetSeen(id string) {
+	if _, ok := g.snmpSeen[id]; ok {
+		delete(g.snmpSeen, id)
+		g.snmpSeenIDs = slices.DeleteFunc(g.snmpSeenIDs, func(s string) bool { return s == id })
+	}
 }
 
 // communitiesText is the details row (SPEC-737): "2 set here", "from
@@ -240,6 +273,8 @@ type communitiesDialog struct {
 	rows    *fyne.Container
 	entries []*widget.Entry
 	save    func([]string)
+	busy    []fyne.Disableable // disabled while saving (crosscheck 2026-11-19-02 C3)
+	closed  bool               // closed with Cancel, perhaps while saving
 }
 
 func (g *GUI) openCommunities(kind string, id int64, name string) {
@@ -304,8 +339,12 @@ func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, fro
 			return
 		}
 		// The dialog stays open until the server took the list, so nothing
-		// typed is lost on an error (L9).
+		// typed is lost on an error (L9). Save, Inherit and Add wait for
+		// the answer: no second save (crosscheck 2026-11-19-02 C3).
 		cd.info.SetText("Saving…")
+		for _, b := range cd.busy {
+			b.Disable()
+		}
 		go func() {
 			var err error
 			var text string
@@ -321,7 +360,14 @@ func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, fro
 				}
 			}
 			g.do(func() {
-				if err != nil {
+				for _, b := range cd.busy {
+					b.Enable()
+				}
+				switch {
+				case err != nil && cd.closed: // Cancel came first: say it where it is seen (C3)
+					g.status.message(fmt.Sprintf("SNMP communities of %s not saved: %v", what, err))
+					return
+				case err != nil:
 					cd.info.SetText("Not saved: " + err.Error())
 					return
 				}
@@ -336,8 +382,10 @@ func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, fro
 	saveB := widget.NewButton("Save", func() {
 		var list []string
 		for _, e := range cd.entries {
-			if s := strings.TrimSpace(e.Text); s != "" { // L9
-				list = append(list, s)
+			// As typed: spaces at the ends may belong to the string; only
+			// empty rows are left out (crosscheck 2026-11-19-02 L3).
+			if strings.TrimSpace(e.Text) != "" {
+				list = append(list, e.Text)
 			}
 		}
 		if len(list) == 0 {
@@ -348,7 +396,8 @@ func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, fro
 	})
 	saveB.Importance = widget.HighImportance
 	inherit := widget.NewButton("Inherit", func() { cd.save([]string{}) })
-	cancel := widget.NewButton("Cancel", func() { cd.d.Hide(); g.commDialog = nil })
+	cancel := widget.NewButton("Cancel", func() { cd.closed = true; cd.d.Hide(); g.commDialog = nil })
+	cd.busy = []fyne.Disableable{add, inherit, saveB}
 	body := container.NewBorder(cd.info, container.NewHBox(add, inherit, cancel, saveB), nil, nil, container.NewVScroll(cd.rows))
 	cd.d = dialog.NewCustomWithoutButtons("SNMP communities of "+what, body, g.win)
 	cd.d.Resize(fyne.NewSize(460, 320))

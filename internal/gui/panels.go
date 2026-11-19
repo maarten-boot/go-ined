@@ -442,6 +442,27 @@ func (d *details) reload() {
 	}()
 }
 
+// above reports whether a network-view group lies above the shown host.
+// The model already has the event applied, so a group moved to a new parent
+// counts where it is now. Without the network view loaded it answers true:
+// one reload too many is cheap.
+func (d *details) above(group int64) bool {
+	if d.host == nil || d.host.ParentID == nil {
+		return false
+	}
+	d.g.mu.Lock()
+	defer d.g.mu.Unlock()
+	if !d.g.model.Loaded(mapmodel.NetworkView) {
+		return true
+	}
+	for _, it := range d.g.model.Trail(mapmodel.NetworkView, *d.host.ParentID) {
+		if it.ID == group {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *details) refreshParent() {
 	if d.host != nil || d.group != nil {
 		d.fill()
@@ -611,6 +632,14 @@ func (d *details) onEvent(ev client.Event) {
 		var g apitypes.Group
 		if json.Unmarshal(ev.Data, &g) == nil && k == mapmodel.GroupKey(g.ID) {
 			d.setGroup(g, false)
+		}
+		if g.ViewID == mapmodel.NetworkView && d.above(g.ID) {
+			d.reload() // where its SNMP list comes from may have changed (crosscheck 2026-11-19-02 C1)
+		}
+	case apitypes.EventGroupMoved:
+		var m apitypes.GroupMovedEvent
+		if json.Unmarshal(ev.Data, &m) == nil && m.ViewID == mapmodel.NetworkView && d.above(m.ID) {
+			d.reload() // also for a group moved elsewhere (L4)
 		}
 	case apitypes.EventGroupStatus:
 		var s apitypes.GroupStatusEvent

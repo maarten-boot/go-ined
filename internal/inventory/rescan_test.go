@@ -302,8 +302,13 @@ func TestCommunitiesHostEvents(t *testing.T) {
 	if _, err := s.UpdateGroup(ctx, lab.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{"x"})}); err != nil {
 		t.Fatal(err)
 	}
-	if ev := r.take(); !strings.Contains(ev, fmt.Sprintf("host.updated %d", h.ID)) || strings.Count(ev, "host.updated") != 1 {
+	// One group.updated, no host.updated per host below it (crosscheck
+	// 2026-11-19-02 C1); the host's origin is read back on request.
+	if ev := r.take(); strings.Contains(ev, "host.updated") || !strings.Contains(ev, fmt.Sprintf("group.updated %d", lab.ID)) {
 		t.Errorf("events: %s", ev)
+	}
+	if v, err := s.Host(h.ID); err != nil || v.SNMPCommunitiesFrom != fmt.Sprintf("group %d", lab.ID) {
+		t.Errorf("host after the group's list: %+v %v", v.SNMPCommunitiesFrom, err)
 	}
 	s.UpdateGroup(ctx, lab.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{"x"})})
 	if ev := r.take(); strings.Contains(ev, "host.updated") {

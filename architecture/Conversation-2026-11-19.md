@@ -157,4 +157,10 @@
    **Claude** checked the push (`main` and `docs/architecture` at `7b8f21a`) and fixed the crosscheck on `fix/crosscheck-19-09` (`d34ba47`, merged as `694431b`; see its section 7). Spec v0.75.
    - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass.
    - On the way: the first mutation check of C1 didn't compile (an unused variable), so it seemed to pass. Redone, the test fails 3 of 3 runs without the fix.
+27. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `89f8043`, `fix/crosscheck-19-09` at `d34ba47`) and wrote `Crosscheck-2026-11-19-10.md`:
+   - One reviewer with read-only access.
+   - Findings: no H or M, 3 L.
+   - CI on `main` @ `89f8043` green.
+   - The user ended the session (`/exit`) before the report. Claude wrote the crosscheck when CI finished, so it is on file for the next session. Nothing is pushed yet.
 

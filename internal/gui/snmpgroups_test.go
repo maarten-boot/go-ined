@@ -497,9 +497,17 @@ func TestDetailsOlderShowAnswerDropped(t *testing.T) {
 	eventually(t, e.ui, "description from the event", func() bool { return strings.Contains(formText(g.details), "core switch") })
 	must(c.PlaceHost(ctx, v.ID, h.ID, apitypes.PlacementSet{}))
 	eventually(t, e.ui, "views from the reload", func() bool { return strings.Contains(formText(g.details), "Views\nNetworks, switches") })
-	close(tr.release)
-	time.Sleep(300 * time.Millisecond) // the held answer is applied, or dropped, by now
+	var before int
 	e.ui.Wait(func() {
+		before = g.details.answers
+		g.details.note.SetText("typed after the event") // kept (crosscheck 2026-11-19-06 L1)
+	})
+	close(tr.release)
+	eventually(t, e.ui, "held answer handled", func() bool { return g.details.answers > before }) // no fixed wait (L2)
+	e.ui.Wait(func() {
+		if g.details.note.Text != "typed after the event" {
+			t.Errorf("the note typed while loading is gone: %q", g.details.note.Text)
+		}
 		if txt := formText(g.details); !strings.Contains(txt, "core switch") || !strings.Contains(txt, "Views\nNetworks, switches") {
 			t.Errorf("an older answer replaced newer data:\n%s", txt)
 		}

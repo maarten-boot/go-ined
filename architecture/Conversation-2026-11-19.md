@@ -28,3 +28,14 @@
    - **Fixed on the way:** a data race the new tests found (the progress throttle of a job was shared between goroutines), and a list order that depended on equal start times.
    - **Tests:** the full Go suite with `-race`, staticcheck v0.8.2, `make nogui-check` and the 65 Python tests pass.
    - **Docs:** Spec v0.65 (SPEC-315, 515, 737, and the additions to SPEC-312, 502, 804, 901); TC-328, 329, 758, 910; Changes; README; API examples; design status.
+6. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `aa2be31`, `feature/snmp-groups` at `e7e0238`) and wrote `Crosscheck-2026-11-19-01.md`:
+   - Two reviewers with read-only access: (1) the server side, (2) the GUI, `inedctl` and the docs.
+   - Findings: 2 H, 2 M, 12 L, 1 P. No leak of a community string was found.
+     - C1: the GUI's "Cancel SNMP check" can stay for good when the finished event comes before the start answer.
+     - C2: `inedctl --json snmp check --wait` exits 1 at once.
+     - C3: a changed list is lost for hosts past the concurrency limit.
+     - C4: the group menu's host count is quadratic, under the GUI's lock.
+     - Claude repeated C2 and C4 with probes, and checked C1 and C3 in the code, with the reviewers' probes.
+   - CI on `main` @ `aa2be31` green.
+   - Decisions asked: D1 C1–C4; D2 L1–L4, L6–L11, P1.

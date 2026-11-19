@@ -58,3 +58,11 @@
    - The server no longer sends one event per host for a group's new list; the GUI reads the shown host again when a group above it changes or moves.
    - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. The new C1 test fails against the old GUI code, as it should.
    - A first C2 test swapped the GUI's context while a goroutine could read it, which would race; it was replaced before the run by a test against a server with SNMP off (503).
+10. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `55ddfb8`, `fix/crosscheck-19-02` at `e04ec30`) and CI on `main` (green, all 8 jobs), and wrote `Crosscheck-2026-11-19-03.md`:
+   - One reviewer with read-only access. Every fix of 2026-11-19-02 works.
+   - Findings: 0 H, 2 M, 5 L, 1 P.
+     - C1: an ancestor group's event while the details pane loads another item can show a host under a group's title. Claude reproduced it with its own probe (2 of 4 runs).
+     - C2: a 503 from the server (SNMP off after a restart) keeps a check followed for good, with its Cancel button.
+   - Decisions asked: D1 C1, C2; D2 L1–L5, P1.
+

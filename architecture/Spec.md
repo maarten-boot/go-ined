@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.66** (2026-11-19)
+Status: **draft v0.67** (2026-11-19)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -109,6 +109,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - **Write-only (G5a):** the strings are never read back, not in the API (not even with the full token), events, the export file or the log. Host JSON has `snmp_communities_set` (how many are set on it) and `snmp_communities_from` (`"host"`, `"group 12"` or `"server"`); group JSON has `snmp_communities_set`.
   - **Effect:** when the list a host's agent was looked for with changes (set on it or a group, or the host moved below another group), it is looked for again at once, as on request.
   - **v0.66 (crosscheck 2026-11-19-01):** a group's new list also sends `host.updated` for the hosts below it, with their new origin (L3). The new list is recorded for a host only when its search starts, so hosts beyond `snmp.concurrency` get theirs at a later tick, not never (C3). A host that may no longer be asked (it left `networks`, or its list was removed) keeps its last agent until it is changed or checked (L5, noted).
+  - **v0.67 (crosscheck 2026-11-19-02):** a group's new list sends only `group.updated`, no `host.updated` per host below it: a big group overflowed the clients' event buffers and made them all resync (C1). Clients that show a host's origin read the host again on a `group.updated` or `group.moved` of a network-view group above it, which also covers a group moved elsewhere (L4). The GUI's dialog and `inedctl`'s stdin keep each string as typed, spaces at the ends too, and leave out only blank lines (stdin also drops the CR of a Windows line end); `inedctl`'s comma list `a, b` is still trimmed (L3).
 
 ## 7. Reverse DNS
 - **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20). It uses Go's resolver (the system's DNS settings), with 5 s per lookup. At startup, the refreshes of the existing hosts are spread across `dns.refresh`. A changed name is saved and emits `host.updated`. When a host's IP changes, its PTR name is cleared at once and looked up again (v0.11). `dns.enabled = false` turns reverse DNS off; PTR names then stay as stored (v0.11).
@@ -223,6 +224,11 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
     - **Counting:** the hosts are counted with one pass over the group's subtree (C4).
     - **The dialog** stays open until the server took the list, and shows the reason when it didn't. It trims what is typed, and says "At most 10 strings." at the limit (L9).
     - **The button** reads "Cancel SNMP checks" while more than one runs (L11).
+  - **v0.67 (crosscheck 2026-11-19-02):**
+    - **Details:** a shown host is read again when a network-view group above it is updated or moved, so its "SNMP communities" row follows a group's list without per-host events (C1, L4).
+    - **Following a check:** only "not found" (the server restarted) ends following a job; after another error of its refresh the job stays followed with its Cancel button, and the status bar says "SNMP check <id>: not read: …" (C2). Of a job's early events the newest is kept (most hosts checked, or the end) (L1); at 50 jobs the oldest is dropped, not all (L2).
+    - **The dialog** disables Save, Inherit and Add while it saves. After Cancel, a failed save is reported in the status bar (C3). It keeps what is typed, spaces at the ends too; it no longer trims (L3).
+    - **One host and groups selected:** the host's menu keeps "Check SNMP now" and "SNMP communities…"; the job item is left out when it would check that host alone (L5).
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.
@@ -278,7 +284,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - `group export <id> [-o FILE]` and `import FILE|- [--parent ID] [--x X --y Y] [--dry-run] [--update]` (SPEC-905, v0.53)
   - `group rescan <id> INTERVAL|off` (SPEC-206, v0.57; `group show` has a row "Rescan: every 24h, last 03:15, 2 new") and `discover list` (every job, scheduled ones marked "(scheduled)", also in `discover status` and the events) (v0.57)
   - `host snmp <id> [--check]` (SPEC-312, 313, v0.60): the agent's system values and latest values; `--check` looks now. `host show` has a row "SNMP: v2c · web · CPU 13 %, memory 63 %, / 91 %" ("not checked yet", "no answer (checked …)"). `events` shows `snmp.values` as "host 1 10.0.1.5 web CPU 13 %, memory 63 %, / 91 %"
-  - `host snmp-communities <id> LIST|-|--clear` and `group snmp-communities <id> LIST|-|--clear` (SPEC-315, v0.65): `a,b`, or `-` for one per line on stdin (kept out of the shell history); `--clear` inherits; prints only "2 set here" or where the list comes from; `host show` and `group show` have a row "Communities". `snmp check --group ID | HOST-ID... [--wait]`, `snmp list`, `snmp status <id>`, `snmp cancel <id>` (SPEC-515); `--wait` follows the job and exits 1 when it is cancelled (v0.66: entries are trimmed, so `a, b` is `a` and `b`; `--json` with `--wait` prints one JSON line at the start and one at the end; a custom-view group's row says "– (custom view)")
+  - `host snmp-communities <id> LIST|-|--clear` and `group snmp-communities <id> LIST|-|--clear` (SPEC-315, v0.65): `a,b`, or `-` for one per line on stdin (kept out of the shell history); `--clear` inherits; prints only "2 set here" or where the list comes from; `host show` and `group show` have a row "Communities". `snmp check --group ID | HOST-ID... [--wait]`, `snmp list`, `snmp status <id>`, `snmp cancel <id>` (SPEC-515); `--wait` follows the job and exits 1 when it is cancelled (v0.66: entries are trimmed, so `a, b` is `a` and `b`; `--json` with `--wait` prints one JSON line at the start and one at the end; a custom-view group's row says "– (custom view)"; v0.67: lines from stdin are kept as typed, blank lines left out, L3)
 
   The server URL and token come from SPEC-805.
 

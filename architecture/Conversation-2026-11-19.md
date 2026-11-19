@@ -53,3 +53,8 @@
      - Claude checked all three in the code.
    - CI on `main` @ `7993040` green.
    - Decisions asked: D1 C1–C3; D2 L1–L5, P1.
+9. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `8e0e2ed`) and fixed the crosscheck on `fix/crosscheck-19-02` (merged as `b3e0b87`; see its section 7). Spec v0.67.
+   - The server no longer sends one event per host for a group's new list; the GUI reads the shown host again when a group above it changes or moves.
+   - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass. The new C1 test fails against the old GUI code, as it should.
+   - A first C2 test swapped the GUI's context while a goroutine could read it, which would race; it was replaced before the run by a test against a server with SNMP off (503).

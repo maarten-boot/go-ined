@@ -9,7 +9,7 @@ The database gets schemas 10 and 11 (a column on groups, hosts and views); a 0.8
 ### Added
 - "Check SNMP now (N hosts)" on a group (with its subgroups) and on a selection of hosts in `ined-gui`: the server checks them as a job, the status bar shows the progress with a "Cancel SNMP check" button, and the end says how many answered. `inedctl snmp check --group ID [--wait]` does the same.
 - SNMP community strings per network group and per host: "SNMP communities…" in `ined-gui`, `inedctl group|host snmp-communities <id> a,b` (or `-` to read them from stdin), or the API. A host uses its own list, else the nearest group's, else the server's; a list you set is also used outside `[snmp] networks`. The strings are never shown again: the details say "2 set here", "from group lab" or "the server's list".
-- SNMP community strings per custom view, for views of hosts of one kind (switches, printers): "SNMP communities…" in the View menu of `ined-gui`, `inedctl view snmp-communities <id> a,b`, or `PATCH /views/{id}`. Hosts placed in the view that have no list of their own use it ("from view switches"); it comes before the network group's list, and with several views the first tab wins.
+- SNMP community strings per custom view, for views of hosts of one kind (switches, printers): "SNMP communities…" in the View menu of `ined-gui`, `inedctl view snmp-communities <id> a,b`, or `PATCH /views/{id}`. Hosts placed in the view that have no list of their own use it ("from view switches"); it comes before the network group's list, and with several views the first tab wins. `inedctl view list` has a new last column, COMMUNITIES; scripts can use `--json`.
 
 ## [0.8.0] - 2026-11-18
 

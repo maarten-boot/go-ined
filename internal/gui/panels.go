@@ -169,8 +169,9 @@ type details struct {
 
 	view     int64
 	key      *mapmodel.Key
-	seq      int // ignores answers for an older selection
-	reloads  int // ignores answers of an older reload (crosscheck 2026-11-19-03 L2)
+	seq      int  // ignores answers for an older selection
+	reloads  int  // ignores answers of an older reload (crosscheck 2026-11-19-03 L2)
+	missed   bool // an event wanted a reload while show() was loading the host (crosscheck 2026-11-19-04 C1)
 	host     *apitypes.Host
 	group    *apitypes.Group
 	lastNote string // the note as loaded; edits aren't overwritten by events
@@ -334,7 +335,7 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 	}
 	d.seq++
 	seq, g := d.seq, d.g
-	d.view, d.key = view, k
+	d.view, d.key, d.missed = view, k, false
 	go func() {
 		var (
 			h   apitypes.Host
@@ -356,6 +357,10 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 			}
 			if k.Type == apitypes.TypeHost {
 				d.setHost(h, true)
+				if d.missed { // the answer may be older than that event (C1)
+					d.missed = false
+					d.reload()
+				}
 			} else {
 				d.setGroup(gr, true)
 			}
@@ -432,6 +437,10 @@ func (d *details) viewNames(ids []int64) string {
 // (crosscheck 2026-11-19-03 C1). Only the newest reload's answer is used,
 // and none that started before a host.updated (L2).
 func (d *details) reload() {
+	if d.loadingHost() {
+		d.missed = true // read again once show() has its answer (crosscheck 2026-11-19-04 C1)
+		return
+	}
 	if !d.showsHost() {
 		return
 	}
@@ -447,6 +456,11 @@ func (d *details) reload() {
 	}()
 }
 
+// loadingHost reports whether show() is still loading the host of the key.
+func (d *details) loadingHost() bool {
+	return d.key != nil && d.key.Type == apitypes.TypeHost && (d.host == nil || *d.key != mapmodel.HostKey(d.host.ID))
+}
+
 // showsHost reports whether the pane shows a host and is not loading
 // another item.
 func (d *details) showsHost() bool {
@@ -460,6 +474,9 @@ func (d *details) showsHost() bool {
 // map doesn't have yet) or the network view isn't loaded, it answers true:
 // one reload too many is cheap (crosscheck 2026-11-19-03 L1).
 func (d *details) above(group int64) bool {
+	if d.loadingHost() {
+		return true // its path isn't known yet: reload() marks it (C1)
+	}
 	if !d.showsHost() || d.host.ParentID == nil {
 		return false
 	}
@@ -655,10 +672,15 @@ func (d *details) onEvent(ev client.Event) {
 			d.reload() // where its SNMP list comes from may have changed (crosscheck 2026-11-19-02 C1)
 		}
 	case apitypes.EventViewUpdated, apitypes.EventViewDeleted:
-		// A view's list or the tab order may change the host's list
-		// (SPEC-315 v0.69, Design-snmp-views.md V5). Views change rarely:
-		// the host is read again without asking whether it is placed there.
-		d.reload()
+		// A view's list or its place in the tab order may change the list
+		// of the hosts placed in it (SPEC-315 v0.69, Design-snmp-views.md
+		// V5); other hosts aren't read again (crosscheck 2026-11-19-04 L1).
+		var v struct {
+			ID int64 `json:"id"`
+		}
+		if json.Unmarshal(ev.Data, &v) == nil && (d.loadingHost() || d.showsHost() && slices.Contains(d.host.Views, v.ID)) {
+			d.reload()
+		}
 	case apitypes.EventGroupMoved:
 		var m apitypes.GroupMovedEvent
 		if json.Unmarshal(ev.Data, &m) == nil && m.ViewID == mapmodel.NetworkView && d.above(m.ID) {

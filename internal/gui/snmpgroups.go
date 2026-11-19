@@ -114,10 +114,11 @@ func (g *GUI) registerSNMPCheck(j apitypes.SNMPCheck) {
 
 // refreshSNMPCheck reads a job and shows it, if this GUI still follows it.
 // An answer that the job is gone ends following it: 404 (the server
-// restarted or dropped it), 503 "unavailable" (SNMP is off) and any other
-// 4xx (crosscheck 2026-11-19-03 C2, L5). After a network error, a timeout
-// or another 5xx the job may still run, so Cancel stays and the next event
-// or refresh settles it (crosscheck 2026-11-19-02 C2).
+// restarted or dropped it) and 503 "unavailable" (SNMP is off)
+// (crosscheck 2026-11-19-03 C2, L5). After any other answer, such as 401
+// for a changed token (crosscheck 2026-11-19-04 C2), a network error or a
+// timeout, the job may still run, so Cancel stays and the next event or
+// refresh settles it (crosscheck 2026-11-19-02 C2).
 func (g *GUI) refreshSNMPCheck(id string) {
 	go func() {
 		j, err := g.c.SNMPCheck(g.ctx, id)
@@ -126,7 +127,7 @@ func (g *GUI) refreshSNMPCheck(id string) {
 			isAE := errors.As(err, &ae)
 			switch {
 			case !g.snmpJobs[id]:
-			case isAE && (ae.Status/100 == 4 || ae.Status == http.StatusServiceUnavailable && ae.Code == apitypes.CodeUnavailable):
+			case isAE && (ae.Status == http.StatusNotFound || ae.Status == http.StatusServiceUnavailable && ae.Code == apitypes.CodeUnavailable):
 				delete(g.snmpJobs, id)
 				g.showSNMPCheck(apitypes.SNMPCheck{ID: id, State: apitypes.DiscoveryCancelled}) // the button
 				why := "no longer known to the server"
@@ -293,6 +294,26 @@ type communitiesDialog struct {
 	save    func([]string)
 	busy    []fyne.Disableable // disabled while saving (crosscheck 2026-11-19-02 C3)
 	closed  bool               // closed with Cancel, perhaps while saving
+	kind    string             // "host", "group" or "view", and its id
+	id      int64
+}
+
+// closeCommunitiesFor closes the dialog when its host, group or view is
+// deleted (crosscheck 2026-11-19-04 L4).
+func (g *GUI) closeCommunitiesFor(ev client.Event) {
+	cd := g.commDialog
+	if cd == nil {
+		return
+	}
+	kind := map[string]string{apitypes.EventHostDeleted: "host", apitypes.EventGroupDeleted: "group", apitypes.EventViewDeleted: "view"}[ev.Type]
+	var del apitypes.DeletedEvent
+	if kind == "" || kind != cd.kind || json.Unmarshal(ev.Data, &del) != nil || del.ID != cd.id {
+		return
+	}
+	cd.closed = true
+	cd.d.Hide()
+	g.commDialog = nil
+	g.status.message(fmt.Sprintf("SNMP communities: the %s was deleted", kind))
 }
 
 func (g *GUI) openCommunities(kind string, id int64, name string) {
@@ -325,8 +346,11 @@ func (g *GUI) openCommunities(kind string, id int64, name string) {
 }
 
 func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, from string) {
-	cd := &communitiesDialog{info: widget.NewLabel(""), rows: container.NewVBox()}
+	cd := &communitiesDialog{info: widget.NewLabel(""), rows: container.NewVBox(), kind: kind, id: id}
 	now := g.communitiesText(set, from)
+	if kind == "view" && set == 0 { // L3
+		now = "none set here; its hosts use their group's or the server's list"
+	}
 	cd.info.SetText(fmt.Sprintf("Now: %s. The strings are never shown again; what you type here replaces the list. "+
 		"\"Inherit\" removes the list set here.", now))
 	cd.info.Wrapping = fyne.TextWrapWord

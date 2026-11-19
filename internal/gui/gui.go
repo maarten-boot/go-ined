@@ -354,6 +354,7 @@ func (g *GUI) apply(ev client.Event) {
 		g.refreshSNMPChecks() // events may have been missed (crosscheck 2026-11-19-01 C1)
 	}
 	g.details.onEvent(ev)
+	g.closeCommunitiesFor(ev)
 	if ev.Type == apitypes.EventDiscoveryProgress || ev.Type == apitypes.EventDiscoveryFinished {
 		g.onDiscoveryEvent(ev)
 	}

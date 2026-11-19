@@ -82,4 +82,15 @@
      - Two edit scripts didn't match the text and were redone against it: a comment said "group lan", not "lab".
      - The API tests had no log capture, so one was added to check that no string reaches the log.
      - The GUI test first assumed the details pane keeps its host across a tab switch; a new tab shows its own selection, which is right, so the test selects the host in the view.
+15. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `98ecf43`, `fix/crosscheck-19-03` at `3751323`, `feature/snmp-views` at `2c66977`) and wrote `Crosscheck-2026-11-19-04.md`:
+   - Two reviewers with read-only access: the server side, and the GUI, `inedctl` and the docs.
+   - The server side has no H or M findings. 5,000 hosts with 10 views take 4.4 ms per round of the SNMP lookup.
+   - Findings: 0 H, 2 M, 6 L, 2 P.
+     - C1: an event while the details pane loads a host is lost.
+     - C2: a 401 (wrong token) stops following an SNMP check.
+     - Claude confirmed both in the code; reviewer 2 had reproduced them.
+   - One speed probe of reviewer 1 was still running when it reported; Claude left it, as it ends by itself and writes nothing to the repo.
+   - CI on `main` @ `98ecf43` green.
+   - Decisions asked: D1 C1, C2; D2 L1, L3–L6, P1, P2.
 

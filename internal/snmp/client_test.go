@@ -132,10 +132,10 @@ func TestClientValuesOutOfRange(t *testing.T) {
 // TC-324 (crosscheck 2026-11-18-04 L5): format characters are dropped and
 // a cut doesn't split a letter from its marks.
 func TestOneLine(t *testing.T) {
-	if got := oneLine("web‮1.0​-⁦x"); got != "web1.0-x" {
+	if got := oneLine("web\u202e1.0\u200b-\u2066x"); got != "web1.0-x" {
 		t.Errorf("format characters: %q", got)
 	}
-	s := strings.Repeat("a", maxText-1) + "é́b"
+	s := strings.Repeat("a", maxText-1) + "e\u0301\u0301b"
 	if got := oneLine(s); got != strings.Repeat("a", maxText-1) {
 		t.Errorf("cut: %q", got[len(got)-4:])
 	}

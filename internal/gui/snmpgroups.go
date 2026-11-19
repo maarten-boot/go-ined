@@ -319,7 +319,10 @@ func (g *GUI) closeCommunitiesFor(ev client.Event) {
 }
 
 // communitiesItemExists reports whether the GUI's model still has the host,
-// group or view. A host or group in a view not loaded counts as there.
+// group or view. Without the network view loaded, a host or group counts as
+// there. A group is looked for in the loaded views: only network-view
+// groups have the dialog, and the network view is loaded with the GUI
+// (crosscheck 2026-11-19-06 L3).
 func (g *GUI) communitiesItemExists(kind string, id int64) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()

@@ -167,11 +167,16 @@ type details struct {
 	note        *widget.Entry
 	save        *widget.Button
 
-	view     int64
-	key      *mapmodel.Key
-	seq      int  // ignores answers for an older selection
-	reloads  int  // ignores answers of an older reload (crosscheck 2026-11-19-03 L2)
-	missed   bool // an event wanted a reload while show() was loading the host (crosscheck 2026-11-19-04 C1)
+	view    int64
+	key     *mapmodel.Key
+	seq     int  // ignores answers for an older selection
+	reloads int  // ignores answers of an older reload (crosscheck 2026-11-19-03 L2)
+	missed  bool // an event wanted a reload while show() was loading the host (crosscheck 2026-11-19-04 C1)
+	// noteSet: the selection's note is in the field; until then the first
+	// record shown sets it, whatever the field holds (crosscheck
+	// 2026-11-19-06 L1).
+	noteSet  bool
+	answers  int // show() answers handled, applied or dropped (tests)
 	host     *apitypes.Host
 	group    *apitypes.Group
 	lastNote string // the note as loaded; edits aren't overwritten by events
@@ -336,7 +341,7 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 	d.seq++
 	d.reloads++ // show() is a read too (crosscheck 2026-11-19-05 C1)
 	seq, n, g := d.seq, d.reloads, d.g
-	d.view, d.key, d.missed = view, k, false
+	d.view, d.key, d.missed, d.noteSet = view, k, false, false
 	go func() {
 		var (
 			h   apitypes.Host
@@ -352,16 +357,16 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 			if seq != d.seq {
 				return
 			}
+			d.answers++
 			if err != nil {
 				g.status.message(fmt.Sprintf("%s %d: %v", k.Type, k.ID, err))
 				return
 			}
 			if k.Type == apitypes.TypeHost {
 				if n != d.reloads && d.showsHost() {
-					// An event or a newer read already shows the host: this
-					// answer may be older (crosscheck 2026-11-19-05 C1). The
-					// note is taken as for a new selection.
-					d.setNote(d.host.Note, true)
+					// An event or a newer read already shows the host, and
+					// its note: this answer may be older (crosscheck
+					// 2026-11-19-05 C1). What was typed since is kept.
 					return
 				}
 				d.setHost(h, true)
@@ -379,7 +384,7 @@ func (d *details) show(view int64, k *mapmodel.Key) {
 func (d *details) setHost(h apitypes.Host, loadNote bool) {
 	d.host, d.group = &h, nil
 	d.fill()
-	d.setNote(h.Note, loadNote)
+	d.setNote(h.Note, loadNote || !d.noteSet)
 }
 
 // hostChanged shows h if it is the selected host, such as after "Check
@@ -393,7 +398,7 @@ func (d *details) hostChanged(h apitypes.Host) {
 func (d *details) setGroup(g apitypes.Group, loadNote bool) {
 	d.group, d.host = &g, nil
 	d.fill()
-	d.setNote(g.Note, loadNote)
+	d.setNote(g.Note, loadNote || !d.noteSet)
 }
 
 // setNote shows the server's note unless the user has unsaved edits.
@@ -401,7 +406,7 @@ func (d *details) setNote(n string, force bool) {
 	if force || d.note.Text == d.lastNote {
 		d.note.SetText(n)
 	}
-	d.lastNote = n
+	d.lastNote, d.noteSet = n, true
 	d.note.Enable()
 	d.save.Enable()
 }

@@ -1,6 +1,9 @@
 package apitypes
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // EventSNMPValues carries a host's latest SNMP values (SNMPValuesEvent),
 // sent only when a value rounded to a whole percent changes (SPEC-313).
@@ -83,4 +86,60 @@ func step5(p *int) *int {
 	}
 	s := *p / 5
 	return &s
+}
+
+// Limits of a community list set on a group or host (SPEC-315).
+const (
+	MaxCommunities  = 10
+	MaxCommunityLen = 255
+)
+
+// CheckCommunities checks a community list for a group or host: at most
+// MaxCommunities strings of 1 to MaxCommunityLen bytes, none twice.
+func CheckCommunities(list []string) error {
+	if len(list) > MaxCommunities {
+		return fmt.Errorf("at most %d SNMP community strings, not %d", MaxCommunities, len(list))
+	}
+	seen := map[string]bool{}
+	for i, c := range list {
+		switch {
+		case c == "":
+			return fmt.Errorf("SNMP community %d is empty", i+1)
+		case len(c) > MaxCommunityLen:
+			return fmt.Errorf("SNMP community %d is longer than %d bytes", i+1, MaxCommunityLen)
+		case seen[c]:
+			return fmt.Errorf("SNMP community %d is given twice", i+1)
+		}
+		seen[c] = true
+	}
+	return nil
+}
+
+// Events of SNMP check jobs (SPEC-515); the payload is the SNMPCheck.
+const (
+	EventSNMPCheckProgress = "snmp.check.progress"
+	EventSNMPCheckFinished = "snmp.check.finished"
+)
+
+// SNMPCheckCreate is the body of POST /snmp/checks: a group (with its
+// subgroups, in its view) or hosts.
+type SNMPCheckCreate struct {
+	GroupID *int64  `json:"group_id,omitempty"`
+	HostIDs []int64 `json:"host_ids,omitempty"`
+}
+
+// SNMPCheck is an SNMP check job (SPEC-515): State running, done or
+// cancelled; Found hosts answered, NoAnswer didn't, Skipped weren't asked
+// (outside snmp.networks without a list of their own, or gone).
+type SNMPCheck struct {
+	ID         string     `json:"id"`
+	GroupID    *int64     `json:"group_id"`
+	State      string     `json:"state"`
+	Total      int        `json:"total"`
+	Checked    int        `json:"checked"`
+	Found      int        `json:"found"`
+	NoAnswer   int        `json:"no_answer"`
+	Skipped    int        `json:"skipped"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
 }

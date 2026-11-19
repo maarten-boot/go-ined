@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 	"slices"
 	"time"
@@ -51,10 +52,48 @@ type SNMPTarget struct {
 	Monitored bool
 	Agent     SNMPAgent
 	ReadAt    time.Time // when values were last read; zero = not since the start
+	// Communities is the list set on the host or the nearest group above
+	// it (SPEC-315); nil means the server's list.
+	Communities []string
 }
 
-func snmpTarget(h *Host) SNMPTarget {
+// communityList checks a list given in a PATCH; [] is nil (inherit).
+func communityList(l []string) ([]string, error) {
+	if err := apitypes.CheckCommunities(l); err != nil {
+		return nil, invalidf("%v", err)
+	}
+	if len(l) == 0 {
+		return nil, nil
+	}
+	return slices.Clone(l), nil
+}
+
+// communitiesFor is the list a host's agent is looked for with (SPEC-315):
+// the host's own, else the nearest group's above it in the network view,
+// with where it comes from ("host", "group 12"); nil and "server" for the
+// server's list. Caller holds the lock.
+func (s *Service) communitiesFor(h *Host) ([]string, string) {
+	if len(h.SNMPCommunities) > 0 {
+		return h.SNMPCommunities, "host"
+	}
+	for id, n := h.ParentID, 0; id != Root && n < 10000; n++ {
+		g := s.m.Groups[id]
+		if g == nil {
+			break
+		}
+		if len(g.SNMPCommunities) > 0 {
+			return g.SNMPCommunities, fmt.Sprintf("group %d", g.ID)
+		}
+		id = g.ParentID
+	}
+	return nil, "server"
+}
+
+func (s *Service) snmpTarget(h *Host) SNMPTarget {
 	t := SNMPTarget{ID: h.ID, IP: h.IP, Monitored: h.Monitored, Agent: h.SNMP}
+	if l, _ := s.communitiesFor(h); l != nil {
+		t.Communities = slices.Clone(l)
+	}
 	if h.SNMPValues != nil {
 		t.ReadAt = h.SNMPValues.At
 	}
@@ -67,7 +106,7 @@ func (s *Service) SNMPTargets() []SNMPTarget {
 	defer s.mu.RUnlock()
 	out := make([]SNMPTarget, 0, len(s.m.Hosts))
 	for _, id := range sortedKeys(s.m.Hosts) {
-		out = append(out, snmpTarget(s.m.Hosts[id]))
+		out = append(out, s.snmpTarget(s.m.Hosts[id]))
 	}
 	return out
 }
@@ -81,7 +120,7 @@ func (s *Service) SNMPTarget(id int64) (SNMPTarget, error) {
 	if h == nil {
 		return SNMPTarget{}, notFoundf("host %d not found", id)
 	}
-	return snmpTarget(h), nil
+	return s.snmpTarget(h), nil
 }
 
 // SetSNMP records what a check of ip found (SPEC-312): an agent, or none
@@ -155,4 +194,23 @@ func (s *Service) SetSNMPValues(id int64, ip netip.Addr, a SNMPAgent, v apitypes
 		HostID: cur.ID, DisplayName: cur.DisplayName(), IP: cur.IP.String(), Values: *snmpView(cur).Values,
 	})
 	return true
+}
+
+// HostsUnder returns the hosts in a group and its subgroups, in the
+// group's own view, ordered by ID (SPEC-515: an SNMP check of a group).
+func (s *Service) HostsUnder(group int64) ([]int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	g := s.m.Groups[group]
+	if g == nil {
+		return nil, notFoundf("group %d not found", group)
+	}
+	vm := s.m.In(g.ViewID)
+	var out []int64
+	for _, id := range sortedKeys(vm.Hosts) {
+		if vm.IsInSubtree(vm.Hosts[id].ParentID, group) {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }

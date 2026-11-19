@@ -216,9 +216,12 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		}
 		if h != nil {
 			items = append(items, g.connectItem(h))
-			if hosts := selectedHosts(sel); !onSelection || len(hosts) <= 1 {
-				items = append(items, g.checkSNMPItem(*h)) // one host only (crosscheck 2026-11-18-03 L7)
-			}
+		}
+		if hosts := selectedHosts(sel); onSelection && len(hosts) > 1 {
+			// A check of every selected host, as a job (SPEC-737).
+			items = append(items, g.snmpCheckItem(apitypes.SNMPCheckCreate{HostIDs: hosts}, len(hosts)))
+		} else if h != nil {
+			items = append(items, g.checkSNMPItem(*h), g.communitiesItem("host", h.ID, h.DisplayName)) // one host (crosscheck 2026-11-18-03 L7)
 		}
 		if remove != nil {
 			items = append(items, remove)
@@ -279,6 +282,13 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 			// too, for the focus group at the click (C5 of crosscheck 2026-11-17-01).
 			items = append(items, g.importItem("Import into this group…", id, nil, nil))
 		}
+	}
+	g.mu.Lock()
+	nHosts := g.hostsUnder(view, id)
+	g.mu.Unlock()
+	items = append(items, g.snmpCheckItem(apitypes.SNMPCheckCreate{GroupID: &id}, nHosts))
+	if view == mapmodel.NetworkView {
+		items = append(items, g.communitiesItem("group", id, n.Item.Name))
 	}
 	if cidr := n.Item.CIDR; cidr != "" {
 		scan := fyne.NewMenuItem("Scan this network", func() { g.openDiscovery(cidr) })

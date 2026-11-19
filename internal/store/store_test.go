@@ -573,3 +573,40 @@ func TestDatabaseMode(t *testing.T) {
 		s.Close()
 	}
 }
+
+// TC-328 (store): migration 10 adds the community lists of groups and
+// hosts; none after the migration, and lists are saved and loaded.
+func TestMigration10(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v9.db")
+	db, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(ctx, db, migrations[:9]); err != nil {
+		t.Fatal(err)
+	}
+	ts := "2026-11-01T10:00:00Z"
+	if _, err := db.Exec(`INSERT INTO groups (id, name, parent_id, x, y, created_at, updated_at) VALUES (3, 'lan', 0, 5, 6, ?1, ?1);
+		INSERT INTO hosts (id, ip, created_at, updated_at) VALUES (4, '192.0.2.4', ?1, ?1)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s, err := Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	st, err := s.Load(ctx)
+	if err != nil || st.Groups[0].SNMPCommunities != nil || st.Hosts[0].SNMPCommunities != nil {
+		t.Fatalf("after migration: %+v %+v %v", st.Groups, st.Hosts, err)
+	}
+	g, h := st.Groups[0], st.Hosts[0]
+	g.SNMPCommunities, h.SNMPCommunities = []string{"lab-ro", `a "b"`}, []string{"x"}
+	if err := s.Apply(ctx, inventory.Changes{Groups: []inventory.Group{g}, Hosts: []inventory.Host{h}}); err != nil {
+		t.Fatal(err)
+	}
+	st, err = s.Load(ctx)
+	if err != nil || !reflect.DeepEqual(st.Groups[0].SNMPCommunities, g.SNMPCommunities) || !reflect.DeepEqual(st.Hosts[0].SNMPCommunities, h.SNMPCommunities) {
+		t.Fatalf("saved: %+v %+v %v", st.Groups[0].SNMPCommunities, st.Hosts[0].SNMPCommunities, err)
+	}
+}

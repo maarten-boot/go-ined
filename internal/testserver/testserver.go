@@ -141,7 +141,7 @@ func (s *Server) boot() {
 	var h http.Handler = api.New(svc, api.Options{
 		Token: s.opts.Token, Version: cmp.Or(s.opts.Version, "test"), RunID: run, DBPing: st.Ping, Events: bus,
 		Discovery: disc, Services: services.New(svc, scfg, nil), Keepalive: s.opts.Keepalive, WriteTimeout: s.opts.WriteTimeout,
-		SNMP: snmpChecker(svc, s.opts.SNMP),
+		SNMP: snmpChecker(svc, s.opts.SNMP, bus, run),
 		ICMP: func() api.ICMPInfo { return api.ICMPInfo{Mode: "unprivileged"} },
 	})
 	s.mu.Lock()
@@ -203,9 +203,11 @@ func (p prober) Ping(ctx context.Context, ip netip.Addr, count int, _ time.Durat
 	return monitor.Result{Sent: count, Received: count, RTTs: []time.Duration{time.Millisecond}, LastReply: time.Now()}, nil
 }
 
-func snmpChecker(svc *inventory.Service, cfg *snmp.Config) api.SNMPChecker {
+func snmpChecker(svc *inventory.Service, cfg *snmp.Config, bus snmp.Notifier, run string) api.SNMPChecker {
 	if cfg == nil {
 		return nil
 	}
-	return snmp.New(svc, *cfg, nil)
+	c := *cfg
+	c.Notify, c.RunID = bus, run
+	return snmp.New(svc, c, nil)
 }

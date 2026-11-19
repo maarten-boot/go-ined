@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/netip"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -441,5 +443,164 @@ func TestValuesNeverRead(t *testing.T) {
 	defer r.m.mu.Unlock()
 	if st := r.m.state[h.ID]; st != nil {
 		t.Errorf("kept with monitoring off: %+v", st)
+	}
+}
+
+// byCommunity answers only for one community and records what it was asked
+// with, per address.
+type byCommunity struct {
+	mu     sync.Mutex
+	answer string
+	asked  map[string][]string // ip -> communities, in order
+}
+
+func (b *byCommunity) System(_ context.Context, ip netip.Addr, c, _ string) (inventory.SNMPSystem, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.asked == nil {
+		b.asked = map[string][]string{}
+	}
+	b.asked[ip.String()] = append(b.asked[ip.String()], c)
+	if c != b.answer {
+		return inventory.SNMPSystem{}, errNoAnswer
+	}
+	return inventory.SNMPSystem{Name: "x"}, nil
+}
+
+func (b *byCommunity) Values(_ context.Context, _ netip.Addr, c, _ string) (apitypes.SNMPValues, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if c != b.answer {
+		return apitypes.SNMPValues{}, errNoAnswer
+	}
+	return apitypes.SNMPValues{}, nil
+}
+
+func (b *byCommunity) seen(ip string) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.asked[ip])
+}
+
+func (b *byCommunity) set(c string) { b.mu.Lock(); b.answer = c; b.mu.Unlock() }
+
+// TC-328: a group's list replaces the server's for the hosts below it,
+// also outside snmp.networks; a host's own list beats the group's; a
+// changed list, or a move below another group, makes the host looked for
+// again at once with the new list; the server's list still goes only to
+// snmp.networks.
+func TestCommunityLists(t *testing.T) {
+	ctx := context.Background()
+	b := &byCommunity{answer: "lab-ro"}
+	r := newRig(t, nil, Config{Client: b, Communities: []string{"public"}, Networks: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}})
+	lab, _ := r.svc.CreateGroup(ctx, apitypes.GroupCreate{Name: "lab"})
+	other, _ := r.svc.CreateGroup(ctx, apitypes.GroupCreate{Name: "other"})
+	if _, err := r.svc.UpdateGroup(ctx, lab.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{"lab-ro"})}); err != nil {
+		t.Fatal(err)
+	}
+	in := func(ip string, parent int64) apitypes.Host {
+		h, err := r.svc.CreateHost(ctx, apitypes.HostCreate{IP: ip, ParentID: &parent})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	far := in("127.0.0.9", lab.ID)    // outside networks, but the group has a list
+	near := in("127.0.0.1", other.ID) // inside networks: the server's list
+	out := in("127.0.0.8", other.ID)  // outside, no list: never asked
+	r.run(t)
+	eventually(t, "far found", func() bool { h, _ := r.svc.Host(far.ID); return h.SNMP != nil && h.SNMP.Version == V2c })
+	eventually(t, "near checked", func() bool { h, _ := r.svc.Host(near.ID); return h.SNMP != nil })
+	if got := b.seen("127.0.0.9"); strings.Join(got, ",") != "lab-ro" {
+		t.Errorf("far asked with %v", got)
+	}
+	if got := b.seen("127.0.0.1"); len(got) == 0 || got[0] != "public" || slices.Contains(got, "lab-ro") {
+		t.Errorf("near asked with %v", got)
+	}
+	if got := b.seen("127.0.0.8"); len(got) != 0 {
+		t.Errorf("out asked with %v", got)
+	}
+	if h, _ := r.svc.Host(far.ID); h.SNMPCommunitiesSet != 0 || h.SNMPCommunitiesFrom != fmt.Sprintf("group %d", lab.ID) {
+		t.Errorf("far: set %d from %q", h.SNMPCommunitiesSet, h.SNMPCommunitiesFrom)
+	}
+	// The host's own list beats the group's, and is looked for again at once.
+	b.set("mine")
+	if _, err := r.svc.UpdateHost(ctx, far.ID, apitypes.HostPatch{SNMPCommunities: apitypes.Some([]string{"mine"})}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "far with its own list", func() bool { return slices.Contains(b.seen("127.0.0.9"), "mine") })
+	if h, _ := r.svc.Host(far.ID); h.SNMPCommunitiesSet != 1 || h.SNMPCommunitiesFrom != "host" {
+		t.Errorf("far: %d %q", h.SNMPCommunitiesSet, h.SNMPCommunitiesFrom)
+	}
+	// out moves below lab: asked with lab's list at once.
+	b.set("lab-ro")
+	if _, err := r.svc.UpdateHost(ctx, out.ID, apitypes.HostPatch{ParentID: apitypes.Some(&lab.ID)}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "out after the move", func() bool { return strings.Join(b.seen("127.0.0.8"), ",") == "lab-ro" })
+	// Never in a host's or group's JSON.
+	h, _ := r.svc.Host(far.ID)
+	g, _ := r.svc.Group(lab.ID)
+	hb, _ := json.Marshal(h)
+	gb, _ := json.Marshal(g)
+	if strings.Contains(string(hb)+string(gb), "mine") || strings.Contains(string(gb), "lab-ro") || g.SNMPCommunitiesSet != 1 {
+		t.Errorf("shown: %s %s", hb, gb)
+	}
+}
+
+// TC-329: a check job of a group checks its hosts with subgroups (found,
+// no answer, skipped), with progress and finished events; one of hosts;
+// neither or both is 400, an unknown group 404; a job can be cancelled.
+func TestCheckJobs(t *testing.T) {
+	ctx := context.Background()
+	b := &byCommunity{answer: "public"}
+	r := newRig(t, nil, Config{Client: b, Communities: []string{"public"}, Networks: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/30")}})
+	r.m.cfg.Notify = r.ev
+	top, _ := r.svc.CreateGroup(ctx, apitypes.GroupCreate{Name: "top"})
+	sub, _ := r.svc.CreateGroup(ctx, apitypes.GroupCreate{Name: "sub", ParentID: &top.ID})
+	for _, c := range []struct {
+		ip     string
+		parent int64
+	}{{"127.0.0.1", top.ID}, {"127.0.0.2", sub.ID}, {"127.0.0.9", sub.ID}} {
+		p := c.parent
+		if _, err := r.svc.CreateHost(ctx, apitypes.HostCreate{IP: c.ip, ParentID: &p}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b.set("") // nobody answers at first
+	j, err := r.m.StartCheck(apitypes.SNMPCheckCreate{GroupID: &top.ID})
+	if err != nil || j.Total != 3 || j.State != "running" {
+		t.Fatalf("start: %+v %v", j, err)
+	}
+	var done apitypes.SNMPCheck
+	eventually(t, "finished", func() bool { done, _ = r.m.GetCheck(j.ID); return done.State != "running" })
+	if done.State != "done" || done.Checked != 3 || done.Found != 0 || done.NoAnswer != 2 || done.Skipped != 1 || done.FinishedAt == nil {
+		t.Errorf("job: %+v", done)
+	}
+	var ev string
+	eventually(t, "the finished event", func() bool {
+		ev += strings.Join(r.ev.take(""), "\n")
+		return strings.Contains(ev, `snmp.check.finished {"id":"`+j.ID+`"`)
+	})
+	b.set("public")
+	j2, _ := r.m.StartCheck(apitypes.SNMPCheckCreate{HostIDs: []int64{1, 1}})
+	eventually(t, "second", func() bool { d, _ := r.m.GetCheck(j2.ID); return d.State == "done" && d.Found == 1 && d.Total == 1 })
+	if l := r.m.Checks(); len(l) != 2 || l[0].ID != j.ID {
+		t.Errorf("list: %+v", l)
+	}
+	for _, in := range []apitypes.SNMPCheckCreate{{}, {GroupID: &top.ID, HostIDs: []int64{1}}} {
+		if _, err := r.m.StartCheck(in); inventory.KindOf(err) != inventory.Invalid {
+			t.Errorf("%+v: %v", in, err)
+		}
+	}
+	nine := int64(999)
+	if _, err := r.m.StartCheck(apitypes.SNMPCheckCreate{GroupID: &nine}); inventory.KindOf(err) != inventory.NotFound {
+		t.Errorf("unknown group: %v", err)
+	}
+	if _, err := r.m.CancelCheck(j2.ID); err != nil {
+		t.Errorf("cancel a finished job: %v", err)
+	}
+	if _, err := r.m.GetCheck("nope"); inventory.KindOf(err) != inventory.NotFound {
+		t.Errorf("unknown job: %v", err)
 	}
 }

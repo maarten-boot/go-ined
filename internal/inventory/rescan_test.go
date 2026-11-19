@@ -1,6 +1,8 @@
 package inventory
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/netip"
 	"strings"
 	"testing"
@@ -217,5 +219,72 @@ func TestSNMPSaved(t *testing.T) {
 	a := SNMPAgent{Version: "v2c", Community: "c"}
 	if set(a, t0.Add(25*time.Hour)) != 1 || set(a, t0.Add(30*time.Hour)) != 0 || set(a, t0.Add(49*time.Hour)) != 1 {
 		t.Error("the same agent: written at once, then once a day")
+	}
+}
+
+// TC-328 (inventory): community lists: a host's and a network-view group's
+// are set and cleared through PATCH; more than 10, an empty one, one over
+// 255 bytes, one twice and a custom-view group are 400; the views show the
+// count and where the list comes from, never the strings.
+func TestCommunitiesPatch(t *testing.T) {
+	s, _ := newSvc(t)
+	top := mustGroup(t, s, apitypes.GroupCreate{Name: "top"})
+	lan := mustGroup(t, s, apitypes.GroupCreate{Name: "lan", ParentID: &top.ID})
+	h := mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &lan.ID})
+	view, err := s.CreateView(ctx, apitypes.ViewCreate{Name: "v"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cg := mustGroup(t, s, apitypes.GroupCreate{Name: "c", ViewID: &view.ID})
+	set := func(group bool, id int64, l []string) error {
+		if group {
+			_, err := s.UpdateGroup(ctx, id, apitypes.GroupPatch{SNMPCommunities: apitypes.Some(l)})
+			return err
+		}
+		_, err := s.UpdateHost(ctx, id, apitypes.HostPatch{SNMPCommunities: apitypes.Some(l)})
+		return err
+	}
+	eleven := make([]string, 11)
+	for i := range eleven {
+		eleven[i] = fmt.Sprint(i)
+	}
+	for _, bad := range [][]string{eleven, {""}, {strings.Repeat("x", 256)}, {"a", "a"}} {
+		if KindOf(set(false, h.ID, bad)) != Invalid || KindOf(set(true, lan.ID, bad)) != Invalid {
+			t.Errorf("%d entries accepted", len(bad))
+		}
+	}
+	if KindOf(set(true, cg.ID, []string{"x"})) != Invalid {
+		t.Error("a custom-view group took a list")
+	}
+	from := func() string { v, _ := s.Host(h.ID); return v.SNMPCommunitiesFrom }
+	if from() != "server" {
+		t.Errorf("from %q", from())
+	}
+	set(true, top.ID, []string{"comm-a", "comm-b"})
+	if from() != fmt.Sprintf("group %d", top.ID) {
+		t.Errorf("from %q", from())
+	}
+	set(true, lan.ID, []string{"comm-c"})
+	set(false, h.ID, []string{"comm-d", "comm-e", "comm-f"})
+	v, _ := s.Host(h.ID)
+	g, _ := s.Group(top.ID)
+	if v.SNMPCommunitiesFrom != "host" || v.SNMPCommunitiesSet != 3 || g.SNMPCommunitiesSet != 2 {
+		t.Errorf("host %+v group %+v", v, g)
+	}
+	set(false, h.ID, []string{})
+	if from() != fmt.Sprintf("group %d", lan.ID) {
+		t.Errorf("after inherit: %q", from())
+	}
+	m, _ := s.MapOf(NetworkView)
+	b, _ := json.Marshal([]any{s.Hosts(), s.Groups(), m}) // what the API answers
+	f, _ := s.ExportGroup(top.ID)
+	fb, _ := json.Marshal(f)
+	for _, w := range []string{"comm-a", "comm-c", "comm-d"} {
+		if strings.Contains(string(b), w) || strings.Contains(string(fb), w) {
+			t.Errorf("%s shown", w)
+		}
+	}
+	if ids, err := s.HostsUnder(top.ID); err != nil || len(ids) != 1 || ids[0] != h.ID {
+		t.Errorf("HostsUnder: %v %v", ids, err)
 	}
 }

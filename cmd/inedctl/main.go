@@ -53,6 +53,8 @@ Commands:
   host move <id> <group-id|root>              (moves it next to its new parent)
   host services <id> [--check]                (SSH, RDP, VNC, HTTP(S) found; --check checks now)
   host snmp <id> [--check]                    (the SNMP agent and its CPU, memory and disks; --check now)
+  host snmp-communities <id> LIST|-|--clear   (its own SNMP community strings, a,b or - for one per line
+                                               on stdin; --clear inherits; never shown again)
   host watch <id> [LIST | --add LIST | --remove LIST | --clear]
                                               (watched services; LIST like ssh,https,tcp:5432)
   group list [--view ID]
@@ -68,6 +70,7 @@ Commands:
   group labels <id> name|ip|both|inherit      (what the GUI shows under the hosts in it)
   group color <id> '#rrggbb'|none              (the colour of its top bar in the GUI)
   group rescan <id> INTERVAL|off              (scan the network again every INTERVAL, e.g. 24h; 15m to 8760h)
+  group snmp-communities <id> LIST|-|--clear  (SNMP community strings for the hosts below a network-view group)
   group copy <id> --view V                     (copy it with its subgroups and hosts into custom view V)
   group export <id> [-o FILE]                  (the group with everything below it, as JSON; default stdout)
   note get|set|clear host|group <id> [text...]   (set reads stdin when no text is given)
@@ -85,6 +88,8 @@ Commands:
   discover start <cidr> | --group ID [--parent ID] [--wait]
   discover status <job-id>
   discover list                                (every job the server keeps, scheduled ones too)
+  snmp check --group ID | HOST-ID... [--wait]  (look for the SNMP agents now and read their values)
+  snmp list | status <job-id> | cancel <job-id>
   discover cancel <job-id>
   import FILE|- [--parent ID] [--x X --y Y] [--dry-run] [--update]
                                                (a group export, below group ID or at the top level;
@@ -115,8 +120,9 @@ type interrupted struct{ msg string }
 
 func (e interrupted) Error() string { return e.msg }
 
-// errJob is returned when a waited-for discovery job fails or is cancelled.
-var errJob = errors.New("discovery job did not finish")
+// errJob is returned when a waited-for discovery or SNMP check job fails or
+// is cancelled.
+var errJob = errors.New("the job did not finish")
 
 // errHelp: -h was given; the usage was printed.
 var errHelp = errors.New("help")

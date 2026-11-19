@@ -139,6 +139,10 @@ var migrations = []string{
 	ALTER TABLE hosts ADD COLUMN snmp_community TEXT NOT NULL DEFAULT '';
 	ALTER TABLE hosts ADD COLUMN snmp_system TEXT NOT NULL DEFAULT '';
 	ALTER TABLE hosts ADD COLUMN snmp_checked_at TEXT;`,
+	// 9 → 10: SNMP community strings per group and per host (SPEC-315), a
+	// JSON list; '' inherits.
+	`ALTER TABLE groups ADD COLUMN snmp_communities TEXT NOT NULL DEFAULT '';
+	ALTER TABLE hosts ADD COLUMN snmp_communities TEXT NOT NULL DEFAULT '';`,
 }
 
 // Store is a SQLite-backed inventory.Repository.
@@ -377,7 +381,7 @@ func (s *Store) loadPlacements(ctx context.Context) ([]inventory.Placement, erro
 
 func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, note, cidr, view_id, parent_id, collapsed, labels, color,
-		rescan, rescan_last, rescan_found, x, y, created_at, updated_at FROM groups ORDER BY id`)
+		rescan, rescan_last, rescan_found, snmp_communities, x, y, created_at, updated_at FROM groups ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("store: load groups: %w", err)
 	}
@@ -387,8 +391,9 @@ func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
 		var g inventory.Group
 		var cidr, rescanLast, created, updated sql.NullString
 		var rescan int64
+		var comms string
 		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.Note, &cidr, &g.ViewID, &g.ParentID, &g.Collapsed, &g.Labels, &g.Color,
-			&rescan, &rescanLast, &g.RescanFound, &g.X, &g.Y, &created, &updated); err != nil {
+			&rescan, &rescanLast, &g.RescanFound, &comms, &g.X, &g.Y, &created, &updated); err != nil {
 			return nil, fmt.Errorf("store: scan group: %w", err)
 		}
 		if cidr.Valid && cidr.String != "" {
@@ -397,6 +402,9 @@ func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
 			}
 		}
 		g.Rescan = time.Duration(rescan) * time.Second
+		if g.SNMPCommunities, err = loadList(comms); err != nil {
+			return nil, fmt.Errorf("store: group %d: bad snmp_communities: %w", g.ID, err)
+		}
 		if g.RescanLast, err = parseTime(rescanLast); err != nil {
 			return nil, fmt.Errorf("store: group %d: %w", g.ID, err)
 		}
@@ -414,7 +422,7 @@ func (s *Store) loadGroups(ctx context.Context) ([]inventory.Group, error) {
 func (s *Store) loadHosts(ctx context.Context) ([]inventory.Host, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, ip, ptr_name, name, description, note, parent_id, monitored, status,
 		rtt_ms, loss_pct, last_seen, last_change, services, services_checked_at,
-		snmp_version, snmp_community, snmp_system, snmp_checked_at, x, y, created_at, updated_at FROM hosts ORDER BY id`)
+		snmp_version, snmp_community, snmp_system, snmp_checked_at, snmp_communities, x, y, created_at, updated_at FROM hosts ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("store: load hosts: %w", err)
 	}
@@ -425,10 +433,10 @@ func (s *Store) loadHosts(ctx context.Context) ([]inventory.Host, error) {
 		var ip string
 		var rtt, loss sql.NullFloat64
 		var seen, change, checked, snmpAt, created, updated sql.NullString
-		var services, snmpSys string
+		var services, snmpSys, comms string
 		if err := rows.Scan(&h.ID, &ip, &h.PTRName, &h.Name, &h.Description, &h.Note, &h.ParentID, &h.Monitored, &h.Status,
 			&rtt, &loss, &seen, &change, &services, &checked,
-			&h.SNMP.Version, &h.SNMP.Community, &snmpSys, &snmpAt, &h.X, &h.Y, &created, &updated); err != nil {
+			&h.SNMP.Version, &h.SNMP.Community, &snmpSys, &snmpAt, &comms, &h.X, &h.Y, &created, &updated); err != nil {
 			return nil, fmt.Errorf("store: scan host: %w", err)
 		}
 		if h.IP, err = netip.ParseAddr(ip); err != nil {
@@ -442,6 +450,9 @@ func (s *Store) loadHosts(ctx context.Context) ([]inventory.Host, error) {
 		}
 		if services != "" {
 			h.Services = strings.Split(services, ",")
+		}
+		if h.SNMPCommunities, err = loadList(comms); err != nil {
+			return nil, fmt.Errorf("store: host %d: bad snmp_communities: %w", h.ID, err)
 		}
 		if snmpSys != "" {
 			if err := json.Unmarshal([]byte(snmpSys), &h.SNMP.System); err != nil {
@@ -541,14 +552,15 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 			cidr = g.CIDR.String()
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO groups (id, name, description, note, cidr, view_id, parent_id, collapsed, labels, color,
-				rescan, rescan_last, rescan_found, x, y, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				rescan, rescan_last, rescan_found, snmp_communities, x, y, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description, note=excluded.note,
 				cidr=excluded.cidr, view_id=excluded.view_id, parent_id=excluded.parent_id, collapsed=excluded.collapsed, labels=excluded.labels, color=excluded.color,
-				rescan=excluded.rescan, rescan_last=excluded.rescan_last, rescan_found=excluded.rescan_found, x=excluded.x, y=excluded.y,
+				rescan=excluded.rescan, rescan_last=excluded.rescan_last, rescan_found=excluded.rescan_found,
+				snmp_communities=excluded.snmp_communities, x=excluded.x, y=excluded.y,
 				updated_at=excluded.updated_at`,
 			g.ID, g.Name, g.Description, g.Note, cidr, max(g.ViewID, 1), g.ParentID, g.Collapsed, g.Labels, g.Color,
-			int64(g.Rescan/time.Second), nullTime(g.RescanLast), g.RescanFound, g.X, g.Y, fmtTime(g.CreatedAt), fmtTime(g.UpdatedAt))
+			int64(g.Rescan/time.Second), nullTime(g.RescanLast), g.RescanFound, saveList(g.SNMPCommunities), g.X, g.Y, fmtTime(g.CreatedAt), fmtTime(g.UpdatedAt))
 		if err != nil {
 			return fmt.Errorf("store: upsert group %d: %w", g.ID, err)
 		}
@@ -561,17 +573,17 @@ func (s *Store) Apply(ctx context.Context, c inventory.Changes) (err error) {
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO hosts (id, ip, ptr_name, name, description, note, parent_id, monitored, status,
 				rtt_ms, loss_pct, last_seen, last_change, services, services_checked_at,
-				snmp_version, snmp_community, snmp_system, snmp_checked_at, x, y, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				snmp_version, snmp_community, snmp_system, snmp_checked_at, snmp_communities, x, y, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET ip=excluded.ip, ptr_name=excluded.ptr_name, name=excluded.name,
 				description=excluded.description, note=excluded.note, parent_id=excluded.parent_id, monitored=excluded.monitored,
 				status=excluded.status, rtt_ms=excluded.rtt_ms, loss_pct=excluded.loss_pct, last_seen=excluded.last_seen,
 				last_change=excluded.last_change, services=excluded.services, services_checked_at=excluded.services_checked_at,
 				snmp_version=excluded.snmp_version, snmp_community=excluded.snmp_community, snmp_system=excluded.snmp_system,
-				snmp_checked_at=excluded.snmp_checked_at, x=excluded.x, y=excluded.y, updated_at=excluded.updated_at`,
+				snmp_checked_at=excluded.snmp_checked_at, snmp_communities=excluded.snmp_communities, x=excluded.x, y=excluded.y, updated_at=excluded.updated_at`,
 			h.ID, h.IP.String(), h.PTRName, h.Name, h.Description, h.Note, h.ParentID, h.Monitored, h.Status,
 			h.RTTms, h.LossPct, nullTime(h.LastSeen), nullTime(h.LastChange), strings.Join(h.Services, ","), nullTime(h.ServicesAt),
-			h.SNMP.Version, h.SNMP.Community, snmpSys, nullTime(h.SNMP.CheckedAt), h.X, h.Y, fmtTime(h.CreatedAt), fmtTime(h.UpdatedAt))
+			h.SNMP.Version, h.SNMP.Community, snmpSys, nullTime(h.SNMP.CheckedAt), saveList(h.SNMPCommunities), h.X, h.Y, fmtTime(h.CreatedAt), fmtTime(h.UpdatedAt))
 		if err != nil {
 			return fmt.Errorf("store: upsert host %d: %w", h.ID, err)
 		}
@@ -616,4 +628,21 @@ func saveWatch(ctx context.Context, tx *sql.Tx, h inventory.Host) error {
 		}
 	}
 	return nil
+}
+
+// saveList stores a community list (SPEC-315) as JSON; nil (inherit) as "".
+func saveList(l []string) string {
+	if len(l) == 0 {
+		return ""
+	}
+	b, _ := json.Marshal(l)
+	return string(b)
+}
+
+func loadList(s string) ([]string, error) {
+	if s == "" {
+		return nil, nil
+	}
+	var l []string
+	return l, json.Unmarshal([]byte(s), &l)
 }

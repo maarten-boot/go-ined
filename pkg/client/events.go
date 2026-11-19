@@ -341,6 +341,11 @@ func (e Event) Short() string {
 		if e.Decode(&p) == nil {
 			return fmt.Sprintf("view %d host %d removed", p.ViewID, p.HostID)
 		}
+	case apitypes.EventSNMPCheckProgress, apitypes.EventSNMPCheckFinished:
+		var j apitypes.SNMPCheck
+		if e.Decode(&j) == nil {
+			return SNMPCheckLine(j)
+		}
 	case apitypes.EventSNMPValues:
 		var v apitypes.SNMPValuesEvent
 		if e.Decode(&v) == nil {
@@ -425,4 +430,11 @@ func CPUText(v apitypes.SNMPValues) string {
 		return fmt.Sprintf("%d %%", *v.CPUPct)
 	}
 	return fmt.Sprintf("%d %% (%d CPUs, busiest %d %%)", *v.CPUPct, v.CPUs, *v.CPUMaxPct)
+}
+
+// SNMPCheckLine is "snmp check run-snmp-1 done 40/40: 12 answered, 26 no
+// answer, 2 skipped" (SPEC-515).
+func SNMPCheckLine(j apitypes.SNMPCheck) string {
+	return fmt.Sprintf("snmp check %s %s %d/%d: %d answered, %d no answer, %d skipped",
+		j.ID, j.State, j.Checked, j.Total, j.Found, j.NoAnswer, j.Skipped)
 }

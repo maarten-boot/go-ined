@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ type Inventory interface {
 	SNMPTarget(id int64) (inventory.SNMPTarget, error)
 	SetSNMP(ctx context.Context, id int64, ip netip.Addr, a inventory.SNMPAgent) (apitypes.Host, bool, error)
 	SetSNMPValues(id int64, ip netip.Addr, a inventory.SNMPAgent, v apitypes.SNMPValues, anyHost bool) bool
+	HostsUnder(group int64) ([]int64, error)
 }
 
 // Config holds the SNMP settings ([snmp] in server.toml). Zero values get
@@ -31,6 +33,13 @@ type Config struct {
 	Tick        time.Duration  // how often due hosts are looked for (default 10 s)
 	Client      Client         // default UDP{Timeout: 1 s, Retries: 1}
 	Now         func() time.Time
+	Notify      Notifier // gets the check jobs' events (SPEC-515); nil = none
+	RunID       string   // the server run, in check job ids
+}
+
+// Notifier receives the check jobs' events.
+type Notifier interface {
+	Publish(typ string, data any)
 }
 
 func (c *Config) defaults() {
@@ -67,6 +76,8 @@ type Manager struct {
 	mu    sync.Mutex
 	busy  map[int64]bool       // hosts being checked by Run
 	state map[int64]*hostState // hosts whose reads fail; gone after a good read
+	lists map[int64]string     // the community list each host was last looked for with (SPEC-315)
+	jobs  *checks              // SNMP check jobs (SPEC-515)
 }
 
 // hostState counts the failures of a host with an agent (crosscheck
@@ -94,10 +105,31 @@ func New(inv Inventory, cfg Config, log *slog.Logger) *Manager {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Manager{inv: inv, cfg: cfg, log: log, busy: map[int64]bool{}, state: map[int64]*hostState{}}
+	m := &Manager{inv: inv, cfg: cfg, log: log, busy: map[int64]bool{}, state: map[int64]*hostState{}, lists: map[int64]string{}}
+	m.jobs = newChecks(m)
+	return m
 }
 
-// allowed: communities may be sent to ip (snmp.networks).
+// mayAsk: communities may be sent to t: a list set on the host or a
+// group goes anywhere (SPEC-315, G4a); the server's list only to
+// snmp.networks.
+func (m *Manager) mayAsk(t inventory.SNMPTarget) bool {
+	return len(t.Communities) > 0 || m.allowed(t.IP)
+}
+
+// communities is the list t's agent is looked for with: its own (the
+// host's or a group's) replaces the server's (SPEC-315, G3a).
+func (m *Manager) communities(t inventory.SNMPTarget) []string {
+	if len(t.Communities) > 0 {
+		return t.Communities
+	}
+	return m.cfg.Communities
+}
+
+// listKey tells community lists apart without keeping them twice.
+func listKey(t inventory.SNMPTarget) string { return strings.Join(t.Communities, "\x00") }
+
+// allowed: the server's communities may be sent to ip (snmp.networks).
 func (m *Manager) allowed(ip netip.Addr) bool {
 	if len(m.cfg.Networks) == 0 {
 		return true
@@ -119,10 +151,13 @@ func (m *Manager) Check(ctx context.Context, id int64) (apitypes.Host, error) {
 	if err != nil {
 		return apitypes.Host{}, err
 	}
-	if !m.allowed(t.IP) {
+	if !m.mayAsk(t) {
 		return apitypes.Host{}, inventory.Errorf(inventory.Invalid,
-			"host %d (%s) is outside snmp.networks: no community is sent to it", id, t.IP)
+			"host %d (%s) is outside snmp.networks and has no community strings of its own or of a group: none is sent to it", id, t.IP)
 	}
+	m.mu.Lock()
+	m.lists[id] = listKey(t)
+	m.mu.Unlock()
 	ok, err := m.find(ctx, t, true)
 	if err == nil && !ok {
 		err = inventory.Errorf(inventory.Conflict, "host %d was changed or deleted during the check; try again", id)
@@ -140,10 +175,11 @@ func (m *Manager) Check(ctx context.Context, id int64) (apitypes.Host, error) {
 // "no answer" is saved (C3).
 func (m *Manager) find(ctx context.Context, t inventory.SNMPTarget, now bool) (ok bool, err error) {
 	a := inventory.SNMPAgent{}
-	n := len(m.cfg.Communities)
+	comms := m.communities(t)
+	n := len(comms)
 	var where string
 search:
-	for i, c := range m.cfg.Communities {
+	for i, c := range comms {
 		for _, v := range []string{V2c, V1} {
 			sys, err := m.cfg.Client.System(ctx, t.IP, c, v)
 			if ctx.Err() != nil {
@@ -266,9 +302,25 @@ func (m *Manager) read(ctx context.Context, t inventory.SNMPTarget, anyHost bool
 // work is what Run should do for t now: find the agent, read values, or
 // nothing.
 func (m *Manager) work(t inventory.SNMPTarget, now time.Time) func(context.Context) {
-	if !t.Monitored || !m.allowed(t.IP) {
+	if !t.Monitored || !m.mayAsk(t) {
 		m.forget(t.ID) // counted again from nothing when it is back (L3)
 		return nil
+	}
+	// Another community list (set on the host or a group, or the host moved
+	// below another group): looked for again at once, as on request
+	// (SPEC-315).
+	key := listKey(t)
+	m.mu.Lock()
+	prev, seen := m.lists[t.ID]
+	m.lists[t.ID] = key
+	m.mu.Unlock()
+	if seen && prev != key {
+		m.forget(t.ID)
+		return func(ctx context.Context) {
+			if _, err := m.find(ctx, t, true); err != nil && ctx.Err() == nil {
+				m.log.Error("SNMP check failed", "host", t.ID, "err", err)
+			}
+		}
 	}
 	var st hostState
 	m.mu.Lock()
@@ -361,7 +413,7 @@ func (m *Manager) Run(ctx context.Context) {
 func (m *Manager) prune(all []inventory.SNMPTarget) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if len(m.state) == 0 {
+	if len(m.state) == 0 && len(m.lists) == 0 {
 		return
 	}
 	have := make(map[int64]bool, len(all))
@@ -371,6 +423,11 @@ func (m *Manager) prune(all []inventory.SNMPTarget) {
 	for id := range m.state {
 		if !have[id] {
 			delete(m.state, id)
+		}
+	}
+	for id := range m.lists {
+		if !have[id] {
+			delete(m.lists, id)
 		}
 	}
 }

@@ -288,6 +288,18 @@ func (c *Client) CheckSNMP(ctx context.Context, hostID int64) (apitypes.Host, er
 	return h, c.do(ctx, max(c.timeout, SNMPCheckTimeout), http.MethodPost, "/hosts/"+id(hostID)+"/check-snmp", nil, &h)
 }
 
+// StartSNMPCheck starts an SNMP check of a group or of hosts (SPEC-515).
+func (c *Client) StartSNMPCheck(ctx context.Context, in apitypes.SNMPCheckCreate) (apitypes.SNMPCheck, error) {
+	var j apitypes.SNMPCheck
+	return j, c.Do(ctx, http.MethodPost, "/snmp/checks", in, &j)
+}
+
+// CancelSNMPCheck stops an SNMP check job.
+func (c *Client) CancelSNMPCheck(ctx context.Context, id string) (apitypes.SNMPCheck, error) {
+	var j apitypes.SNMPCheck
+	return j, c.Do(ctx, http.MethodDelete, "/snmp/checks/"+url.PathEscape(id), nil, &j)
+}
+
 // CreateHost adds a host.
 func (c *Client) CreateHost(ctx context.Context, in apitypes.HostCreate) (apitypes.Host, error) {
 	var h apitypes.Host

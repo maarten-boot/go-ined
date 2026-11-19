@@ -68,6 +68,10 @@ type Discovery interface {
 // SNMPChecker is what the API needs from snmp.Manager.
 type SNMPChecker interface {
 	Check(ctx context.Context, id int64) (apitypes.Host, error)
+	StartCheck(in apitypes.SNMPCheckCreate) (apitypes.SNMPCheck, error)
+	Checks() []apitypes.SNMPCheck
+	GetCheck(id string) (apitypes.SNMPCheck, error)
+	CancelCheck(id string) (apitypes.SNMPCheck, error)
 }
 
 // ServiceChecker is what the API needs from services.Checker.
@@ -150,6 +154,8 @@ func newServer(svc *inventory.Service, opts Options) (*server, http.Handler) {
 	route("/hosts/{id}", map[string]http.HandlerFunc{"GET": s.getHost, "PATCH": s.patchHost, "DELETE": s.deleteHost})
 	route("/hosts/{id}/check-services", map[string]http.HandlerFunc{"POST": s.checkServices})
 	route("/hosts/{id}/check-snmp", map[string]http.HandlerFunc{"POST": s.checkSNMP})
+	route("/snmp/checks", map[string]http.HandlerFunc{"GET": s.listSNMPChecks, "POST": s.startSNMPCheck})
+	route("/snmp/checks/{id}", map[string]http.HandlerFunc{"GET": s.getSNMPCheck, "DELETE": s.cancelSNMPCheck})
 	route("/groups", map[string]http.HandlerFunc{"GET": s.listGroups, "POST": s.createGroup})
 	route("/groups/{id}", map[string]http.HandlerFunc{"GET": s.getGroup, "PATCH": s.patchGroup, "DELETE": s.deleteGroup})
 	route("/groups/{id}/move", map[string]http.HandlerFunc{"POST": s.moveGroup})
@@ -314,6 +320,49 @@ func (s *server) checkSNMP(w http.ResponseWriter, r *http.Request) {
 	s.respond(w, http.StatusOK, h, err)
 }
 
+// snmpOff answers 503 when SNMP is off on the server.
+func (s *server) snmpOff(w http.ResponseWriter) bool {
+	if s.opts.SNMP != nil {
+		return false
+	}
+	writeError(w, http.StatusServiceUnavailable, apitypes.CodeUnavailable,
+		"SNMP is turned off on the server (snmp.enabled = false)")
+	return true
+}
+
+// startSNMPCheck starts an SNMP check of a group or of hosts (SPEC-515).
+func (s *server) startSNMPCheck(w http.ResponseWriter, r *http.Request) {
+	var in apitypes.SNMPCheckCreate
+	if !decode(w, r, &in) || s.snmpOff(w) {
+		return
+	}
+	c, err := s.opts.SNMP.StartCheck(in)
+	s.respond(w, http.StatusAccepted, c, err)
+}
+
+func (s *server) listSNMPChecks(w http.ResponseWriter, r *http.Request) {
+	if s.snmpOff(w) {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.opts.SNMP.Checks())
+}
+
+func (s *server) getSNMPCheck(w http.ResponseWriter, r *http.Request) {
+	if s.snmpOff(w) {
+		return
+	}
+	c, err := s.opts.SNMP.GetCheck(r.PathValue("id"))
+	s.respond(w, http.StatusOK, c, err)
+}
+
+func (s *server) cancelSNMPCheck(w http.ResponseWriter, r *http.Request) {
+	if s.snmpOff(w) {
+		return
+	}
+	c, err := s.opts.SNMP.CancelCheck(r.PathValue("id"))
+	s.respond(w, http.StatusOK, c, err)
+}
+
 func (s *server) createHost(w http.ResponseWriter, r *http.Request) {
 	var in apitypes.HostCreate
 	if !decode(w, r, &in) {
@@ -333,6 +382,9 @@ func (s *server) patchHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h, err := s.svc.UpdateHost(r.Context(), id, p)
+	if err == nil && p.SNMPCommunities.Set { // never the strings (SPEC-315)
+		s.log.Info("SNMP communities set", "host", id, "count", len(p.SNMPCommunities.Value))
+	}
 	s.respond(w, http.StatusOK, h, err)
 }
 
@@ -386,6 +438,9 @@ func (s *server) patchGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	g, err := s.svc.UpdateGroup(r.Context(), id, p)
+	if err == nil && p.SNMPCommunities.Set { // never the strings (SPEC-315)
+		s.log.Info("SNMP communities set", "group", id, "count", len(p.SNMPCommunities.Value))
+	}
 	s.respond(w, http.StatusOK, g, err)
 }
 

@@ -445,6 +445,13 @@ func (s *Service) UpdateHost(ctx context.Context, id int64, p apitypes.HostPatch
 	h := *cur
 	ipChanged := false
 	var watchChanged []int // entries of h.Watch whose status changed: service.status
+	if p.SNMPCommunities.Set {
+		l, err := communityList(p.SNMPCommunities.Value)
+		if err != nil {
+			return apitypes.Host{}, err
+		}
+		h.SNMPCommunities = l
+	}
 	if p.Watch.Set {
 		ws, err := parseWatch(p.Watch.Value, cur.Watch)
 		if err != nil {
@@ -654,6 +661,16 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	}
 	if p.Color.Set {
 		g.Color = p.Color.Value
+	}
+	if p.SNMPCommunities.Set {
+		if g.ViewID != NetworkView {
+			return apitypes.Group{}, invalidf("SNMP community strings can be set on network-view groups only")
+		}
+		l, err := communityList(p.SNMPCommunities.Value)
+		if err != nil {
+			return apitypes.Group{}, err
+		}
+		g.SNMPCommunities = l
 	}
 	if p.Rescan.Set {
 		d, err := apitypes.ParseRescan(p.Rescan.Value)
@@ -1065,6 +1082,8 @@ func (s *Service) hostView(h *Host) apitypes.Host {
 		}
 	}
 	v.SNMP = snmpView(h)
+	v.SNMPCommunitiesSet = len(h.SNMPCommunities)
+	_, v.SNMPCommunitiesFrom = s.communitiesFor(h)
 	return v
 }
 
@@ -1105,7 +1124,7 @@ func groupView(g *Group, c Counts) apitypes.Group {
 	v := apitypes.Group{
 		ID: g.ID, Name: g.Name, Description: g.Description, Note: g.Note,
 		ViewID: g.ViewID, ParentID: parentPtr(g.ParentID), Collapsed: g.Collapsed, Labels: g.Labels, Color: g.Color, Status: c.Status(),
-		Rescan: apitypes.FormatRescan(g.Rescan), RescanFound: g.RescanFound,
+		Rescan: apitypes.FormatRescan(g.Rescan), RescanFound: g.RescanFound, SNMPCommunitiesSet: len(g.SNMPCommunities),
 		X: g.X, Y: g.Y, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt,
 	}
 	if !g.RescanLast.IsZero() {

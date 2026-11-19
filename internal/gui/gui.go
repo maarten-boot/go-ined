@@ -112,9 +112,11 @@ type GUI struct {
 	// colorPicked is the callback of the colour picker opened last (for
 	// tests).
 	colorPicked func(color.Color)
-	disc        *discoveryDialog // the open discovery dialog
-	jobs        map[string]bool  // discovery jobs started here, still running
-	wantView    int64            // a new view to select once its tab exists
+	disc        *discoveryDialog   // the open discovery dialog
+	jobs        map[string]bool    // discovery jobs started here, still running
+	snmpJobs    map[string]bool    // SNMP check jobs started here, still running (SPEC-737)
+	commDialog  *communitiesDialog // the open "SNMP communities…" dialog (tests)
+	wantView    int64              // a new view to select once its tab exists
 	viewBtn     *widget.Button
 	wrapChk     *widget.Check
 
@@ -141,7 +143,7 @@ func New(a fyne.App, opt Options) *GUI {
 	g := &GUI{
 		app: a, c: opt.Client, opt: opt, model: mapmodel.New(),
 		ctx: ctx, cancel: cancel, maps: map[int64]*MapView{}, current: mapmodel.NetworkView,
-		dirty: map[int64]bool{}, jobs: map[string]bool{}, focus: map[int64]int64{},
+		dirty: map[int64]bool{}, jobs: map[string]bool{}, snmpJobs: map[string]bool{}, focus: map[int64]int64{},
 	}
 	g.do = opt.Do
 	if g.do == nil {
@@ -351,6 +353,9 @@ func (g *GUI) apply(ev client.Event) {
 	g.details.onEvent(ev)
 	if ev.Type == apitypes.EventDiscoveryProgress || ev.Type == apitypes.EventDiscoveryFinished {
 		g.onDiscoveryEvent(ev)
+	}
+	if ev.Type == apitypes.EventSNMPCheckProgress || ev.Type == apitypes.EventSNMPCheckFinished {
+		g.onSNMPCheckEvent(ev)
 	}
 }
 

@@ -39,3 +39,7 @@
      - Claude repeated C2 and C4 with probes, and checked C1 and C3 in the code, with the reviewers' probes.
    - CI on `main` @ `aa2be31` green.
    - Decisions asked: D1 C1–C4; D2 L1–L4, L6–L11, P1.
+7. **User**: pushed; OK, all.
+   **Claude** checked the push (`main` and `docs/architecture` at `39c7148`) and fixed the crosscheck on `fix/crosscheck-19-01` (merged as `c5e686d`; see its section 7). Spec v0.66.
+   - Tests: the full Go suite with `-race`, staticcheck v0.8.2, `make nogui-check` and the 65 Python tests pass.
+   - On the way, gofmt had realigned the `GUI` struct's fields, so three edits to `gui.go` didn't match at first. They were applied to the actual text before the build.

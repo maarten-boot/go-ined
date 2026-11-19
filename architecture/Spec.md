@@ -1,6 +1,6 @@
 # Spec — go-ined
 
-Status: **draft v0.65** (2026-11-19)
+Status: **draft v0.66** (2026-11-19)
 Withdrawn IDs are kept and marked ~~withdrawn~~ so they aren't reused.
 Every requirement has a stable ID (`SPEC-NNN`). Tests in `Tests.md` reference these IDs.
 Keywords: **MUST** = required for v0.1, **SHOULD** = wanted for v0.1 but can slip, **LATER** = out of scope for v0.1.
@@ -108,6 +108,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - **Setting it:** `PATCH /hosts/{id}` or `/groups/{id}` with `"snmp_communities": [...]`; `[]` inherits. It is saved with the host or group (schema 10). The log says "SNMP communities set" with the count, never the strings.
   - **Write-only (G5a):** the strings are never read back, not in the API (not even with the full token), events, the export file or the log. Host JSON has `snmp_communities_set` (how many are set on it) and `snmp_communities_from` (`"host"`, `"group 12"` or `"server"`); group JSON has `snmp_communities_set`.
   - **Effect:** when the list a host's agent was looked for with changes (set on it or a group, or the host moved below another group), it is looked for again at once, as on request.
+  - **v0.66 (crosscheck 2026-11-19-01):** a group's new list also sends `host.updated` for the hosts below it, with their new origin (L3). The new list is recorded for a host only when its search starts, so hosts beyond `snmp.concurrency` get theirs at a later tick, not never (C3). A host that may no longer be asked (it left `networks`, or its list was removed) keeps its last agent until it is changed or checked (L5, noted).
 
 ## 7. Reverse DNS
 - **SPEC-401** MUST: The server looks up the PTR record when a host is added, and then every `dns.refresh` (default 1 h), with at most `dns.concurrency` lookups running at once (default 20). It uses Go's resolver (the system's DNS settings), with 5 s per lookup. At startup, the refreshes of the existing hosts are spread across `dns.refresh`. A changed name is saved and emits `host.updated`. When a host's IP changes, its PTR name is cleared at once and looked up again (v0.11). `dns.enabled = false` turns reverse DNS off; PTR names then stay as stored (v0.11).
@@ -155,6 +156,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - **Running:** every host's agent is looked for with its list (SPEC-315) and its values read, as on request (SPEC-514), at most `snmp.concurrency` at once. A host outside `snmp.networks` without a list of its own or a group's is skipped.
   - **The job:** `{id, group_id, state (running, done, cancelled), total, checked, found, no_answer, skipped, started_at, finished_at}`. `snmp.check.progress` comes at most once a second, and `snmp.check.finished` at the end.
   - **Other calls:** `GET /snmp/checks` lists the jobs (running and the last 20 finished, oldest first); `GET` and `DELETE /snmp/checks/{id}` read and cancel one. Jobs live in memory and are cancelled at shutdown (SPEC-804).
+  - **v0.66 (crosscheck 2026-11-19-01):** progress is sent after every host, whatever its outcome. A host changed during its check counts as skipped. A cancelled job counts the hosts not started as skipped, so `checked` reaches `total` (L2). After shutdown has begun, a start answers 503 (L1). With SNMP off, `POST /snmp/checks` answers 503 before reading the body (L6). `group_id` is the job's own copy (L4).
 
 ## 9. Storage
 - **SPEC-601** MUST: Data is stored in SQLite through `modernc.org/sqlite` (pure Go, no cgo). The database file path is configurable.
@@ -215,6 +217,12 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - **Checks:** a group's menu (any view) and a selection of several hosts have **"Check SNMP now (N hosts)"** (N from the map; disabled with none). It starts a job (SPEC-515). The status bar shows "SNMP check: 12 of 40 hosts checked, 5 answered" and a **"Cancel SNMP check"** button while it runs, then "SNMP: 12 of 40 hosts answered (26 no answer, 2 skipped)". One host keeps "Check SNMP now" (SPEC-736).
   - **The dialog:** a host's menu and a network-view group's menu have **"SNMP communities…"**. It says what is set now ("2 set here", "from group lab", "the server's list"), has one masked field per string (with an eye to show while typing), "Add", "Remove", "Inherit" (clears the list), "Cancel" and "Save" (what is typed replaces the list). The strings are never shown again.
   - **Details:** a host's and a network-view group's details have the row **SNMP communities** with the same text.
+  - **v0.66 (crosscheck 2026-11-19-01):**
+    - **Start answer:** a job's events that come before the start's answer are kept and used, and the job is read once more after it is registered, after a cancel and after a resync. "Cancel SNMP check" can't stay after the job ended (C1).
+    - **Mixed selections:** a group alone checks the group; any other selection checks every selected host and every host below the selected groups, in one job (L10).
+    - **Counting:** the hosts are counted with one pass over the group's subtree (C4).
+    - **The dialog** stays open until the server took the list, and shows the reason when it didn't. It trims what is typed, and says "At most 10 strings." at the limit (L9).
+    - **The button** reads "Cancel SNMP checks" while more than one runs (L11).
 
 ## 11. Configuration and security
 - **SPEC-801** MUST: The server listens on `127.0.0.1:8470` by default. The address is configurable.
@@ -270,7 +278,7 @@ Design: `Design-views.md` (approved 2026-11-10, V1–V6 as recommended). A **vie
   - `group export <id> [-o FILE]` and `import FILE|- [--parent ID] [--x X --y Y] [--dry-run] [--update]` (SPEC-905, v0.53)
   - `group rescan <id> INTERVAL|off` (SPEC-206, v0.57; `group show` has a row "Rescan: every 24h, last 03:15, 2 new") and `discover list` (every job, scheduled ones marked "(scheduled)", also in `discover status` and the events) (v0.57)
   - `host snmp <id> [--check]` (SPEC-312, 313, v0.60): the agent's system values and latest values; `--check` looks now. `host show` has a row "SNMP: v2c · web · CPU 13 %, memory 63 %, / 91 %" ("not checked yet", "no answer (checked …)"). `events` shows `snmp.values` as "host 1 10.0.1.5 web CPU 13 %, memory 63 %, / 91 %"
-  - `host snmp-communities <id> LIST|-|--clear` and `group snmp-communities <id> LIST|-|--clear` (SPEC-315, v0.65): `a,b`, or `-` for one per line on stdin (kept out of the shell history); `--clear` inherits; prints only "2 set here" or where the list comes from; `host show` and `group show` have a row "Communities". `snmp check --group ID | HOST-ID... [--wait]`, `snmp list`, `snmp status <id>`, `snmp cancel <id>` (SPEC-515); `--wait` follows the job and exits 1 when it is cancelled
+  - `host snmp-communities <id> LIST|-|--clear` and `group snmp-communities <id> LIST|-|--clear` (SPEC-315, v0.65): `a,b`, or `-` for one per line on stdin (kept out of the shell history); `--clear` inherits; prints only "2 set here" or where the list comes from; `host show` and `group show` have a row "Communities". `snmp check --group ID | HOST-ID... [--wait]`, `snmp list`, `snmp status <id>`, `snmp cancel <id>` (SPEC-515); `--wait` follows the job and exits 1 when it is cancelled (v0.66: entries are trimmed, so `a, b` is `a` and `b`; `--json` with `--wait` prints one JSON line at the start and one at the end; a custom-view group's row says "– (custom view)")
 
   The server URL and token come from SPEC-805.
 

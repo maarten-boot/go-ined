@@ -760,3 +760,34 @@ func TestNoteOlderSaveAnswer(t *testing.T) {
 		}
 	})
 }
+
+// TC-759 (crosscheck 2026-11-19-10 L1): a note changed and changed back to
+// the old text while a save is on its way counts as changed: the save's
+// late answer doesn't bring its text back.
+func TestNoteSaveAnswerAfterChangeBack(t *testing.T) {
+	tr := &hookTransport{holdMethod: http.MethodPatch, seen: make(chan struct{}, 4), release: make(chan struct{})}
+	e := hookedEnv(t, testserver.Options{}, tr)
+	c, ctx := e.c, e.ctx
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", Note: "A", X: ptr(100.0), Y: ptr(100.0)}))
+	tr.holdPath = "/api/v1/hosts/" + strconv.FormatInt(h.ID, 10)
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h.ID) != nil })
+	k := mapmodel.HostKey(h.ID)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	eventually(t, e.ui, "shown", func() bool { return g.details.note.Text == "A" })
+	tr.hold.Store(true)
+	e.ui.Wait(func() { g.details.note.SetText("X"); g.details.saveNote() })
+	<-tr.seen // the server has X; the answer is held
+	tr.hold.Store(false)
+	eventually(t, e.ui, "own event", func() bool { return g.details.lastNote == "X" })
+	must(c.UpdateHost(ctx, h.ID, apitypes.HostPatch{Note: apitypes.Some("A")})) // back to the old text
+	eventually(t, e.ui, "A again", func() bool { return g.details.note.Text == "A" && g.details.lastNote == "A" })
+	close(tr.release)
+	eventually(t, e.ui, "saved", func() bool { return strings.Contains(g.status.Text(), fmt.Sprintf("note of host %d saved", h.ID)) })
+	e.ui.Wait(func() {
+		if g.details.note.Text != "A" || g.details.lastNote != "A" {
+			t.Errorf("the save's late answer came back: field %q, loaded %q", g.details.note.Text, g.details.lastNote)
+		}
+	})
+}

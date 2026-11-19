@@ -183,6 +183,10 @@ type details struct {
 	// saving is the text of each item's save on its way (crosscheck
 	// 2026-11-19-09 L1).
 	saving map[mapmodel.Key]string
+	// noteVer counts the notes loaded into lastNote; a save's answer
+	// compares it rather than the text, so a note changed and changed back
+	// counts as changed (crosscheck 2026-11-19-10 L1).
+	noteVer int
 }
 
 func newDetails(g *GUI) *details {
@@ -445,6 +449,7 @@ func (d *details) setNote(n string, force bool) {
 		d.note.SetText(n)
 	}
 	d.lastNote, d.noteSet = n, true
+	d.noteVer++
 	d.note.SetPlaceHolder("Note") // also after "Note not loaded" (crosscheck 2026-11-19-09 L2)
 	d.note.Enable()
 	d.save.Enable()
@@ -770,9 +775,10 @@ func (d *details) saveNote() {
 	if d.key == nil || !d.noteSet { // not before the selection's note is in (C1)
 		return
 	}
-	// before: the note as loaded when the save starts; the answer touches
-	// the field only while it is still that (crosscheck 2026-11-19-09 C1).
-	k, text, before, g := *d.key, d.note.Text, d.lastNote, d.g
+	// ver: the note loaded when the save starts; the answer touches the
+	// field only while no other note was loaded since (crosscheck
+	// 2026-11-19-09 C1, 2026-11-19-10 L1).
+	k, text, ver, g := *d.key, d.note.Text, d.noteVer, d.g
 	if d.saving == nil {
 		d.saving = map[mapmodel.Key]string{}
 	}
@@ -794,13 +800,14 @@ func (d *details) saveNote() {
 			}
 			// Still that item, and no newer note came since the save
 			// started (an event of this save or of another client's).
-			if d.key != nil && *d.key == k && d.noteSet && d.lastNote == before { // crosscheck 2026-11-19-08 C2, -09 C1
+			if d.key != nil && *d.key == k && d.noteSet && d.noteVer == ver { // crosscheck 2026-11-19-08 C2, -09 C1, -10 L1
 				if d.note.Text == d.lastNote {
 					// Unedited since it was shown, perhaps loaded again
 					// before the save landed: show what was saved.
 					d.note.SetText(text)
 				}
 				d.lastNote = text
+				d.noteVer++
 			}
 			g.status.message(fmt.Sprintf("note of %s %d saved", k.Type, k.ID))
 		})

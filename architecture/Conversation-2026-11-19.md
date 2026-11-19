@@ -146,4 +146,11 @@
    - Selecting the same item keeps unsaved typing. Leaving an item with unsaved typing says so in the status bar.
    - Tests: the full Go suite with `-race` and staticcheck v0.8.2 pass.
    - On the way: the first C2 test passed with the old code, because a later event hid the wrong field. It was strengthened, and now fails without the fix.
+25. **User**: pushed; run the crosscheck; then "status ?" while it ran.
+   **Claude** checked the push (`main` and `docs/architecture` at `edec893`, `fix/crosscheck-19-08` at `2b50947`) and wrote `Crosscheck-2026-11-19-09.md`:
+   - One reviewer with read-only access. The 2026-11-19-08 fixes work.
+   - Findings: 0 H, 1 M, 2 L, 1 P.
+     - C1: an older save's answer can put the saved text back over a newer note from another client. It is new, from the C2 fix of 2026-11-19-08. Claude reproduced it with its own probe (field "X", server "B").
+   - CI on `main` @ `edec893` green.
+   - Decisions asked: D1 C1; D2 L1, L2, P1.
 

@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/netip"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/maarten-boot/go-ined/internal/gui/mapmodel"
 	"github.com/maarten-boot/go-ined/internal/inventory"
@@ -149,5 +152,120 @@ func TestSNMPCheckRaceSelectionAndSaveError(t *testing.T) {
 	})
 	eventually(t, e.ui, "the reason in the dialog", func() bool {
 		return g.commDialog != nil && strings.HasPrefix(g.commDialog.info.Text, "Not saved: ")
+	})
+}
+
+// TC-759 (crosscheck 2026-11-19-02 C1-C3, L1-L5): the details of a host
+// follow its groups' lists without host events, also when a group moves; a
+// refresh error other than "not found" keeps following the check; a save
+// disables its buttons and, after Cancel, reports a failure in the status
+// bar; the dialog keeps spaces; the early-event store keeps the newest
+// event and drops the oldest job; one host with a group keeps its items.
+func TestSNMPFollowDetailsAndDialogBusy(t *testing.T) {
+	e := startWith(t, testserver.Options{SNMP: &snmp.Config{Communities: []string{"public"}, Client: snmp.Static{Community: "public", Version: snmp.V2c}}})
+	c, ctx := e.c, e.ctx
+	lab := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "lab", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	top := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "top", Collapsed: ptr(false), X: ptr(600.0), Y: ptr(600.0)}))
+	empty := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "empty", X: ptr(900.0), Y: ptr(100.0)}))
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &lab.ID, X: ptr(100.0), Y: ptr(200.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h.ID) != nil })
+	k := mapmodel.HostKey(h.ID)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	eventually(t, e.ui, "server's list", func() bool { return strings.Contains(formText(g.details), "SNMP communities\nthe server's list") })
+
+	// C1: a group's list reaches the shown host through group.updated.
+	must(c.UpdateGroup(ctx, lab.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{"a"})}))
+	eventually(t, e.ui, "from lab", func() bool { return strings.Contains(formText(g.details), "SNMP communities\nfrom group lab") })
+	// L4: lab without a list moves below top, which has one.
+	must(c.UpdateGroup(ctx, top.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{"b"})}))
+	must(c.UpdateGroup(ctx, lab.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{})}))
+	must(c.UpdateGroup(ctx, lab.ID, apitypes.GroupPatch{ParentID: apitypes.Some(&top.ID)}))
+	eventually(t, e.ui, "from top", func() bool { return strings.Contains(formText(g.details), "SNMP communities\nfrom group top") })
+
+	e.ui.Wait(func() {
+		// L5: one host and an empty group: the one-host items, no job item.
+		g.maps[1].SetSelection([]mapmodel.Key{k, mapmodel.GroupKey(empty.ID)})
+		host := must(c.Host(ctx, h.ID))
+		items := g.menuItems(1, find(e.nodes(1), "host", h.ID), 0, 0, &host)
+		if menuItem(items, "Check SNMP now") == nil || menuItem(items, "SNMP communities…") == nil || menuItem(items, "Check SNMP now (1 host)") != nil {
+			t.Errorf("one host and an empty group: %v", labels(items))
+		}
+		g.maps[1].SetSelection(nil)
+
+		// L1: an older event after a newer one is not kept.
+		ev := func(j apitypes.SNMPCheck) {
+			b, _ := json.Marshal(j)
+			g.onSNMPCheckEvent(client.Event{Type: apitypes.EventSNMPCheckProgress, Data: b})
+		}
+		ev(apitypes.SNMPCheck{ID: "y-1", State: apitypes.DiscoveryRunning, Total: 9, Checked: 5})
+		ev(apitypes.SNMPCheck{ID: "y-1", State: apitypes.DiscoveryRunning, Total: 9, Checked: 3})
+		if got := g.snmpSeen["y-1"].Checked; got != 5 {
+			t.Errorf("kept checked %d, want 5", got)
+		}
+		// L2: 50 other jobs push out only the oldest.
+		for i := range maxSeen {
+			ev(apitypes.SNMPCheck{ID: "z-" + strconv.Itoa(i), State: apitypes.DiscoveryRunning})
+		}
+		if _, ok := g.snmpSeen["y-1"]; ok || len(g.snmpSeen) != maxSeen || len(g.snmpSeenIDs) != maxSeen {
+			t.Errorf("store: %d events, %d ids, y-1 kept %v", len(g.snmpSeen), len(g.snmpSeenIDs), ok)
+		}
+		if _, ok := g.snmpSeen["z-0"]; !ok {
+			t.Error("z-0 dropped")
+		}
+	})
+	// C2: "not found" ends following a check.
+	e.ui.Wait(func() { g.registerSNMPCheck(apitypes.SNMPCheck{ID: "gone-1", State: apitypes.DiscoveryRunning}) })
+	eventually(t, e.ui, "not found unfollows", func() bool { return !g.snmpJobs["gone-1"] && !g.status.cancelB.Visible() })
+	e.ui.Wait(func() {
+
+		// L3: what is typed is saved as typed, empty rows left out.
+		g.communitiesDialog("host", h.ID, "h", 0, "server")
+		cd := g.commDialog
+		var got []string
+		cd.save = func(l []string) { got = l }
+		cd.entries[0].SetText(" with space ")
+		cd.busy[0].(*widget.Button).OnTapped() // Add
+		save := cd.busy[2].(*widget.Button)
+		save.OnTapped()
+		if !slices.Equal(got, []string{" with space "}) {
+			t.Errorf("saved %q", got)
+		}
+		cd.d.Hide()
+
+		// C3: a save disables Save, Inherit and Add; Cancel during it, and
+		// the refusal goes to the status bar.
+		g.communitiesDialog("host", 999, "gone", 0, "server")
+		cd = g.commDialog
+		cd.save([]string{"x"})
+		for _, b := range cd.busy {
+			if !b.Disabled() {
+				t.Error("a button is enabled while saving")
+			}
+		}
+		cd.closed = true
+		cd.d.Hide()
+		g.commDialog = nil
+	})
+	eventually(t, e.ui, "refusal in the status bar", func() bool {
+		return strings.Contains(g.status.Text(), "SNMP communities of host gone not saved:")
+	})
+}
+
+// TC-759 (crosscheck 2026-11-19-02 C2): a refresh error other than "not
+// found" (here 503: SNMP is off) keeps following the check, with Cancel.
+func TestSNMPCheckRefreshErrorKeepsJob(t *testing.T) {
+	e := startWith(t, testserver.Options{})
+	e.open()
+	g := e.g
+	e.ui.Wait(func() {
+		g.registerSNMPCheck(apitypes.SNMPCheck{ID: "run-1", State: apitypes.DiscoveryRunning, Total: 2})
+	})
+	eventually(t, e.ui, "error shown", func() bool { return strings.Contains(g.status.Text(), "SNMP check run-1: not read") })
+	e.ui.Wait(func() {
+		if !g.snmpJobs["run-1"] || !g.status.cancelB.Visible() {
+			t.Errorf("after a 503: followed %v, cancel %v", g.snmpJobs["run-1"], g.status.cancelB.Visible())
+		}
 	})
 }

@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -797,5 +798,19 @@ func TestExportImport(t *testing.T) {
 	}
 	if r := ctl(t, ua, "group", "export", "9"); r.code != 1 || !strings.Contains(r.errOut, "not found") {
 		t.Errorf("export 9: %+v", r)
+	}
+}
+
+// TC-910 (crosscheck 2026-11-19-02 L3): from stdin each line is kept as
+// typed, spaces too, without a Windows CR; blank lines are left out. The
+// comma list is trimmed.
+func TestCommunitiesArgKeepsSpaces(t *testing.T) {
+	a := &app{stdin: strings.NewReader(" a b \r\n\n   \nc\n")}
+	got, err := a.communitiesArg("-", false)
+	if err != nil || !slices.Equal(got, []string{" a b ", "c"}) {
+		t.Errorf("stdin: %q %v", got, err)
+	}
+	if got, _ := a.communitiesArg(" x , y", false); !slices.Equal(got, []string{"x", "y"}) {
+		t.Errorf("comma list: %q", got)
 	}
 }

@@ -116,6 +116,7 @@ type GUI struct {
 	jobs        map[string]bool               // discovery jobs started here, still running
 	snmpJobs    map[string]bool               // SNMP check jobs started here, still running (SPEC-737)
 	snmpSeen    map[string]apitypes.SNMPCheck // events of jobs not (yet) followed here (C1)
+	snmpSeenIDs []string                      // snmpSeen's ids, oldest first (crosscheck 2026-11-19-02 L2)
 	commDialog  *communitiesDialog            // the open "SNMP communities…" dialog (tests)
 	wantView    int64                         // a new view to select once its tab exists
 	viewBtn     *widget.Button

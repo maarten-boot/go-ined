@@ -43,3 +43,13 @@
    **Claude** checked the push (`main` and `docs/architecture` at `39c7148`) and fixed the crosscheck on `fix/crosscheck-19-01` (merged as `c5e686d`; see its section 7). Spec v0.66.
    - Tests: the full Go suite with `-race`, staticcheck v0.8.2, `make nogui-check` and the 65 Python tests pass.
    - On the way, gofmt had realigned the `GUI` struct's fields, so three edits to `gui.go` didn't match at first. They were applied to the actual text before the build.
+8. **User**: pushed; run the crosscheck.
+   **Claude** checked the push (`main` and `docs/architecture` at `7993040`, `fix/crosscheck-19-01` at `20c1500`) and wrote `Crosscheck-2026-11-19-02.md`:
+   - One reviewer with read-only access, since the scope was one fix commit. Every earlier fix works.
+   - Findings: 0 H, 3 M, 5 L, 1 P.
+     - C1: the per-host events of a group's new list can force a resync on every client (the buffer holds 256).
+     - C2: the GUI stops following a check on any refresh error.
+     - C3: Cancel during a save hides a failure.
+     - Claude checked all three in the code.
+   - CI on `main` @ `7993040` green.
+   - Decisions asked: D1 C1–C3; D2 L1–L5, P1.

@@ -3068,7 +3068,7 @@
           },
           "skipped": {
             "type": "integer",
-            "description": "hosts not asked: outside snmp.networks without a list of their own or a group's, or gone"
+            "description": "hosts not asked: outside snmp.networks without a list of their own, a view's or a group's, or gone"
           },
           "started_at": {
             "type": "string",

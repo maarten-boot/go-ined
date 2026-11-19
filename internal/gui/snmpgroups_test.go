@@ -1,13 +1,17 @@
 package gui
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -359,4 +363,113 @@ func TestViewCommunitiesGUI(t *testing.T) {
 	eventually(t, e.ui, "dialog again", func() bool { return g.commDialog != nil && strings.Contains(g.commDialog.info.Text, "2 set here") })
 	e.ui.Wait(func() { g.commDialog.save([]string{}) })
 	eventually(t, e.ui, "inherit", func() bool { return strings.Contains(formText(g.details), "SNMP communities\nthe server's list") })
+	// A view without a list says what its hosts use (crosscheck 2026-11-19-04
+	// L3); the dialog closes when the view is deleted (L4).
+	e.ui.Wait(func() {
+		g.commDialog = nil
+		menuItem(g.viewMenuItems(), "SNMP communities…").Action()
+	})
+	eventually(t, e.ui, "dialog for an empty view", func() bool {
+		return g.commDialog != nil && strings.Contains(g.commDialog.info.Text, "none set here; its hosts use their group's or the server's list")
+	})
+	if err := c.DeleteView(ctx, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, e.ui, "dialog closed", func() bool {
+		return g.commDialog == nil && strings.Contains(g.status.Text(), "SNMP communities: the view was deleted")
+	})
+}
+
+// hookTransport holds the server's answer to GET holdPath while hold is
+// set (until release is closed; seen gets a value per held answer), and sends requests to
+// /snmp/checks/ without the token while noAuth is set.
+type hookTransport struct {
+	holdPath string
+	hold     atomic.Bool
+	noAuth   atomic.Bool
+	seen     chan struct{}
+	release  chan struct{}
+}
+
+func (h *hookTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if h.noAuth.Load() && strings.Contains(r.URL.Path, "/snmp/checks/") {
+		r = r.Clone(r.Context())
+		r.Header.Del("Authorization")
+	}
+	held := r.Method == http.MethodGet && r.URL.Path == h.holdPath && h.hold.Load()
+	resp, err := http.DefaultTransport.RoundTrip(r)
+	if held && err == nil {
+		// The server has answered; the answer is read only later.
+		body, rerr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		err = rerr
+		h.seen <- struct{}{}
+		<-h.release
+	}
+	return resp, err
+}
+
+// hookedEnv starts a server with a token and a GUI whose client goes
+// through tr.
+func hookedEnv(t *testing.T, opts testserver.Options, tr *hookTransport) *env {
+	opts.Token = "tok"
+	e := startWith(t, opts)
+	var err error
+	if e.c, err = client.New(client.Options{URL: e.srv.URL(), Token: "tok"}); err != nil {
+		t.Fatal(err)
+	}
+	e.options = func(o *Options) {
+		cl, err := client.New(client.Options{URL: e.srv.URL(), Token: "tok", Transport: tr})
+		if err != nil {
+			t.Fatal(err)
+		}
+		o.Client = cl
+	}
+	return e
+}
+
+// TC-759 (crosscheck 2026-11-19-04 C1): a placement while the pane loads
+// the host isn't lost: when the (older) answer comes, the host is read
+// again and its Views row is right.
+func TestDetailsEventWhileLoadingHost(t *testing.T) {
+	tr := &hookTransport{seen: make(chan struct{}, 4), release: make(chan struct{})}
+	e := hookedEnv(t, testserver.Options{}, tr)
+	c, ctx := e.c, e.ctx
+	h := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", X: ptr(100.0), Y: ptr(100.0)}))
+	v := must(c.CreateView(ctx, apitypes.ViewCreate{Name: "switches"}))
+	tr.holdPath = "/api/v1/hosts/" + strconv.FormatInt(h.ID, 10)
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", h.ID) != nil })
+	k := mapmodel.HostKey(h.ID)
+	tr.hold.Store(true)
+	e.ui.Wait(func() { g.details.show(1, &k) })
+	<-tr.seen // the GET is held: its answer will be from before the placement
+	tr.hold.Store(false)
+	must(c.PlaceHost(ctx, v.ID, h.ID, apitypes.PlacementSet{}))
+	eventually(t, e.ui, "placement event seen", func() bool { return g.details.missed })
+	close(tr.release)
+	eventually(t, e.ui, "views row", func() bool { return strings.Contains(formText(g.details), "Views\nNetworks, switches") })
+}
+
+// TC-759 (crosscheck 2026-11-19-04 C2): a 401 while refreshing a check
+// (a changed token) keeps following it, with Cancel.
+func TestSNMPCheckRefresh401KeepsJob(t *testing.T) {
+	tr := &hookTransport{}
+	e := hookedEnv(t, testserver.Options{SNMP: &snmp.Config{Communities: []string{"public"}, Client: snmp.Static{Community: "public", Version: snmp.V2c}}}, tr)
+	e.open()
+	g := e.g
+	tr.noAuth.Store(true)
+	e.ui.Wait(func() {
+		g.registerSNMPCheck(apitypes.SNMPCheck{ID: "run-1", State: apitypes.DiscoveryRunning, Total: 2})
+	})
+	eventually(t, e.ui, "401 shown", func() bool {
+		return strings.Contains(g.status.Text(), "SNMP check run-1: not read") && strings.Contains(g.status.Text(), "401")
+	})
+	e.ui.Wait(func() {
+		if !g.snmpJobs["run-1"] || !g.status.cancelB.Visible() {
+			t.Errorf("after a 401: followed %v, cancel %v", g.snmpJobs["run-1"], g.status.cancelB.Visible())
+		}
+	})
 }

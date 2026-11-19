@@ -118,7 +118,7 @@ func (m *Manager) mayAsk(t inventory.SNMPTarget) bool {
 }
 
 // communities is the list t's agent is looked for with: its own (the
-// host's or a group's) replaces the server's (SPEC-315, G3a).
+// host's, a view's or a group's) replaces the server's (SPEC-315, G3a).
 func (m *Manager) communities(t inventory.SNMPTarget) []string {
 	if len(t.Communities) > 0 {
 		return t.Communities
@@ -153,7 +153,7 @@ func (m *Manager) Check(ctx context.Context, id int64) (apitypes.Host, error) {
 	}
 	if !m.mayAsk(t) {
 		return apitypes.Host{}, inventory.Errorf(inventory.Invalid,
-			"host %d (%s) is outside snmp.networks and has no community strings of its own or of a group: none is sent to it", id, t.IP)
+			"host %d (%s) is outside snmp.networks and has no community strings of its own, of a view or of a group: none is sent to it", id, t.IP)
 	}
 	m.mu.Lock()
 	m.lists[id] = listKey(t)
@@ -306,8 +306,8 @@ func (m *Manager) work(t inventory.SNMPTarget, now time.Time) func(context.Conte
 		m.forget(t.ID) // counted again from nothing when it is back (L3)
 		return nil
 	}
-	// Another community list (set on the host or a group, or the host moved
-	// below another group): looked for again at once, as on request
+	// Another community list (set on the host, a view or a group, or the
+	// host placed elsewhere): looked for again at once, as on request
 	// (SPEC-315).
 	key := listKey(t)
 	m.mu.Lock()

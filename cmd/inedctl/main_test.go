@@ -658,6 +658,18 @@ func TestSNMPCommunitiesAndChecks(t *testing.T) {
 			t.Errorf("shown: %s", o)
 		}
 	}
+	// --json --wait: one JSON line at the start, one at the end (crosscheck 2026-11-19-01 C2).
+	if r := ctl(t, u, "--json", "snmp", "check", "--group", "1", "--wait"); r.code != 0 || strings.Count(r.out, "\n") != 2 ||
+		!strings.Contains(r.out, `"state":"running"`) || !strings.Contains(r.out, `"state":"done"`) {
+		t.Fatalf("--json --wait: %+v", r)
+	}
+	// "a, a" is a twice after trimming (L7); a custom-view group has no list (L8).
+	if r := ctl(t, u, "host", "snmp-communities", "1", "a, a"); r.code != 2 {
+		t.Errorf("a, a: %+v", r)
+	}
+	ok(t, u, "view", "add", "v")
+	ok(t, u, "group", "add", "--name", "c", "--view", "2")
+	contains(t, ok(t, u, "group", "show", "2"), "Communities:", "– (custom view)")
 	out := ok(t, u, "snmp", "check", "--group", "1", "--wait")
 	contains(t, out, " running 0/2", " done 2/2: 2 answered, 0 no answer, 0 skipped")
 	contains(t, ok(t, u, "snmp", "list"), " done 2/2: 2 answered")

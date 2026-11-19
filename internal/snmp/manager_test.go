@@ -604,3 +604,87 @@ func TestCheckJobs(t *testing.T) {
 		t.Errorf("unknown job: %v", err)
 	}
 }
+
+// TC-328 (crosscheck 2026-11-19-01 C3): with one slot, every host whose
+// list changed is still looked for with the new list, one per tick.
+func TestListChangePastConcurrency(t *testing.T) {
+	ctx := context.Background()
+	b := &byCommunity{answer: "old"}
+	r := newRig(t, nil, Config{Client: b, Communities: []string{"old"}, Concurrency: 1})
+	lab, _ := r.svc.CreateGroup(ctx, apitypes.GroupCreate{Name: "lab"})
+	var ids []int64
+	for _, ip := range []string{"127.0.0.1", "127.0.0.2", "127.0.0.3"} {
+		h, err := r.svc.CreateHost(ctx, apitypes.HostCreate{IP: ip, ParentID: &lab.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, h.ID)
+	}
+	r.run(t)
+	eventually(t, "all found", func() bool {
+		for _, id := range ids {
+			if h, _ := r.svc.Host(id); h.SNMP == nil || h.SNMP.Version == "" {
+				return false
+			}
+		}
+		return true
+	})
+	b.set("new")
+	if _, err := r.svc.UpdateGroup(ctx, lab.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{"new"})}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "every host asked with the new list", func() bool {
+		for _, ip := range []string{"127.0.0.1", "127.0.0.2", "127.0.0.3"} {
+			if !slices.Contains(b.seen(ip), "new") {
+				return false
+			}
+		}
+		return true
+	})
+}
+
+// TC-329 (crosscheck 2026-11-19-01 L1, L2): a cancelled job counts the
+// hosts not started as skipped, and Checked reaches Total; after Close no
+// job starts.
+func TestCheckJobCancelAndClose(t *testing.T) {
+	ctx := context.Background()
+	gate := make(chan struct{})
+	r := newRig(t, nil, Config{Client: blocking{gate}, Communities: []string{"x"}, Concurrency: 1})
+	var ids []int64
+	for _, ip := range []string{"127.0.0.1", "127.0.0.2", "127.0.0.3"} {
+		h, _ := r.svc.CreateHost(ctx, apitypes.HostCreate{IP: ip})
+		ids = append(ids, h.ID)
+	}
+	j, err := r.m.StartCheck(apitypes.SNMPCheckCreate{HostIDs: ids})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	r.m.CancelCheck(j.ID)
+	var d apitypes.SNMPCheck
+	eventually(t, "cancelled", func() bool { d, _ = r.m.GetCheck(j.ID); return d.State == "cancelled" })
+	if d.Checked != 3 || d.Skipped != 3 || d.Found+d.NoAnswer != 0 {
+		t.Errorf("cancelled job: %+v", d)
+	}
+	close(gate)
+	r.m.Close()
+	if _, err := r.m.StartCheck(apitypes.SNMPCheckCreate{HostIDs: ids}); inventory.KindOf(err) != inventory.Unavailable {
+		t.Errorf("after Close: %v", err)
+	}
+}
+
+// blocking holds every System call until its gate closes or ctx ends.
+type blocking struct{ gate chan struct{} }
+
+func (b blocking) System(ctx context.Context, _ netip.Addr, _, _ string) (inventory.SNMPSystem, error) {
+	select {
+	case <-b.gate:
+		return inventory.SNMPSystem{}, errNoAnswer
+	case <-ctx.Done():
+		return inventory.SNMPSystem{}, ctx.Err()
+	}
+}
+
+func (blocking) Values(context.Context, netip.Addr, string, string) (apitypes.SNMPValues, error) {
+	return apitypes.SNMPValues{}, errNoAnswer
+}

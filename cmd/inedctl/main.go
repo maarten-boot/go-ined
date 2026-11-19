@@ -88,9 +88,9 @@ Commands:
   discover start <cidr> | --group ID [--parent ID] [--wait]
   discover status <job-id>
   discover list                                (every job the server keeps, scheduled ones too)
+  discover cancel <job-id>
   snmp check --group ID | HOST-ID... [--wait]  (look for the SNMP agents now and read their values)
   snmp list | status <job-id> | cancel <job-id>
-  discover cancel <job-id>
   import FILE|- [--parent ID] [--x X --y Y] [--dry-run] [--update]
                                                (a group export, below group ID or at the top level;
                                                 exit 1 when it is, or would be, refused for conflicts)

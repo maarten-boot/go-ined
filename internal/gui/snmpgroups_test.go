@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/netip"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/maarten-boot/go-ined/internal/snmp"
 	"github.com/maarten-boot/go-ined/internal/testserver"
 	"github.com/maarten-boot/go-ined/pkg/apitypes"
+	"github.com/maarten-boot/go-ined/pkg/client"
 )
 
 // gated holds every answer until released or the check is cancelled.
@@ -105,4 +107,47 @@ func TestSNMPGroupCheckAndCommunities(t *testing.T) {
 	eventually(t, e.ui, "dialog again", func() bool { return g.commDialog != nil && strings.Contains(g.commDialog.info.Text, "2 set here") })
 	e.ui.Wait(func() { g.commDialog.save([]string{}) })
 	eventually(t, e.ui, "inherit", func() bool { return must(c.Group(ctx, lab.ID)).SNMPCommunitiesSet == 0 })
+}
+
+// TC-758 (crosscheck 2026-11-19-01 C1, L9, L10): a finished event that
+// comes before the start's answer is used, so no Cancel button stays; a
+// mixed selection checks its hosts and the hosts below its groups; a save
+// the server refuses keeps the dialog open with the reason.
+func TestSNMPCheckRaceSelectionAndSaveError(t *testing.T) {
+	e := startWith(t, testserver.Options{SNMP: &snmp.Config{Communities: []string{"public"}, Client: snmp.Static{Community: "public", Version: snmp.V2c}}})
+	c, ctx := e.c, e.ctx
+	lab := must(c.CreateGroup(ctx, apitypes.GroupCreate{Name: "lab", Collapsed: ptr(false), X: ptr(100.0), Y: ptr(100.0)}))
+	must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &lab.ID, X: ptr(100.0), Y: ptr(200.0)}))
+	must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.2", ParentID: &lab.ID, X: ptr(200.0), Y: ptr(200.0)}))
+	lone := must(c.CreateHost(ctx, apitypes.HostCreate{IP: "192.0.2.3", X: ptr(600.0), Y: ptr(200.0)}))
+	e.open()
+	g := e.g
+	eventually(t, e.ui, "loaded", func() bool { return find(e.nodes(1), "host", lone.ID) != nil })
+	e.ui.Wait(func() {
+		// The finished event first, then the start's answer.
+		done := apitypes.SNMPCheck{ID: "x-1", State: apitypes.DiscoveryDone, Total: 1, Checked: 1, Found: 1}
+		b, _ := json.Marshal(done)
+		g.onSNMPCheckEvent(client.Event{Type: apitypes.EventSNMPCheckFinished, Data: b})
+		g.registerSNMPCheck(apitypes.SNMPCheck{ID: "x-1", State: apitypes.DiscoveryRunning, Total: 1})
+		if g.status.cancelB.Visible() || len(g.snmpJobs) != 0 || !strings.Contains(g.status.Text(), "SNMP: 1 of 1 hosts answered") {
+			t.Errorf("after an early finished event: cancel %v jobs %v status %q", g.status.cancelB.Visible(), g.snmpJobs, g.status.Text())
+		}
+		// A group and a lone host selected: 3 hosts.
+		sel := []mapmodel.Key{mapmodel.GroupKey(lab.ID), mapmodel.HostKey(lone.ID)}
+		g.maps[1].SetSelection(sel)
+		host := must(c.Host(ctx, lone.ID))
+		if menuItem(g.menuItems(1, find(e.nodes(1), "host", lone.ID), 0, 0, &host), "Check SNMP now (3 hosts)") == nil {
+			t.Error("mixed selection from a host")
+		}
+		fr := find(e.nodes(1), "group", lab.ID)
+		if menuItem(g.menuItems(1, fr, fr.Icon.X+2, fr.Icon.Y+2, nil), "Check SNMP now (3 hosts)") == nil {
+			t.Error("mixed selection from a group")
+		}
+		g.maps[1].SetSelection(nil)
+		g.communitiesDialog("host", 999, "gone", 0, "server") // the server refuses: no such host
+		g.commDialog.save([]string{"x"})
+	})
+	eventually(t, e.ui, "the reason in the dialog", func() bool {
+		return g.commDialog != nil && strings.HasPrefix(g.commDialog.info.Text, "Not saved: ")
+	})
 }

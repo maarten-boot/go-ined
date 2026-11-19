@@ -294,6 +294,12 @@ func (c *Client) StartSNMPCheck(ctx context.Context, in apitypes.SNMPCheckCreate
 	return j, c.Do(ctx, http.MethodPost, "/snmp/checks", in, &j)
 }
 
+// SNMPCheck reads an SNMP check job.
+func (c *Client) SNMPCheck(ctx context.Context, id string) (apitypes.SNMPCheck, error) {
+	var j apitypes.SNMPCheck
+	return j, c.Do(ctx, http.MethodGet, "/snmp/checks/"+url.PathEscape(id), nil, &j)
+}
+
 // CancelSNMPCheck stops an SNMP check job.
 func (c *Client) CancelSNMPCheck(ctx context.Context, id string) (apitypes.SNMPCheck, error) {
 	var j apitypes.SNMPCheck

@@ -332,8 +332,11 @@ func (s *server) snmpOff(w http.ResponseWriter) bool {
 
 // startSNMPCheck starts an SNMP check of a group or of hosts (SPEC-515).
 func (s *server) startSNMPCheck(w http.ResponseWriter, r *http.Request) {
+	if s.snmpOff(w) { // before the body: off is off (crosscheck 2026-11-19-01 L6)
+		return
+	}
 	var in apitypes.SNMPCheckCreate
-	if !decode(w, r, &in) || s.snmpOff(w) {
+	if !decode(w, r, &in) {
 		return
 	}
 	c, err := s.opts.SNMP.StartCheck(in)

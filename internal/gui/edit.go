@@ -217,9 +217,13 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		if h != nil {
 			items = append(items, g.connectItem(h))
 		}
-		if hosts := selectedHosts(sel); onSelection && len(hosts) > 1 {
-			// A check of every selected host, as a job (SPEC-737).
-			items = append(items, g.snmpCheckItem(apitypes.SNMPCheckCreate{HostIDs: hosts}, len(hosts)))
+		if onSelection && len(sel) > 1 {
+			// A check of every selected host, and of the hosts below the
+			// selected groups, as a job (SPEC-737; crosscheck 2026-11-19-01 L10).
+			g.mu.Lock()
+			in, n := g.checkTarget(view, k, sel, true)
+			g.mu.Unlock()
+			items = append(items, g.snmpCheckItem(in, n))
 		} else if h != nil {
 			items = append(items, g.checkSNMPItem(*h), g.communitiesItem("host", h.ID, h.DisplayName)) // one host (crosscheck 2026-11-18-03 L7)
 		}
@@ -284,9 +288,9 @@ func (g *GUI) menuItems(view int64, n *mapmodel.Node, mx, my float64, h *apitype
 		}
 	}
 	g.mu.Lock()
-	nHosts := g.hostsUnder(view, id)
+	in, nHosts := g.checkTarget(view, k, sel, onSelection)
 	g.mu.Unlock()
-	items = append(items, g.snmpCheckItem(apitypes.SNMPCheckCreate{GroupID: &id}, nHosts))
+	items = append(items, g.snmpCheckItem(in, nHosts))
 	if view == mapmodel.NetworkView {
 		items = append(items, g.communitiesItem("group", id, n.Item.Name))
 	}

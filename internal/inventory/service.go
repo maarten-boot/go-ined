@@ -756,6 +756,15 @@ func (s *Service) UpdateGroup(ctx context.Context, id int64, p apitypes.GroupPat
 	s.applyShift(ch, cur.ViewID)
 	v := groupView(cur, s.m.In(cur.ViewID).Aggregate()[id])
 	s.notify.Publish(apitypes.EventGroupUpdated, v)
+	if p.SNMPCommunities.Set && !slices.Equal(old.SNMPCommunities, cur.SNMPCommunities) {
+		// The hosts below show where their list comes from (SPEC-315):
+		// they changed too (crosscheck 2026-11-19-01 L3).
+		for _, hid := range sortedKeys(s.m.Hosts) {
+			if h := s.m.Hosts[hid]; s.m.IsInSubtree(h.ParentID, id) {
+				s.notify.Publish(apitypes.EventHostUpdated, s.hostView(h))
+			}
+		}
+	}
 	if len(ch.Groups) > 1 || len(ch.Hosts) > 0 || len(ch.Placements) > 0 {
 		s.notify.Publish(apitypes.EventGroupMoved, apitypes.GroupMovedEvent{ID: id, ViewID: cur.ViewID, DX: dx, DY: dy})
 	}

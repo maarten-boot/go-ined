@@ -3,6 +3,7 @@ package gui
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -21,18 +22,52 @@ import (
 
 // hostsUnder counts the hosts of a group and its subgroups in a view, as
 // the map has them. Caller holds g.mu.
-func (g *GUI) hostsUnder(view, group int64) int {
-	vm := g.model.Map(view)
-	if vm == nil {
-		return 0
-	}
-	n := 0
-	for k := range vm.Items {
-		if k.Type == apitypes.TypeHost && g.model.InFocus(view, group, k) {
-			n++
+func (g *GUI) hostsUnder(view, group int64) int { return len(g.hostIDsUnder(view, group)) }
+
+// hostIDsUnder lists them. The subtree is built once, not per host
+// (crosscheck 2026-11-19-01 C4). Caller holds g.mu.
+func (g *GUI) hostIDsUnder(view, group int64) []int64 {
+	var ids []int64
+	for k := range g.model.Subtree(view, group) {
+		if k.Type == apitypes.TypeHost {
+			ids = append(ids, k.ID)
 		}
 	}
-	return n
+	return ids
+}
+
+// checkTarget is what "Check SNMP now" checks for a click on k with the
+// selection sel (onSelection: k is in it): a lone group by its id, else
+// every selected host and every host below the selected groups (L10).
+// Caller holds g.mu.
+func (g *GUI) checkTarget(view int64, k mapmodel.Key, sel []mapmodel.Key, onSelection bool) (apitypes.SNMPCheckCreate, int) {
+	keys := []mapmodel.Key{k}
+	if onSelection {
+		keys = sel
+	}
+	if len(keys) == 1 && keys[0].Type == apitypes.TypeGroup {
+		id := keys[0].ID
+		return apitypes.SNMPCheckCreate{GroupID: &id}, g.hostsUnder(view, id)
+	}
+	seen := map[int64]bool{}
+	var ids []int64
+	add := func(id int64) {
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	for _, s := range keys {
+		if s.Type == apitypes.TypeHost {
+			add(s.ID)
+			continue
+		}
+		for _, id := range g.hostIDsUnder(view, s.ID) {
+			add(id)
+		}
+	}
+	slices.Sort(ids)
+	return apitypes.SNMPCheckCreate{HostIDs: ids}, len(ids)
 }
 
 // snmpCheckItem is "Check SNMP now (N hosts)" for a group or a selection.
@@ -56,13 +91,48 @@ func (g *GUI) startSNMPCheck(in apitypes.SNMPCheckCreate, n int) {
 			g.fail("SNMP check", err)
 			return
 		}
+		g.do(func() { g.registerSNMPCheck(j) })
+	}()
+}
+
+// registerSNMPCheck follows a job this GUI started. An event for it may
+// have come before the start's answer: the newest one seen is used, and
+// the job is read once more (crosscheck 2026-11-19-01 C1).
+func (g *GUI) registerSNMPCheck(j apitypes.SNMPCheck) {
+	if seen, ok := g.snmpSeen[j.ID]; ok && (seen.Checked > j.Checked || seen.State != apitypes.DiscoveryRunning) {
+		j = seen
+	}
+	delete(g.snmpSeen, j.ID)
+	if j.State == apitypes.DiscoveryRunning {
+		g.snmpJobs[j.ID] = true
+		g.refreshSNMPCheck(j.ID)
+	}
+	g.showSNMPCheck(j)
+}
+
+// refreshSNMPCheck reads a job and shows it, if this GUI still follows it.
+func (g *GUI) refreshSNMPCheck(id string) {
+	go func() {
+		j, err := g.c.SNMPCheck(g.ctx, id)
 		g.do(func() {
-			if j.State == apitypes.DiscoveryRunning {
-				g.snmpJobs[j.ID] = true
+			switch {
+			case !g.snmpJobs[id]:
+			case err != nil: // gone (the server restarted): stop following it
+				delete(g.snmpJobs, id)
+				g.showSNMPCheck(apitypes.SNMPCheck{ID: id, State: apitypes.DiscoveryCancelled})
+			default:
+				g.showSNMPCheck(j)
 			}
-			g.showSNMPCheck(j)
 		})
 	}()
+}
+
+// refreshSNMPChecks reads every job this GUI follows (after a resync,
+// when events may have been missed).
+func (g *GUI) refreshSNMPChecks() {
+	for id := range g.snmpJobs {
+		g.refreshSNMPCheck(id)
+	}
 }
 
 // snmpCheckText is "SNMP check: 12 of 40 hosts checked, 5 answered", and
@@ -97,12 +167,17 @@ func (g *GUI) showSNMPCheck(j apitypes.SNMPCheck) {
 		g.status.cancelB.Hide()
 		return
 	}
+	g.status.cancelB.SetText("Cancel SNMP check")
+	if len(g.snmpJobs) > 1 { // L11
+		g.status.cancelB.SetText("Cancel SNMP checks")
+	}
 	g.status.cancelB.OnTapped = func() {
 		for id := range g.snmpJobs {
 			go func() {
 				if _, err := g.c.CancelSNMPCheck(g.ctx, id); err != nil {
 					g.fail("Cancel SNMP check", err)
 				}
+				g.refreshSNMPCheck(id) // a finished job sends no event (C1)
 			}()
 		}
 	}
@@ -112,7 +187,16 @@ func (g *GUI) showSNMPCheck(j apitypes.SNMPCheck) {
 // onSNMPCheckEvent follows the checks this GUI started.
 func (g *GUI) onSNMPCheckEvent(ev client.Event) {
 	var j apitypes.SNMPCheck
-	if json.Unmarshal(ev.Data, &j) != nil || !g.snmpJobs[j.ID] {
+	if json.Unmarshal(ev.Data, &j) != nil {
+		return
+	}
+	if !g.snmpJobs[j.ID] {
+		// Perhaps one this GUI just started, whose answer is still on its
+		// way: kept for registerSNMPCheck (C1); a few at most.
+		if len(g.snmpSeen) > 50 {
+			clear(g.snmpSeen)
+		}
+		g.snmpSeen[j.ID] = j
 		return
 	}
 	g.showSNMPCheck(j)
@@ -204,9 +288,11 @@ func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, fro
 	}
 	addRow()
 	add := widget.NewButton("Add", func() {
-		if len(cd.entries) < apitypes.MaxCommunities {
-			addRow()
+		if len(cd.entries) >= apitypes.MaxCommunities {
+			cd.info.SetText(fmt.Sprintf("At most %d strings.", apitypes.MaxCommunities)) // L9
+			return
 		}
+		addRow()
 	})
 	what := "host " + name
 	if kind == "group" {
@@ -217,8 +303,9 @@ func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, fro
 			cd.info.SetText(err.Error())
 			return
 		}
-		cd.d.Hide()
-		g.commDialog = nil
+		// The dialog stays open until the server took the list, so nothing
+		// typed is lost on an error (L9).
+		cd.info.SetText("Saving…")
 		go func() {
 			var err error
 			var text string
@@ -233,17 +320,23 @@ func (g *GUI) communitiesDialog(kind string, id int64, name string, set int, fro
 					text = g.communitiesText(gr.SNMPCommunitiesSet, "")
 				}
 			}
-			if err != nil {
-				g.fail("SNMP communities of "+what, err)
-				return
-			}
-			g.do(func() { g.status.message(fmt.Sprintf("SNMP communities of %s: %s", what, text)) })
+			g.do(func() {
+				if err != nil {
+					cd.info.SetText("Not saved: " + err.Error())
+					return
+				}
+				cd.d.Hide()
+				if g.commDialog == cd {
+					g.commDialog = nil
+				}
+				g.status.message(fmt.Sprintf("SNMP communities of %s: %s", what, text))
+			})
 		}()
 	}
 	saveB := widget.NewButton("Save", func() {
 		var list []string
 		for _, e := range cd.entries {
-			if s := e.Text; s != "" {
+			if s := strings.TrimSpace(e.Text); s != "" { // L9
 				list = append(list, s)
 			}
 		}

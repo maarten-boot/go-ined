@@ -797,6 +797,7 @@ func TestSNMPOffAndCommunities(t *testing.T) {
 	var h apitypes.Host
 	e.want(201, "POST", "/hosts", apitypes.HostCreate{IP: "192.0.2.1"}, &h)
 	e.wantErr(503, apitypes.CodeUnavailable, "GET", "/snmp/checks", nil)
+	e.wantErr(503, apitypes.CodeUnavailable, "POST", "/snmp/checks", `{"bogus":1}`) // off before the body (L6)
 	e.wantErr(503, apitypes.CodeUnavailable, "POST", "/snmp/checks", apitypes.SNMPCheckCreate{HostIDs: []int64{h.ID}})
 	e.wantErr(503, apitypes.CodeUnavailable, "GET", "/snmp/checks/x", nil)
 	e.wantErr(503, apitypes.CodeUnavailable, "DELETE", "/snmp/checks/x", nil)

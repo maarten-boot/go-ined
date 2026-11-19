@@ -184,7 +184,7 @@ func (a *app) groupDetails(g apitypes.Group) {
 	a.details([][2]string{
 		{"ID", id(g.ID)}, {"Name", g.Name}, {"CIDR", dash(g.CIDR)}, {"Description", g.Description},
 		{"View", id(g.ViewID)}, {"Parent", parent(g.ParentID)}, {"Status", g.Status}, {"Collapsed", yesNo(g.Collapsed)},
-		{"Labels", labelsText(g.Labels)}, {"Bar colour", colorText(g.Color)}, {"Rescan", rescanText(g)}, {"Communities", communitiesText(g.SNMPCommunitiesSet, "")}, {"Position", pos(g.X, g.Y)},
+		{"Labels", labelsText(g.Labels)}, {"Bar colour", colorText(g.Color)}, {"Rescan", rescanText(g)}, {"Communities", groupCommunitiesText(g)}, {"Position", pos(g.X, g.Y)},
 		{"Created", g.CreatedAt.Local().Format(time.DateTime)}, {"Updated", g.UpdatedAt.Local().Format(time.DateTime)},
 		{"Note", noteInline(g.Note)},
 	}, false)
@@ -331,4 +331,13 @@ func colorText(c string) string {
 		return "none"
 	}
 	return c
+}
+
+// groupCommunitiesText: lists exist on network-view groups only (SPEC-315;
+// crosscheck 2026-11-19-01 L8).
+func groupCommunitiesText(g apitypes.Group) string {
+	if g.ViewID != 1 {
+		return "– (custom view)"
+	}
+	return communitiesText(g.SNMPCommunitiesSet, "")
 }

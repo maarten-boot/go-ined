@@ -312,11 +312,19 @@ func (m *Manager) work(t inventory.SNMPTarget, now time.Time) func(context.Conte
 	key := listKey(t)
 	m.mu.Lock()
 	prev, seen := m.lists[t.ID]
-	m.lists[t.ID] = key
+	if !seen {
+		m.lists[t.ID] = key // the first look: nothing changed
+	}
 	m.mu.Unlock()
 	if seen && prev != key {
-		m.forget(t.ID)
+		// The new list is recorded only when the job runs: a job Run can't
+		// start for lack of a slot is tried at the next tick (crosscheck
+		// 2026-11-19-01 C3).
 		return func(ctx context.Context) {
+			m.mu.Lock()
+			m.lists[t.ID] = key
+			m.mu.Unlock()
+			m.forget(t.ID)
 			if _, err := m.find(ctx, t, true); err != nil && ctx.Err() == nil {
 				m.log.Error("SNMP check failed", "host", t.ID, "err", err)
 			}

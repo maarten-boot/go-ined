@@ -39,11 +39,18 @@ func snmpCheck(a *app, name string, args []string) error {
 			in.HostIDs = append(in.HostIDs, id)
 		}
 	}
+	if !*wait {
+		var j apitypes.SNMPCheck
+		return a.call(http.MethodPost, "/snmp/checks", in, &j, func() { fmt.Fprintln(a.out, client.SNMPCheckLine(j)) })
+	}
+	// With --wait the job is read in --json mode too: one JSON line for the
+	// start and one for the end (crosscheck 2026-11-19-01 C2).
 	var j apitypes.SNMPCheck
-	if err := a.call(http.MethodPost, "/snmp/checks", in, &j, func() { fmt.Fprintln(a.out, client.SNMPCheckLine(j)) }); err != nil || !*wait {
+	if err := a.c.Do(a.ctx, http.MethodPost, "/snmp/checks", in, &j); err != nil {
 		return err
 	}
-	last := ""
+	a.jobOut(j)
+	last := client.SNMPCheckLine(j)
 	for j.State == apitypes.DiscoveryRunning {
 		select {
 		case <-a.ctx.Done():
@@ -59,8 +66,7 @@ func snmpCheck(a *app, name string, args []string) error {
 		}
 	}
 	if a.g.json {
-		b, _ := json.Marshal(j)
-		fmt.Fprintf(a.out, "%s\n", b)
+		a.jobOut(j)
 	}
 	if j.State != apitypes.DiscoveryDone {
 		return errJob
@@ -112,7 +118,7 @@ func (a *app) communitiesArg(arg string, clear bool) ([]string, error) {
 		var out []string
 		sc := bufio.NewScanner(io.LimitReader(a.stdin, 64<<10))
 		for sc.Scan() {
-			if l := strings.TrimRight(sc.Text(), "\r"); l != "" {
+			if l := strings.TrimSpace(sc.Text()); l != "" { // spaces at the ends are mistakes (L7)
 				out = append(out, l)
 			}
 		}
@@ -124,7 +130,11 @@ func (a *app) communitiesArg(arg string, clear bool) ([]string, error) {
 		}
 		return out, nil
 	}
-	return strings.Split(arg, ","), nil
+	list := strings.Split(arg, ",")
+	for i := range list {
+		list[i] = strings.TrimSpace(list[i]) // "a, b" is a and b (L7)
+	}
+	return list, nil
 }
 
 // hostCommunities and groupCommunities set the SNMP community strings of a
@@ -183,4 +193,14 @@ func communitiesText(set int, from string) string {
 		return "the server's list"
 	}
 	return "none set here"
+}
+
+// jobOut prints a check job: its line, or with --json one line of JSON.
+func (a *app) jobOut(j apitypes.SNMPCheck) {
+	if !a.g.json {
+		fmt.Fprintln(a.out, client.SNMPCheckLine(j))
+		return
+	}
+	b, _ := json.Marshal(j)
+	fmt.Fprintf(a.out, "%s\n", b)
 }

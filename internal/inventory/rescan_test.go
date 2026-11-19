@@ -288,3 +288,25 @@ func TestCommunitiesPatch(t *testing.T) {
 		t.Errorf("HostsUnder: %v %v", ids, err)
 	}
 }
+
+// TC-328 (inventory; crosscheck 2026-11-19-01 L3): a group's new list sends
+// host.updated for the hosts below it, with their new origin.
+func TestCommunitiesHostEvents(t *testing.T) {
+	s, _ := newSvc(t)
+	r := &recorder{}
+	s.SetNotifier(r)
+	lab := mustGroup(t, s, apitypes.GroupCreate{Name: "lab"})
+	h := mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.1", ParentID: &lab.ID})
+	mustHost(t, s, apitypes.HostCreate{IP: "192.0.2.2"})
+	r.take()
+	if _, err := s.UpdateGroup(ctx, lab.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{"x"})}); err != nil {
+		t.Fatal(err)
+	}
+	if ev := r.take(); !strings.Contains(ev, fmt.Sprintf("host.updated %d", h.ID)) || strings.Count(ev, "host.updated") != 1 {
+		t.Errorf("events: %s", ev)
+	}
+	s.UpdateGroup(ctx, lab.ID, apitypes.GroupPatch{SNMPCommunities: apitypes.Some([]string{"x"})})
+	if ev := r.take(); strings.Contains(ev, "host.updated") {
+		t.Errorf("the same list again: %s", ev)
+	}
+}

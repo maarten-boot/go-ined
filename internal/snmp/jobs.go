@@ -23,6 +23,7 @@ type checks struct {
 	jobs     map[string]*check
 	finished []string
 	wg       sync.WaitGroup
+	closed   bool // Close was called: no new jobs (crosscheck 2026-11-19-01 L1)
 }
 
 type check struct {
@@ -60,14 +61,23 @@ func (m *Manager) StartCheck(in apitypes.SNMPCheckCreate) (apitypes.SNMPCheck, e
 	}
 	c := m.jobs
 	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return apitypes.SNMPCheck{}, inventory.Errorf(inventory.Unavailable, "the server is shutting down")
+	}
 	c.seq++
 	id := "snmp-" + strconv.Itoa(c.seq)
 	if m.cfg.RunID != "" {
 		id = m.cfg.RunID + "-" + id
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	var group *int64
+	if in.GroupID != nil {
+		g := *in.GroupID // not the caller's (L4)
+		group = &g
+	}
 	j := &check{seq: c.seq, cancel: cancel, done: make(chan struct{}), view: apitypes.SNMPCheck{
-		ID: id, GroupID: in.GroupID, State: apitypes.DiscoveryRunning, Total: len(ids),
+		ID: id, GroupID: group, State: apitypes.DiscoveryRunning, Total: len(ids),
 		StartedAt: m.cfg.Now().UTC().Truncate(time.Millisecond),
 	}}
 	c.jobs[id] = j
@@ -101,6 +111,7 @@ func (c *checks) run(ctx context.Context, j *check, ids []int64) {
 		f(&j.view)
 		j.view.Checked++
 		c.mu.Unlock()
+		progress() // after every host, whatever its outcome (L2)
 	}
 	for _, id := range ids {
 		select {
@@ -120,8 +131,9 @@ func (c *checks) run(ctx context.Context, j *check, ids []int64) {
 			m.mu.Lock()
 			m.lists[id] = listKey(t)
 			m.mu.Unlock()
-			if _, err := m.find(ctx, t, true); err != nil || ctx.Err() != nil {
-				if ctx.Err() == nil {
+			ok, err := m.find(ctx, t, true)
+			if err != nil || ctx.Err() != nil || !ok { // !ok: the host changed meanwhile (L2)
+				if err != nil && ctx.Err() == nil {
 					m.log.Error("SNMP check failed", "host", id, "err", err)
 				}
 				count(func(v *apitypes.SNMPCheck) { v.Skipped++ })
@@ -138,7 +150,6 @@ func (c *checks) run(ctx context.Context, j *check, ids []int64) {
 					v.NoAnswer++
 				}
 			})
-			progress()
 		})
 	}
 	wg.Wait()
@@ -146,6 +157,9 @@ func (c *checks) run(ctx context.Context, j *check, ids []int64) {
 	j.view.State = apitypes.DiscoveryDone
 	if ctx.Err() != nil {
 		j.view.State = apitypes.DiscoveryCancelled
+		// Hosts not started count as skipped (L2).
+		j.view.Skipped += j.view.Total - j.view.Checked
+		j.view.Checked = j.view.Total
 	}
 	now := m.cfg.Now().UTC().Truncate(time.Millisecond)
 	j.view.FinishedAt = &now
@@ -214,6 +228,7 @@ func (m *Manager) CancelCheck(id string) (apitypes.SNMPCheck, error) {
 func (m *Manager) Close() {
 	c := m.jobs
 	c.mu.Lock()
+	c.closed = true
 	for _, j := range c.jobs {
 		j.cancel()
 	}

@@ -21,3 +21,5 @@
    **Claude** checked the push (`main` and `docs/architecture` at `6ed2b0c`). CI 44736738426 on `main` green, all 8 jobs; made the annotated tag `v0.9.0` on `6ed2b0c`. After the tag push, release run 44739382547 went green on the first attempt; the release was published at 13:08 UTC.
    - Downloaded: 11 archives and SHA256SUMS, every checksum OK; the linux/amd64 `ined-server`, `inedctl` and `ined-gui` print `v0.9.0` (go1.26.11); the darwin arm64/amd64 and linux arm64 GUI binaries are of the right architecture; `ined-gui.exe` is in the Windows zip; the release text equals the `[0.9.0]` section (TC-011).
    - After the release: 11 releases and no CI artifacts, so no cleanup to propose.
+6. **User**: snmp looks good, will need to test the mail relay.
+   **Claude** asked which check that covers; **User**: both (the SNMP parts of the GUI by eye, and a real SNMP agent). Recorded in the Plan. Still open: the note by eye (typing kept on a tab switch, the "not saved" warning) and the mail relay.

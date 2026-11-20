@@ -4,12 +4,22 @@ All notable changes between releases. Format based on [Keep a Changelog](https:/
 
 ## [Unreleased]
 
-The database gets schemas 10 and 11 (a column on groups, hosts and views); a 0.8.0 server can't open it any more, so keep a copy if you may go back.
+## [0.9.0] - 2026-11-20
+
+Update `ined-server` first: the database gets schemas 10 and 11 (a column on groups, hosts and views), so a 0.8.0 server can't open it any more; keep a copy of the database if you may go back. Against an older server, the new `ined-gui`'s "Check SNMP now (N hosts)" and "SNMP communities…" and `inedctl snmp check --group` and `… snmp-communities` get the server's error; everything else works. `ined-alert` doesn't change.
 
 ### Added
 - "Check SNMP now (N hosts)" on a group (with its subgroups) and on a selection of hosts in `ined-gui`: the server checks them as a job, the status bar shows the progress with a "Cancel SNMP check" button, and the end says how many answered. `inedctl snmp check --group ID [--wait]` does the same.
 - SNMP community strings per network group and per host: "SNMP communities…" in `ined-gui`, `inedctl group|host snmp-communities <id> a,b` (or `-` to read them from stdin), or the API. A host uses its own list, else the nearest group's, else the server's; a list you set is also used outside `[snmp] networks`. The strings are never shown again: the details say "2 set here", "from group lab" or "the server's list".
 - SNMP community strings per custom view, for views of hosts of one kind (switches, printers): "SNMP communities…" in the View menu of `ined-gui`, `inedctl view snmp-communities <id> a,b`, or `PATCH /views/{id}`. Hosts placed in the view that have no list of their own use it ("from view switches"); it comes before the network group's list, and with several views the first tab wins. `inedctl view list` has a new last column, COMMUNITIES; scripts can use `--json`.
+
+### Changed
+- `ined-gui`: selecting another item while the note has unsaved typing says so in the status bar ("Note of host 3 not saved"); the note is still saved only with its button. Selecting the same item again (a tab switch, a click on it, the find dialog) keeps the typing.
+
+### Fixed
+- `ined-gui`: "Save note" in the moment after selecting another item could save the previous item's note onto the new one. The note field is now empty and disabled until the new item's note is in.
+- `ined-gui`: a note saved just before selecting another item could make that item's note look edited, so changes from others no longer showed in it.
+- `ined-gui`: the details could briefly show a host under the title of a group selected just before, when that group changed meanwhile.
 
 ## [0.8.0] - 2026-11-18
 

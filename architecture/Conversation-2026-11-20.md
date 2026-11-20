@@ -17,3 +17,7 @@
    - README status; OpenAPI version 0.9.0.
    - Checks: repocheck and api tests pass; a local release build gave 7 archives, checksums OK, the three linux/amd64 binaries print `v0.9.0`.
    - The tag `v0.9.0` follows once CI on `main` is green with this commit.
+5. **User**: pushed (the release commit), then "ok pushed" (the tag).
+   **Claude** checked the push (`main` and `docs/architecture` at `6ed2b0c`). CI 44736738426 on `main` green, all 8 jobs; made the annotated tag `v0.9.0` on `6ed2b0c`. After the tag push, release run 44739382547 went green on the first attempt; the release was published at 13:08 UTC.
+   - Downloaded: 11 archives and SHA256SUMS, every checksum OK; the linux/amd64 `ined-server`, `inedctl` and `ined-gui` print `v0.9.0` (go1.26.11); the darwin arm64/amd64 and linux arm64 GUI binaries are of the right architecture; `ined-gui.exe` is in the Windows zip; the release text equals the `[0.9.0]` section (TC-011).
+   - After the release: 11 releases and no CI artifacts, so no cleanup to propose.

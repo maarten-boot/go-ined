@@ -360,6 +360,13 @@ func TestDiscoveryDialog(t *testing.T) {
 	eventually(t, e.ui, "cancelled", func() bool {
 		return strings.Contains(g.disc.info.Text, "cancelled") && strings.Contains(g.status.Text(), "discovery 10.9.0.0/30 cancelled")
 	})
+	// "Copy" in the open dialog has the job's last state.
+	e.ui.Wait(func() {
+		g.disc.copyB.OnTapped()
+		if got := fyne.CurrentApp().Clipboard().Content(); !strings.Contains(got, "range 10.9.0.0/30, state cancelled:") {
+			t.Errorf("copied job details: %q", got)
+		}
+	})
 
 	// A second job with the dialog closed: progress goes to the status bar.
 	var dd *discoveryDialog
@@ -370,14 +377,11 @@ func TestDiscoveryDialog(t *testing.T) {
 	})
 	eventually(t, e.ui, "started", func() bool { return dd.job != "" })
 	e.ui.Wait(func() { dd.d.Hide() })
+	// A closed dialog no longer follows the job, by design; its "Copy"
+	// can't be pressed. The test used to copy from it, which passed only
+	// when the job ended before the dialog closed.
 	eventually(t, e.ui, "done in the status bar", func() bool {
 		return g.disc == nil && strings.Contains(g.status.Text(), "discovery 10.8.0.0/30 done: 2 found")
-	})
-	e.ui.Wait(func() {
-		dd.copyB.OnTapped()
-		if got := fyne.CurrentApp().Clipboard().Content(); !strings.Contains(got, "range 10.8.0.0/30, state done: 2 of 2 probed") {
-			t.Errorf("copied job details: %q", got)
-		}
 	})
 	// A bad range: the error is in the dialog.
 	e.ui.Wait(func() {

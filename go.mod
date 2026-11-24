@@ -7,7 +7,7 @@ toolchain go1.26.11
 require (
 	fyne.io/fyne/v2 v2.8.2
 	github.com/BurntSushi/toml v1.6.0
-	github.com/godbus/dbus/v5 v5.2.2
+	github.com/godbus/dbus/v5 v5.2.4
 	github.com/gosnmp/gosnmp v1.47.0
 	github.com/ncruces/zenity v0.10.14
 	golang.org/x/net v0.62.0

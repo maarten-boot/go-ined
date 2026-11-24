@@ -10,7 +10,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/gosnmp/gosnmp v1.47.0
 	github.com/ncruces/zenity v0.10.14
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	modernc.org/sqlite v1.62.0
 )
 
